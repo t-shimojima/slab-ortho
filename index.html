@@ -138,6 +138,8 @@ input[type=text],input[type=date]{font:inherit;font-size:15px;width:100%;padding
 .viewer{position:relative;overflow:auto;max-height:76vh;border-radius:8px;background:var(--surface2);border:1px solid var(--line)}
 .viewer .inner{position:relative;line-height:0}
 #pv{display:block}
+.viewer .inner{transform-origin:50% 50%}
+.guide{position:absolute;inset:0;z-index:2;pointer-events:none;background-image:repeating-linear-gradient(0deg,rgba(78,201,242,.75) 0 1px,transparent 1px 48px),repeating-linear-gradient(90deg,rgba(78,201,242,.45) 0 1px,transparent 1px 48px)}
 .viewer svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
 .seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
 .seg button{font:inherit;font-size:13px;border:0;background:var(--surface2);color:var(--muted);padding:6px 12px;min-height:36px;cursor:pointer}
@@ -274,6 +276,7 @@ input[type=text],input[type=date]{font:inherit;font-size:15px;width:100%;padding
         <div class="field"><label for="o-q">読込画質</label><select id="o-q"><option value="6144">標準</option><option value="10240">高（メモリ大）</option></select></div>
         <div class="field"><label for="o-gain">露出補正</label><select id="o-gain"><option value="1">する</option><option value="0">しない</option></select></div>
       </div>
+      <div class="field"><label for="o-level">自動水平補正（画像内の直線に合わせる）</label><select id="o-level"><option value="1">する</option><option value="0">しない</option></select></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn primary" id="o-run" data-busy="need-files" disabled>合成を実行</button>
         <button class="btn" id="o-sample" data-busy="">サンプルで試す</button>
@@ -295,13 +298,23 @@ input[type=text],input[type=date]{font:inherit;font-size:15px;width:100%;padding
           <select id="v-zoom" style="width:auto;min-height:36px;padding:4px 8px"><option value="1">全体</option><option value="2">2倍</option><option value="4">4倍</option></select>
         </div>
         <div class="viewer" id="viewer"><div class="empty" id="viewer-empty">画像を選んで「合成を実行」を押すか、「サンプルで試す」で動作を確認できます。保存した案件は「保存データ」から開けます。</div>
-          <div class="inner" id="inner" hidden><canvas id="pv"></canvas><svg id="overlay"></svg></div></div>
+          <div class="guide" id="guide" hidden></div><div class="inner" id="inner" hidden><canvas id="pv"></canvas><svg id="overlay"></svg></div></div>
         <div class="toolbar" style="margin-top:10px">
-          <span class="seg"><button data-tool="measure" aria-pressed="true">距離を測る</button><button data-tool="crop" aria-pressed="false">範囲を指定</button></span>
+          <span class="seg"><button data-tool="measure" aria-pressed="true">距離を測る</button><button data-tool="crop" aria-pressed="false">範囲を指定</button><button data-tool="level" aria-pressed="false">傾きを補正</button></span>
           <span id="tool-measure" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
             <span class="measure" id="measure">画像を2点タップすると距離を測れます</span>
             <span class="unit">実寸</span><input type="number" id="m-true" step="0.01" placeholder="m" style="width:90px;min-height:34px">
             <button class="btn small" id="m-apply" disabled>縮尺を補正</button><button class="btn small" id="m-clear">測定を消す</button>
+          </span>
+          <span id="tool-level" hidden style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+            <span class="hint" id="lv-note">床版の縁や目地など、まっすぐな線に沿って2点をタップしてください。</span>
+            <span style="display:inline-flex;gap:4px;align-items:center">
+              <button class="btn small" data-lv="-1">−1°</button><button class="btn small" data-lv="-0.1">−0.1°</button>
+              <input type="number" id="lv-deg" step="0.1" value="0.0" style="width:80px;min-height:34px" aria-label="補正角度（反時計回り）"><span class="unit">°</span>
+              <button class="btn small" data-lv="0.1">＋0.1°</button><button class="btn small" data-lv="1">＋1°</button>
+            </span>
+            <button class="btn small primary" id="lv-apply" disabled>この角度で合成</button>
+            <button class="btn small" id="lv-reset">元に戻す</button>
           </span>
           <span id="tool-crop" hidden style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
             <span class="hint" id="crop-note">画像をなぞって、床版の範囲を囲んでください。</span>
@@ -381,6 +394,14 @@ input[type=text],input[type=date]{font:inherit;font-size:15px;width:100%;padding
       <li><div>機体の microSD を USB-C カードリーダーで iPad に接続し、「ファイル」アプリで DCIM フォルダの JPEG（DJI_…_D.JPG）を iPad 内の任意のフォルダにコピーします。</div></li>
       <li><div>このアプリの「オルソ合成」で「ファイルを選択」→「ブラウズ」からコピーしたフォルダを開き、対象の画像をまとめて選びます。</div></li>
       <li><div>DJI Fly アプリや「写真」経由で取り込んだ画像は縮小されることがあります。読み込んだ画像が 15520×7760 より小さいと、ログに注意が表示されます。</div></li>
+    </ol>
+  </div>
+  <div class="box" style="margin-top:20px">
+    <h3>合成画像の傾きを直す</h3>
+    <ol class="steps">
+      <li><div>合成時は、型枠の目地や床版の縁などの直線を手がかりに自動で水平に合わせます（「自動水平補正」）。</div></li>
+      <li><div>まだ傾いているときは「傾きを補正」を選び、床版の縁や目地に沿って2点をタップします。線が水平（または垂直）になる角度が入り、画面で確認できます。</div></li>
+      <li><div>±0.1°・±1° のボタンや数値で微調整し、青い補助線と平行になったら「この角度で合成」を押します。範囲指定は解除されるので、必要なら指定し直してください。</div></li>
     </ol>
   </div>
 </section>
@@ -1026,6 +1047,8 @@ function drawOverlay(){
     s+=`<text x="${u*2}" y="${img.H/2}" style="font-size:${u*5}px;fill:#fff;paint-order:stroke;stroke:#000;stroke-width:${u*0.8}px">${L}</text>`;
     s+=`<text x="${img.W-u*2}" y="${img.H/2}" text-anchor="end" style="font-size:${u*5}px;fill:#fff;paint-order:stroke;stroke:#000;stroke-width:${u*0.8}px">${R}</text>`;}
   if(S.cropDraft){const r=S.cropDraft;s+=`<rect x="${Math.min(r[0],r[2])}" y="${Math.min(r[1],r[3])}" width="${Math.abs(r[2]-r[0])}" height="${Math.abs(r[3]-r[1])}" fill="rgba(242,193,78,.15)" stroke="#f2c14e" stroke-width="${u*0.5}" stroke-dasharray="${u*2} ${u}"/>`;}
+  if(S.tool==='level'&&S.lvPts){S.lvPts.forEach(p=>{s+=`<circle cx="${p[0]}" cy="${p[1]}" r="${u*1.2}" fill="#4ec9f2" stroke="#000" stroke-width="${u*0.3}"/>`});
+    if(S.lvPts.length===2){const [a,b]=S.lvPts;s+=`<line x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}" stroke="#4ec9f2" stroke-width="${u*0.5}"/>`;}}
   S.measure.forEach(p=>{s+=`<circle cx="${p[0]}" cy="${p[1]}" r="${u*1.2}" fill="#f2c14e" stroke="#000" stroke-width="${u*0.3}"/>`});
   if(S.measure.length===2){const [a,b]=S.measure;s+=`<line x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}" stroke="#f2c14e" stroke-width="${u*0.5}"/>`;}
   OV.innerHTML=s;
@@ -1035,7 +1058,12 @@ function updateOutInfo(){
   $('#out-info').textContent=`${img.W.toLocaleString()} × ${img.H.toLocaleString()} px（${fmt(img.W*Geff(),2)} × ${fmt(img.H*Geff(),2)} m）・${fmt(Geff()*1000,2)} mm/px${S.crop?'・範囲指定あり':''}`;
 }
 /* 計測と範囲指定 */
-function evPt(e){const r=PV.getBoundingClientRect();return [(e.clientX-r.left)/r.width*S.img.W,(e.clientY-r.top)/r.height*S.img.H]}
+function evPt(e){
+  const inner=$('#inner'),r=inner.getBoundingClientRect(),w=inner.offsetWidth,h=inner.offsetHeight;
+  const cx=(r.left+r.right)/2,cy=(r.top+r.bottom)/2,dx=e.clientX-cx,dy=e.clientY-cy,a=-(S.levelDeg||0)*D2R; // CSS の時計回り角
+  const x=dx*Math.cos(a)+dy*Math.sin(a), y=-dx*Math.sin(a)+dy*Math.cos(a);
+  return [(x/w+0.5)*S.img.W,(y/h+0.5)*S.img.H];
+}
 let drag=null;
 $('#inner').addEventListener('pointerdown',e=>{
   if(!S.img||S.tool!=='crop')return; e.preventDefault(); $('#inner').setPointerCapture(e.pointerId);
@@ -1045,6 +1073,33 @@ $('#inner').addEventListener('pointermove',e=>{if(!drag)return;const p=evPt(e);S
 $('#inner').addEventListener('pointerup',e=>{if(!drag)return;drag=null;const r=S.cropDraft;
   if(Math.abs(r[2]-r[0])<S.img.W/100||Math.abs(r[3]-r[1])<S.img.H/100){S.cropDraft=null;drawOverlay();return;}
   $('#crop-apply').disabled=false; $('#crop-note').textContent='黄色の枠で合成し直せます。';});
+/* 傾きを補正：画面上で反時計回りに levelDeg 度回して確認 → 「この角度で合成」で確定 */
+function setLevel(deg){
+  deg=Math.max(-45,Math.min(45,Math.round(deg*10)/10)); S.levelDeg=deg;
+  $('#lv-deg').value=fmt(deg,1); $('#inner').style.transform=deg?`rotate(${-deg}deg)`:'';
+  $('#guide').hidden=!(S.tool==='level'); $('#lv-apply').disabled=!deg;
+}
+$('#inner').addEventListener('click',e=>{
+  if(!S.img||S.tool!=='level')return; const p=evPt(e);
+  if(!S.lvPts||S.lvPts.length>=2)S.lvPts=[]; S.lvPts.push(p); drawOverlay();
+  if(S.lvPts.length===2){const [a,b]=S.lvPts;
+    // 画面上の線の角度（反時計回り＋）を、近い方の水平・垂直に合わせる
+    const cur=Math.atan2(-(b[1]-a[1]),b[0]-a[0])/D2R;
+    let t=((cur+90)%180+180)%180-90; if(t>45)t-=90; if(t<-45)t+=90;
+    setLevel(-t); $('#lv-note').textContent=`2点を結ぶ線が${Math.abs(t)<=45?'水平または垂直':''}になる角度にしました。よければ「この角度で合成」。`;
+  }else $('#lv-note').textContent='もう1点タップしてください';
+});
+document.querySelectorAll('[data-lv]').forEach(b=>b.addEventListener('click',()=>{if(S.img)setLevel((S.levelDeg||0)+(+b.dataset.lv));}));
+$('#lv-deg').addEventListener('change',()=>{if(S.img)setLevel(+$('#lv-deg').value||0);});
+$('#lv-reset').addEventListener('click',()=>{S.lvPts=[];setLevel(0);drawOverlay();$('#lv-note').textContent='床版の縁や目地など、まっすぐな線に沿って2点をタップしてください。';});
+$('#lv-apply').addEventListener('click',()=>task(async()=>{
+  const deg=S.levelDeg||0; if(!deg||!S.img)return;
+  // 画面の反時計回り → ワールドの回転。表示が鏡像（sx·sy=+1）のときは向きが逆になる
+  rotateSol(S.sol,-S.img.sx*S.img.sy*deg*D2R);
+  S.crop=null;S.cropDraft=null;S.lvPts=[];S.dirty=true;
+  setLevel(0); $('#lv-note').textContent='補正しました。さらに調整する場合は、もう一度2点をタップするか角度を入力してください。'; logEl.textContent=''; log(`傾きを ${fmt(deg,1)}° 補正して合成し直します（範囲指定は解除されます）`);
+  await renderCurrent(); if(S.projectId)await saveProject(false);
+}));
 $('#inner').addEventListener('click',e=>{
   if(!S.img||S.tool!=='measure')return; const p=evPt(e);
   if(S.measure.length>=2)S.measure=[]; S.measure.push(p);
@@ -1056,7 +1111,9 @@ $('#inner').addEventListener('click',e=>{
 document.querySelectorAll('[data-tool]').forEach(b=>b.addEventListener('click',()=>{
   S.tool=b.dataset.tool;document.querySelectorAll('[data-tool]').forEach(x=>x.setAttribute('aria-pressed',x===b));
   $('#inner').style.touchAction=S.tool==='crop'?'none':'auto';
-  $('#tool-measure').hidden=S.tool!=='measure';$('#tool-crop').hidden=S.tool!=='crop';
+  $('#tool-measure').hidden=S.tool!=='measure';$('#tool-crop').hidden=S.tool!=='crop';$('#tool-level').hidden=S.tool!=='level';
+  if(S.tool!=='level'){S.lvPts=[];setLevel(0);} else $('#guide').hidden=false;
+  drawOverlay();
 }));
 $('#m-clear').addEventListener('click',()=>{S.measure=[];$('#measure').textContent='画像を2点タップすると距離を測れます';$('#m-apply').disabled=true;drawOverlay()});
 $('#m-apply').addEventListener('click',()=>{
@@ -1084,11 +1141,11 @@ function viewSel(){return document.querySelector('[data-view][aria-pressed="true
 function markView(v){document.querySelectorAll('[data-view]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.view===v));}
 document.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',()=>{
   const v=b.dataset.view; markView(v); setViewPref(v);
-  if(!S.img)return; const plan=v==='down';
+  if(!S.img)return; setLevel(0); const plan=v==='down';
   if(plan!==S.view.plan){flipImg(S.img,false);S.view.plan=plan;S.dirty=true;S.measure=[];buildPreview();}
 }));
 try{const v=localStorage.getItem('slabortho-view');markView(v==='up'?'up':'down');}catch(e){markView('down');}
-$('#v-rot').addEventListener('click',()=>{if(!S.img)return;flipImg(S.img,true);flipImg(S.img,false);S.view.rot=!S.view.rot;S.dirty=true;S.measure=[];
+$('#v-rot').addEventListener('click',()=>{if(!S.img)return;setLevel(0);flipImg(S.img,true);flipImg(S.img,false);S.view.rot=!S.view.rot;S.dirty=true;S.measure=[];
   const o=$('#i-origin'); if(o.value==='left')o.value='right'; else if(o.value==='right')o.value='left';
   buildPreview();});
 $('#o-regsd').addEventListener('click',()=>task(async()=>{logEl.textContent='';log('画素寸法を変えて合成し直します');await renderCurrent();}));
@@ -1109,6 +1166,37 @@ function showThumb(k,name,url,st){
 }
 function setThumbStatus(k,html){const e=document.querySelector('#th-'+k+' .st');if(e)e.innerHTML=html}
 
+/* ---- 傾き：画像内の直線の向き（型枠目地・床版の縁など） ----
+   各タイルの勾配方向を 0〜90° に畳み込んだヒストグラム（0.5° 刻み）。天頂付近（θ<40°）の床版面だけを見る */
+function tileOrient(tile,h){
+  const N=tile.N,g=tile.gray,hist=new Float64Array(180),rmax=h*Math.tan(40*D2R)/tile.g,c=N/2;
+  for(let v=2;v<N-2;v+=2)for(let u=2;u<N-2;u+=2){
+    const dx=u-c,dy=v-c; if(dx*dx+dy*dy>rmax*rmax)continue;
+    const i=v*N+u, a=g[i]; if(a>0.92||a<0.03)continue;
+    const gx=(g[i+1]-g[i-1])*0.5, gy=-(g[i+N]-g[i-N])*0.5, m2=gx*gx+gy*gy; if(m2<4e-4)continue;
+    let ang=Math.atan2(gy,gx)/D2R; ang=((ang%90)+90)%90; hist[Math.floor(ang*2)%180]+=m2;
+  }
+  return hist;
+}
+/* 全体（ワールド座標）の主方向を求める。戻り値：主方向の角度（°、-45〜45）と確からしさ */
+function dominantAngle(sol,hists){
+  const H=new Float64Array(180);
+  sol.cams.forEach(c=>{const h=hists[c.i];if(!h)return;const sh=Math.atan2(c.b,c.a)/D2R*2;
+    for(let k=0;k<180;k++){const t=Math.round(k+sh);H[((t%180)+180)%180]+=h[k];}});
+  const Sm=new Float64Array(180),w=[1,2,3,2,1];
+  for(let k=0;k<180;k++){let v=0;for(let j=-2;j<=2;j++)v+=H[(k+j+180)%180]*w[j+2];Sm[k]=v;}
+  let p=0;for(let k=1;k<180;k++)if(Sm[k]>Sm[p])p=k;
+  const mean=Sm.reduce((a,b)=>a+b,0)/180, y0=Sm[(p+179)%180],y1=Sm[p],y2=Sm[(p+1)%180];
+  const off=(y0-2*y1+y2)!==0?0.5*(y0-y2)/(y0-2*y1+y2):0;
+  let deg=(p+0.5+off)/2; if(deg>45)deg-=90;
+  return {deg,conf:mean>0?y1/mean:0};
+}
+/* ワールド座標を φ（ラジアン、反時計回り）回転 */
+function rotateSol(sol,phi){
+  const c=Math.cos(phi),s=Math.sin(phi);
+  sol.cams.forEach(k=>{const a=k.a,b=k.b,x=k.tx,y=k.ty;k.a=c*a-s*b;k.b=s*a+c*b;k.tx=c*x-s*y;k.ty=s*x+c*y;});
+}
+
 /* ---- 位置合わせ ---- */
 function readOpts(){
   const h=Math.max(0.3,+$('#o-h').value||3), th=Math.max(30,Math.min(75,+$('#o-theta').value||55));
@@ -1117,14 +1205,14 @@ function readOpts(){
 function currentGsd(){const v=$('#o-gsd').value;return v==='auto'?S.autoG:(+v)/1000}
 async function register(n,names,getSrc,yaws,truth){
   const o=readOpts(); const t0=performance.now();
-  const feats=[],srcInfo=[];
+  const feats=[],srcInfo=[],hists=[];
   for(let k=0;k<n;k++){
     prog(0.4*k/n); log(`投影・特徴点 ${k+1}/${n}：${names[k]}`); await sleep();
     const src=await getSrc(k);
     if(Math.abs(src.W/src.H-2)>0.05) log(`  注意：縦横比が 2:1 ではありません（${src.W}×${src.H}）。360° の正距円筒画像か確認してください。`);
     else if(!truth&&src.W<15000) log(`  注意：画像の幅が ${src.W} px です。本体の 120MP（15520×7760）より小さく、取り込み時に縮小された可能性があります。`);
     const band=getBand(src,Math.min(89,REG_TH*1.25),3072,2); src.close&&src.close();
-    const tile=makeRegTile(band,o.h); const f=detect(tile,1500); feats.push(f);
+    const tile=makeRegTile(band,o.h); const f=detect(tile,1500); feats.push(f); hists[k]=tileOrient(tile,o.h);
     addThumb(k,names[k],tile,`<span class="chip warn">特徴点 ${f.M}</span>`);
     srcInfo.push({W:src.W,H:src.H});
   }
@@ -1162,14 +1250,19 @@ async function register(n,names,getSrc,yaws,truth){
     const a=sr/sp,b=si/sp;let e=0;P.forEach((p,k)=>{const ax=p[0]-mp[0],ay=p[1]-mp[1];const x=a*ax-b*ay+mq[0],y=b*ax+a*ay+mq[1];e+=(x-Q[k][0])**2+(y-Q[k][1])**2});
     log(`サンプル検証：撮影位置の誤差 RMS ${fmt(Math.sqrt(e/L)*1000,1)} mm、縮尺 ${fmt(Math.hypot(a,b),3)}`);
   }
+  if($('#o-level').value==='1'){
+    const d=dominantAngle(sol,hists);
+    if(d.conf>=1.5&&Math.abs(d.deg)>0.2&&Math.abs(d.deg)<=30){rotateSol(sol,-d.deg*D2R);log(`自動水平補正：${fmt(-d.deg,1)}°（画像内の直線に合わせました）`);}
+    else log('自動水平補正：直線がはっきりしないため補正しませんでした（「傾きを補正」で調整できます）');
+  }
   const gains=o.gain?solveGains(n,feats,pairs,sol.used):null;
   const s0=srcInfo[0];
   S.autoG=Math.max(0.0008,Math.ceil(o.h*Math.PI/s0.H*Math.max(1,s0.W/o.maxW/2)*2000)/2000);
-  Object.assign(S,{sol,gains,o,srcInfo,names,getSrc,yaws});
+  Object.assign(S,{sol,gains,o,srcInfo,names,getSrc,yaws,hists});
 }
 async function renderCurrent(){
   const t0=performance.now();
-  S.img=null; S.measure=[]; S.exported=null; $('#export-ready').hidden=true; setBusy(true);
+  S.img=null; S.measure=[]; S.lvPts=[]; S.exported=null; $('#export-ready').hidden=true; setBusy(true); setLevel(0);
   const img=await renderMosaic2(S.sol,S.o,S.getSrc,S.gains,S.view,S.crop,currentGsd(),S.names);
   S.img=img; prog(1); buildPreview();
   log(`合成完了（${fmt((performance.now()-t0)/1000,1)} 秒）`);
