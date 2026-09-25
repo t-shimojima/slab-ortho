@@ -1,0 +1,1383 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>床版下面オルソ</title>
+<meta name="description" content="DJI Avata 360 の 360° 静止画から床版下面の平面オルソ画像を端末内で合成します">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="床版オルソ">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#1b6784">
+<style>
+:root{
+  --bg:#eceeed; --surface:#f9faf9; --surface2:#f1f3f2; --ink:#1b2125; --muted:#5a656c; --line:#cfd5d7;
+  --accent:#1b6784; --accent-ink:#ffffff; --accent-soft:#d9e9ef;
+  --ok:#256f45; --ok-bg:#dff0e5; --warn:#935800; --warn-bg:#f8ead3; --bad:#a3231b; --bad-bg:#f6dcda;
+  --fp:rgba(27,103,132,.10); --fp-line:rgba(27,103,132,.55); --slab:#c9ccc9; --cam:#1b2125;
+  --font:"Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP",system-ui,sans-serif;
+  --mono:ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --bg:#14181a; --surface:#1b2023; --surface2:#20272a; --ink:#e3e8ea; --muted:#9aa6ad; --line:#323b40;
+    --accent:#5fb2d0; --accent-ink:#0d1a20; --accent-soft:#1e3a46;
+    --ok:#7fd3a0; --ok-bg:#1c3527; --warn:#f0bd6a; --warn-bg:#3a2d17; --bad:#f19a92; --bad-bg:#3d1f1d;
+    --fp:rgba(95,178,208,.12); --fp-line:rgba(95,178,208,.6); --slab:#3a4246; --cam:#e3e8ea;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#14181a; --surface:#1b2023; --surface2:#20272a; --ink:#e3e8ea; --muted:#9aa6ad; --line:#323b40;
+  --accent:#5fb2d0; --accent-ink:#0d1a20; --accent-soft:#1e3a46;
+  --ok:#7fd3a0; --ok-bg:#1c3527; --warn:#f0bd6a; --warn-bg:#3a2d17; --bad:#f19a92; --bad-bg:#3d1f1d;
+  --fp:rgba(95,178,208,.12); --fp-line:rgba(95,178,208,.6); --slab:#3a4246; --cam:#e3e8ea;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--font);font-size:15px;line-height:1.6;padding-inline:16px;padding-block:0 40px}
+.wrap{max-width:1180px;margin:0 auto}
+header.top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px;padding-block:20px 12px;border-bottom:1px solid var(--line)}
+.brand h1{font-size:22px;margin:0;letter-spacing:.02em;text-wrap:balance}
+.brand p{margin:2px 0 0;color:var(--muted);font-size:13px}
+nav.tabs{display:flex;gap:4px;background:var(--surface2);padding:4px;border-radius:10px;border:1px solid var(--line)}
+nav.tabs button{font:inherit;font-size:14px;border:0;background:transparent;color:var(--muted);padding:8px 14px;border-radius:7px;cursor:pointer;min-height:40px}
+nav.tabs button[aria-selected="true"]{background:var(--surface);color:var(--ink);font-weight:700;box-shadow:0 1px 2px rgba(0,0,0,.08)}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+section.panel{padding-block:20px}
+h2{font-size:18px;margin:0 0 4px;text-wrap:balance}
+h3{font-size:15px;margin:0 0 8px}
+.lead{color:var(--muted);margin:0 0 16px;max-width:70ch}
+.grid2{display:grid;grid-template-columns:320px 1fr;gap:20px;align-items:start}
+@media (max-width:900px){.grid2{grid-template-columns:1fr}}
+.box{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px}
+.fields{display:grid;gap:12px}
+.field label{display:block;font-size:12px;color:var(--muted);letter-spacing:.04em;margin-bottom:4px}
+.field .row{display:flex;gap:8px;align-items:center}
+input[type=number],select{font:inherit;font-family:var(--mono);font-size:15px;width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:7px;background:var(--surface2);color:var(--ink);min-height:40px}
+select{font-family:var(--font)}
+input[type=range]{width:100%;accent-color:var(--accent)}
+.unit{font-size:13px;color:var(--muted);white-space:nowrap}
+.pair{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.presets{display:flex;gap:6px;flex-wrap:wrap}
+.btn{font:inherit;font-size:14px;border:1px solid var(--line);background:var(--surface2);color:var(--ink);padding:8px 14px;border-radius:8px;cursor:pointer;min-height:42px}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:700}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn.small{min-height:34px;padding:4px 10px;font-size:13px}
+.hint{font-size:12px;color:var(--muted);margin:4px 0 0}
+.num{white-space:nowrap;font-family:var(--mono);font-variant-numeric:tabular-nums}
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;min-width:720px;font-size:14px}
+th,td{padding:9px 12px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
+th{font-size:12px;color:var(--muted);font-weight:400;letter-spacing:.03em;background:var(--surface2);vertical-align:bottom}
+th small{display:block;font-size:11px}
+td:first-child,th:first-child{text-align:left}
+tbody tr{cursor:pointer}
+tbody tr:hover td{background:var(--surface2)}
+tbody tr.sel td{background:var(--accent-soft)}
+td.key{font-weight:700;color:var(--accent)}
+.chip{display:inline-block;font-size:12px;padding:1px 8px;border-radius:999px;font-family:var(--font)}
+.chip.ok{background:var(--ok-bg);color:var(--ok)}
+.chip.warn{background:var(--warn-bg);color:var(--warn)}
+.chip.bad{background:var(--bad-bg);color:var(--bad)}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px}
+.stat{background:var(--surface2);border-radius:8px;padding:10px 12px}
+.stat .k{font-size:12px;color:var(--muted)}
+.stat .v{font-family:var(--mono);font-size:20px;font-variant-numeric:tabular-nums}
+.stat .v small{font-size:12px;color:var(--muted);margin-left:2px}
+.diagrams{display:grid;grid-template-columns:1fr 1.3fr;gap:14px}
+@media (max-width:700px){.diagrams{grid-template-columns:1fr}}
+svg text{font-family:var(--mono);fill:var(--muted);font-size:11px}
+.formula{font-family:var(--mono);font-size:13px;background:var(--surface2);border-radius:8px;padding:10px 12px;color:var(--ink);overflow-x:auto}
+.notes{margin:0;padding-left:1.2em;color:var(--ink);max-width:75ch}
+.notes li{margin-bottom:6px}
+.progress{height:6px;background:var(--surface2);border-radius:4px;overflow:hidden;margin:10px 0 6px}
+.progress div{height:100%;width:0;background:var(--accent);transition:width .2s}
+#log{font-family:var(--mono);font-size:12px;color:var(--muted);max-height:150px;overflow:auto;white-space:pre-wrap;margin:0}
+.thumbs{display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:8px}
+.thumb{background:var(--surface2);border-radius:8px;padding:6px;font-size:11px}
+.thumb canvas{width:100%;aspect-ratio:1;display:block;border-radius:4px;background:#000}
+.thumb .nm{font-family:var(--mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:4px}
+.viewer{position:relative;overflow:auto;max-height:78vh;border-radius:8px;background:var(--surface2);border:1px solid var(--line)}
+.viewer .inner{position:relative;display:inline-block;line-height:0}
+.viewer img{max-width:none;display:block;-webkit-touch-callout:default}
+.viewer svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:10px}
+.toolbar label{font-size:13px;display:flex;align-items:center;gap:6px}
+.measure{font-family:var(--mono);font-size:14px}
+.empty{padding:40px 16px;text-align:center;color:var(--muted)}
+.tag{font-size:11px;letter-spacing:.06em;color:var(--muted);text-transform:uppercase}
+.steps{counter-reset:s;list-style:none;padding:0;margin:0;display:grid;gap:10px;max-width:80ch}
+.steps li{counter-increment:s;display:grid;grid-template-columns:28px 1fr;gap:10px}
+.steps li::before{content:counter(s);font-family:var(--mono);width:26px;height:26px;border-radius:50%;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center;font-size:13px}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+@media (max-width:800px){.cols{grid-template-columns:1fr}}
+@media (prefers-reduced-motion: reduce){.progress div{transition:none}}
+
+[hidden]{display:none!important}
+html{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+body{margin:0}
+.offline{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px}
+.offline i{width:8px;height:8px;border-radius:50%;background:var(--line);display:inline-block}
+.offline.ok i{background:var(--ok)}
+input[type=text],input[type=date]{font:inherit;font-size:15px;width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:7px;background:var(--surface2);color:var(--ink);min-height:40px}
+.sec{font-size:12px;letter-spacing:.06em;color:var(--muted);border-bottom:1px solid var(--line);padding-bottom:4px;margin-top:4px}
+.thumb img{width:100%;aspect-ratio:1;display:block;border-radius:4px;background:#000;object-fit:cover}
+.viewer{position:relative;overflow:auto;max-height:76vh;border-radius:8px;background:var(--surface2);border:1px solid var(--line)}
+.viewer .inner{position:relative;line-height:0}
+#pv{display:block}
+.viewer svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{font:inherit;font-size:13px;border:0;background:var(--surface2);color:var(--muted);padding:6px 12px;min-height:36px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+.export{display:grid;gap:10px}
+.export .row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.ready{display:flex;flex-wrap:wrap;gap:10px;align-items:center;background:var(--ok-bg);color:var(--ok);border-radius:8px;padding:10px 12px}
+.ready .num{color:var(--ink)}
+.proj{display:grid;grid-template-columns:160px 1fr;gap:14px;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px;align-items:start}
+.proj img{width:100%;border-radius:6px;background:var(--surface2);min-height:60px;object-fit:cover}
+.proj .pn{font-weight:700;font-size:16px}
+.proj .acts{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;align-items:center}
+.muted{color:var(--muted);font-weight:400;font-size:13px}
+.btn.danger{background:var(--bad);border-color:var(--bad);color:#fff}
+#projects{display:grid;gap:10px}
+@media (max-width:600px){.proj{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="top">
+  <div class="brand">
+    <h1>床版下面オルソ</h1>
+    <p>DJI Avata 360 の 360° 静止画から、床版下面の平面オルソ画像を端末内で合成します</p>
+    <div class="offline" id="offline"><i></i><span>オフライン対応を確認中…</span></div>
+  </div>
+  <nav class="tabs" role="tablist">
+    <button role="tab" id="tab-plan" aria-selected="true" data-tab="plan">撮影計画</button>
+    <button role="tab" id="tab-ortho" aria-selected="false" data-tab="ortho">オルソ合成</button>
+    <button role="tab" id="tab-data" aria-selected="false" data-tab="data">保存データ</button>
+    <button role="tab" id="tab-guide" aria-selected="false" data-tab="guide">撮影要領</button>
+  </nav>
+</header>
+
+<section class="panel" id="panel-plan">
+  <h2>離隔距離ごとのラップ率と撮影間隔</h2>
+  <p class="lead">上向きレンズの天頂付近だけをオルソに使います。使用範囲（天頂角 θ）とラップ率から、1枚あたりの有効範囲 L と、写真同士の間隔（撮影間隔・コース間隔）を求めます。行をタップすると下の図に反映されます。</p>
+
+  <div class="grid2">
+    <div class="box fields">
+      <div class="field">
+        <label for="p-theta">使用する範囲（天頂からの角度 θ）</label>
+        <div class="row"><input type="range" id="p-theta" min="30" max="60" step="1" value="45"><span class="num" id="p-theta-v">45°</span></div>
+        <p class="hint">45° で L = 2h。四隅は約 55°。大きくすると枚数は減るが端部の画素が粗くなる。</p>
+      </div>
+      <div class="field">
+        <label>ラップ率</label>
+        <div class="pair">
+          <div class="row"><input type="number" id="p-fw" min="30" max="90" step="5" value="70"><span class="unit">% 進行</span></div>
+          <div class="row"><input type="number" id="p-sd" min="30" max="90" step="5" value="60"><span class="unit">% 横</span></div>
+        </div>
+        <div class="presets" style="margin-top:8px">
+          <button class="btn small" data-preset="70,60">標準 70/60</button>
+          <button class="btn small" data-preset="80,70">模様が少ない面 80/70</button>
+        </div>
+      </div>
+      <div class="field">
+        <label for="p-src">撮影データ</label>
+        <select id="p-src">
+          <option value="15520">静止画 120MP</option>
+          <option value="7680">8K 動画から切出し</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>対象範囲（床版下面）</label>
+        <div class="pair">
+          <div class="row"><input type="number" id="p-len" min="1" max="200" step="0.5" value="15"><span class="unit">m 橋軸</span></div>
+          <div class="row"><input type="number" id="p-wid" min="1" max="50" step="0.5" value="9"><span class="unit">m 幅員</span></div>
+        </div>
+      </div>
+      <div class="field">
+        <label for="p-speed">動画から切り出す場合の飛行速度</label>
+        <div class="row"><input type="number" id="p-speed" min="0.1" max="3" step="0.1" value="0.5"><span class="unit">m/s</span></div>
+      </div>
+    </div>
+
+    <div style="display:grid;gap:14px;min-width:0">
+      <div class="tablewrap">
+        <table id="plan-table">
+          <thead><tr>
+            <th>離隔 h<small>レンズ→床版</small></th>
+            <th>有効範囲 L<small>1枚・正方形</small></th>
+            <th>画素寸法<small>直下 / 範囲端 / 隅</small></th>
+            <th>撮影間隔 B<small>進行方向（最大）</small></th>
+            <th>コース間隔 C<small>横方向（最大）</small></th>
+            <th>必要枚数<small>コース × 枚</small></th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="formula" id="formula"></div>
+    </div>
+  </div>
+
+  <div class="box" style="margin-top:20px">
+    <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;margin-bottom:10px">
+      <h3 style="margin:0">飛行計画 <span class="num" id="d-h-label">h = 3.0 m</span></h3>
+      <div class="row" style="display:flex;gap:8px;align-items:center;min-width:240px;flex:1;max-width:420px">
+        <span class="unit">離隔</span><input type="range" id="d-h" min="2" max="5" step="0.1" value="3"><span class="num" id="d-h-v">3.0 m</span>
+      </div>
+    </div>
+    <div class="stats" id="d-stats"></div>
+    <div class="diagrams">
+      <div><div class="tag">側面図</div><svg id="svg-side" viewBox="0 0 420 260" role="img" aria-label="側面図"></svg></div>
+      <div><div class="tag">見上げ図（撮影位置と有効範囲）</div><svg id="svg-plan" viewBox="0 0 520 320" role="img" aria-label="撮影位置の配置図"></svg></div>
+    </div>
+  </div>
+</section>
+
+
+<section class="panel" id="panel-ortho" hidden>
+  <div class="grid2">
+    <div class="box fields">
+      <div class="sec">案件情報</div>
+      <div class="field"><label for="i-bridge">橋梁名</label><input type="text" id="i-bridge" placeholder="例：○○橋" autocomplete="off"></div>
+      <div class="pair">
+        <div class="field"><label for="i-span">径間番号</label><input type="text" id="i-span" placeholder="例：第1径間" autocomplete="off"></div>
+        <div class="field"><label for="i-date">撮影日</label><input type="date" id="i-date"></div>
+      </div>
+      <div class="field"><label for="i-origin">起点・終点の表示</label>
+        <select id="i-origin"><option value="none">表示しない</option><option value="left">左が起点側</option><option value="right">右が起点側</option></select></div>
+
+      <div class="sec">画像と設定</div>
+      <div class="field">
+        <label for="o-files">360° 画像（2〜20枚程度）</label>
+        <input type="file" id="o-files" accept="image/jpeg,image/*" multiple style="font-size:14px;max-width:100%">
+        <p class="hint">SDカードリーダーから「ファイル」経由で選ぶと、元の解像度のまま読み込めます。</p>
+      </div>
+      <div class="pair">
+        <div class="field"><label for="o-h">離隔 h</label><div class="row"><input type="number" id="o-h" min="0.5" max="20" step="0.1" value="3.0"><span class="unit">m</span></div></div>
+        <div class="field"><label for="o-theta">使用する天頂角</label><div class="row"><input type="number" id="o-theta" min="35" max="70" step="1" value="55"><span class="unit">°</span></div></div>
+      </div>
+      <div class="pair">
+        <div class="field"><label for="o-q">読込画質</label><select id="o-q"><option value="6144">標準</option><option value="10240">高（メモリ大）</option></select></div>
+        <div class="field"><label for="o-gain">露出補正</label><select id="o-gain"><option value="1">する</option><option value="0">しない</option></select></div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn primary" id="o-run" data-busy="need-files" disabled>合成を実行</button>
+        <button class="btn" id="o-sample" data-busy="">サンプルで試す</button>
+      </div>
+      <div>
+        <div class="progress"><div id="prog"></div></div>
+        <pre id="log"></pre>
+      </div>
+    </div>
+
+    <div style="display:grid;gap:14px;min-width:0">
+      <div class="box">
+        <div class="toolbar">
+          <h3 style="margin:0;margin-right:auto">合成結果</h3>
+          <select id="v-view" style="width:auto;min-height:36px;padding:4px 8px"><option value="up">見上げ図</option><option value="plan">平面図（上から透視）</option></select>
+          <button class="btn small" id="v-rot" data-busy="need-img" disabled>180°回転</button>
+          <label><input type="checkbox" id="v-grid" checked> 1m グリッド</label>
+          <label><input type="checkbox" id="v-cams" checked> 撮影位置</label>
+          <select id="v-zoom" style="width:auto;min-height:36px;padding:4px 8px"><option value="1">全体</option><option value="2">2倍</option><option value="4">4倍</option></select>
+        </div>
+        <div class="viewer" id="viewer"><div class="empty" id="viewer-empty">画像を選んで「合成を実行」を押すか、「サンプルで試す」で動作を確認できます。保存した案件は「保存データ」から開けます。</div>
+          <div class="inner" id="inner" hidden><canvas id="pv"></canvas><svg id="overlay"></svg></div></div>
+        <div class="toolbar" style="margin-top:10px">
+          <span class="seg"><button data-tool="measure" aria-pressed="true">距離を測る</button><button data-tool="crop" aria-pressed="false">範囲を指定</button></span>
+          <span id="tool-measure" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+            <span class="measure" id="measure">画像を2点タップすると距離を測れます</span>
+            <span class="unit">実寸</span><input type="number" id="m-true" step="0.01" placeholder="m" style="width:90px;min-height:34px">
+            <button class="btn small" id="m-apply" disabled>縮尺を補正</button><button class="btn small" id="m-clear">測定を消す</button>
+          </span>
+          <span id="tool-crop" hidden style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+            <span class="hint" id="crop-note">画像をなぞって、床版の範囲を囲んでください。</span>
+            <button class="btn small primary" id="crop-apply" disabled>この範囲で合成</button>
+            <button class="btn small" id="crop-reset" data-busy="need-img" disabled>範囲をリセット</button>
+          </span>
+        </div>
+      </div>
+
+      <div class="box export">
+        <h3 style="margin:0">書き出し・保存</h3>
+        <div class="hint num" id="out-info">—</div>
+        <div class="row">
+          <span class="unit">画素寸法</span>
+          <select id="o-gsd" style="width:auto"><option value="auto">自動（元画像なり）</option><option value="1.5">1.5 mm/px</option><option value="2">2 mm/px</option><option value="3">3 mm/px</option><option value="5">5 mm/px</option></select>
+          <button class="btn small" id="o-regsd" data-busy="need-img" disabled>この画素寸法で合成し直す</button>
+        </div>
+        <div class="row">
+          <label style="font-size:13px;display:flex;gap:6px;align-items:center"><input type="checkbox" id="x-grid" checked> 1m グリッドを入れる</label>
+          <button class="btn" id="x-jpg" data-busy="need-img" disabled>JPEG を作成</button>
+          <select id="x-paper" style="width:auto"><option value="A3">A3 横</option><option value="A4">A4 横</option></select>
+          <button class="btn" id="x-pdf" data-busy="need-img" disabled>PDF を作成</button>
+          <button class="btn" id="p-save" data-busy="need-img" disabled>案件を上書き保存</button>
+        </div>
+        <div class="ready" id="export-ready" hidden><span>作成しました：</span><span class="num" id="export-name"></span><button class="btn primary" id="x-share">保存・共有…</button></div>
+        <p class="hint">「保存・共有…」から「"ファイル"に保存」を選ぶと iPad 内に保存できます。AirDrop やメールでも送れます。</p>
+      </div>
+
+      <div class="box">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap">
+          <h3>平面投影した各画像</h3><span class="hint" id="thumb-note"></span>
+        </div>
+        <div class="thumbs" id="thumbs"><div class="empty">画像を読み込むと、床版平面に投影した各画像がここに並びます。</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="panel" id="panel-data" hidden>
+  <h2>保存データ</h2>
+  <p class="lead">合成した案件は、元画像・位置合わせ結果・設定と一緒にこの iPad 内に保存されます。開き直すと位置合わせをやり直さずに再出力できます。<span class="num" id="storage"></span></p>
+  <div id="projects"><div class="empty">読み込み中…</div></div>
+</section>
+
+<section class="panel" id="panel-guide" hidden>
+  <h2>DJI Avata 360 での撮影要領</h2>
+  <p class="lead">360° モードではレンズが上下を向き、上側レンズの中心がほぼ天頂になります。左右レンズのつなぎ目は水平方向にあるため、天頂 ±55° 程度を使うこのアプリでは、本体内でつないだ JPEG をそのまま使えます。</p>
+  <div class="cols">
+    <div class="box">
+      <h3>撮影の手順</h3>
+      <ol class="steps">
+        <li><div>桁下高さをレーザー距離計で測り、飛行高度との差から離隔 h を決める（2〜5 m）。</div></li>
+        <li><div>「撮影計画」で h を選び、撮影間隔 B とコース間隔 C を確認。床版にチョークで間隔の目印を付けると飛行が安定します。</div></li>
+        <li><div>360° モード・静止画・最高解像度（120MP）で撮影。各地点で1〜2秒ホバリングしてから撮るとブレを防げます。</div></li>
+        <li><div>橋軸方向に1コース撮ったら横へ C だけずらして戻る。端部は床版の縁より外側まで撮る。</div></li>
+        <li><div>床版上の既知寸法（目地間隔、スケール板、チョークの 1 m 目印など）を1か所以上写しておく。合成後の縮尺補正に使います。</div></li>
+      </ol>
+    </div>
+    <div class="box">
+      <h3>注意点</h3>
+      <ul class="notes">
+        <li>桁下では GNSS が使えず、ビジョン測位も水面上では不安定になります。ラップ率には余裕を持たせてください。</li>
+        <li>離陸前は撮影できないため、ポール撮影には使えません。</li>
+        <li>RAW（DNG）は左右レンズが別ファイルでつながれていないため、本体生成の JPEG を使います。</li>
+        <li>桁下は暗いため ISO が上がりがちです。露出補正と、可能なら照明を併用してください。</li>
+        <li>地覆・張出し・排水管など床版面から外れた部分は二重像になります。損傷図では平面部を主に使ってください。</li>
+        <li>360° 画像は水平補正済み・機体の向き基準で保存されます。画像の XMP に記録された機体ヨー角を読み取り、画像間の回転の拘束に使います。</li>
+        <li>同じ形の照明・点検口・排水桝が等間隔に並ぶと誤対応が起きやすくなります。白飛び部分は自動で除外しますが、床版面そのものの模様（型枠跡・汚れ・チョーク印）が写る露出で撮ってください。</li>
+        <li>桁や壁の近くを飛ぶと、その側面が平面として投影されて歪みます。桁際はコースを1本増やし、桁から離れた位置で撮った画像が使われるようにしてください。</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="box" style="margin-top:20px">
+    <h3>画像の取り込み</h3>
+    <ol class="steps">
+      <li><div>機体の microSD を USB-C カードリーダーで iPad に接続し、「ファイル」アプリで DCIM フォルダの JPEG（DJI_…_D.JPG）を iPad 内の任意のフォルダにコピーします。</div></li>
+      <li><div>このアプリの「オルソ合成」で「ファイルを選択」→「ブラウズ」からコピーしたフォルダを開き、対象の画像をまとめて選びます。</div></li>
+      <li><div>DJI Fly アプリや「写真」経由で取り込んだ画像は縮小されることがあります。読み込んだ画像が 15520×7760 より小さいと、ログに注意が表示されます。</div></li>
+    </ol>
+  </div>
+</section>
+
+</div>
+
+<script>
+"use strict";
+const $=s=>document.querySelector(s);
+const D2R=Math.PI/180, TAU=Math.PI*2;
+const sleep=()=>new Promise(r=>setTimeout(r,0));
+const fmt=(v,d=1)=>Number(v).toFixed(d);
+function showTab(t){
+  document.querySelectorAll('nav.tabs button').forEach(b=>b.setAttribute('aria-selected',b.dataset.tab===t));
+  ['plan','ortho','data','guide'].forEach(k=>$('#panel-'+k).hidden=(k!==t));
+  try{localStorage.setItem('slabortho-tab',t)}catch(e){}
+  if(t==='data')refreshProjects();
+  if(t==='ortho')setTimeout(applyZoom,0);
+}
+document.querySelectorAll('nav.tabs button').forEach(b=>b.addEventListener('click',()=>showTab(b.dataset.tab)));
+/* ================= 撮影計画 ================= */
+const P={};
+function readPlan(){
+  P.theta=+$('#p-theta').value; P.fw=Math.min(95,Math.max(0,+$('#p-fw').value||0)); P.sd=Math.min(95,Math.max(0,+$('#p-sd').value||0));
+  P.imgW=+$('#p-src').value; P.len=Math.max(0.5,+$('#p-len').value||1); P.wid=Math.max(0.5,+$('#p-wid').value||1);
+  P.speed=Math.max(0.05,+$('#p-speed').value||0.5);
+  $('#p-theta-v').textContent=P.theta+'°';
+}
+function calc(h){
+  const th=P.theta*D2R, L=2*h*Math.tan(th), dth=TAU/P.imgW;
+  const g0=h*dth*1000, gEdge=g0/Math.cos(th)**2;
+  const thc=Math.atan(Math.SQRT2*Math.tan(th)), gCorner=g0/Math.cos(thc)**2;
+  const B=L*(1-P.fw/100), C=L*(1-P.sd/100);
+  const nx=P.len<=L?1:Math.ceil((P.len-L)/B-1e-9)+1, ny=P.wid<=L?1:Math.ceil((P.wid-L)/C-1e-9)+1;
+  const Bact=nx>1?(P.len-L)/(nx-1):0, Cact=ny>1?(P.wid-L)/(ny-1):0;
+  return {h,L,g0,gEdge,gCorner,thc,B,C,nx,ny,n:nx*ny,Bact,Cact};
+}
+let selH=3;
+function chip(n){return n<=20?`<span class="chip ok">${n} 枚</span>`:n<=30?`<span class="chip warn">${n} 枚</span>`:`<span class="chip bad">${n} 枚</span>`}
+function renderPlan(){
+  readPlan();
+  const rows=[];
+  for(let h=2;h<=5.001;h+=0.5){
+    const c=calc(h);
+    rows.push(`<tr data-h="${h}" class="${Math.abs(h-selH)<0.05?'sel':''}"><td class="num">${fmt(h)} m</td><td class="num">${fmt(c.L,2)} m</td>
+    <td class="num">${fmt(c.g0,1)} / ${fmt(c.gEdge,1)} / ${fmt(c.gCorner,1)} mm</td>
+    <td class="num key">${fmt(c.B,2)} m</td><td class="num key">${fmt(c.C,2)} m</td>
+    <td class="num">${c.ny} × ${c.nx} = ${chip(c.n)}</td></tr>`);
+  }
+  $('#plan-table tbody').innerHTML=rows.join('');
+  $('#plan-table tbody').querySelectorAll('tr').forEach(tr=>tr.addEventListener('click',()=>{selH=+tr.dataset.h;$('#d-h').value=selH;renderPlan()}));
+  $('#formula').innerHTML=`L = 2·h·tan(${P.theta}°) = ${fmt(2*Math.tan(P.theta*D2R),3)}·h　　B = L·(1 − ${P.fw}%)　　C = L·(1 − ${P.sd}%)<br>画素寸法 = h·Δθ / cos²θ（Δθ = 360° / ${P.imgW} px）　　枚数 = ⌈(対象長 − L)/B⌉ + 1`;
+  renderDiagram();
+}
+function renderDiagram(){
+  const h=selH, c=calc(h);
+  $('#d-h-v').textContent=fmt(h)+' m'; $('#d-h-label').textContent=`h = ${fmt(h)} m`;
+  const tFrame=c.B/P.speed;
+  $('#d-stats').innerHTML=[
+    ['有効範囲 L',fmt(c.L,2),'m'],['撮影間隔 B（最大）',fmt(c.B,2),'m'],['コース間隔 C（最大）',fmt(c.C,2),'m'],
+    ['必要枚数',c.n,`枚（${c.ny}コース×${c.nx}）`],['範囲端の画素寸法',fmt(c.gEdge,1),'mm'],['動画の切出し間隔',fmt(tFrame,1),'秒']
+  ].map(([k,v,u])=>`<div class="stat"><div class="k">${k}</div><div class="v">${v}<small>${u}</small></div></div>`).join('');
+  sideSVG(c); planSVG(c);
+}
+function sideSVG(c){
+  const W=420,H=260, m=30, scale=Math.min((W-2*m)/(c.L+c.B+0.5),(H-80)/Math.max(c.h,2));
+  const slabY=40, camY=slabY+c.h*scale, x0=W/2-(c.B*scale)/2;
+  const cams=[x0,x0+c.B*scale];
+  let s=`<rect x="0" y="${slabY-16}" width="${W}" height="16" fill="var(--slab)"/>`;
+  s+=`<text x="8" y="${slabY-4}">床版下面</text>`;
+  cams.forEach((cx,i)=>{
+    const half=c.L/2*scale;
+    s+=`<polygon points="${cx},${camY} ${cx-half},${slabY} ${cx+half},${slabY}" fill="var(--fp)" stroke="var(--fp-line)" stroke-width="1"/>`;
+    s+=`<circle cx="${cx}" cy="${camY}" r="6" fill="var(--cam)"/>`;
+  });
+  const ovL=cams[1]-c.L/2*scale, ovR=cams[0]+c.L/2*scale;
+  if(ovR>ovL) s+=`<rect x="${ovL}" y="${slabY}" width="${ovR-ovL}" height="5" fill="var(--accent)"/>`;
+  // dims
+  s+=`<line x1="${cams[0]}" y1="${camY+18}" x2="${cams[1]}" y2="${camY+18}" stroke="var(--muted)"/><text x="${(cams[0]+cams[1])/2}" y="${camY+34}" text-anchor="middle">B = ${fmt(c.B,2)} m</text>`;
+  s+=`<line x1="${cams[0]-c.L/2*scale}" y1="${slabY+16}" x2="${cams[0]+c.L/2*scale}" y2="${slabY+16}" stroke="var(--muted)" stroke-dasharray="3 3"/><text x="${cams[0]-c.L/2*scale+4}" y="${slabY+30}">L = ${fmt(c.L,2)} m</text>`;
+  s+=`<line x1="${cams[1]+22}" y1="${slabY}" x2="${cams[1]+22}" y2="${camY}" stroke="var(--muted)"/><text x="${cams[1]+28}" y="${(slabY+camY)/2}">h = ${fmt(c.h)} m</text>`;
+  s+=`<text x="${cams[0]}" y="${camY-12}" text-anchor="middle">θ=${P.theta}°</text>`;
+  s+=`<text x="${ovL}" y="${slabY+46}">重複 ${P.fw}%</text>`;
+  $('#svg-side').innerHTML=s;
+}
+function planSVG(c){
+  const W=520,H=320,m=24, span=Math.max(P.len,c.L)+1, spanY=Math.max(P.wid,c.L)+1;
+  const sc=Math.min((W-2*m)/span,(H-2*m-14)/spanY);
+  const ox=(W-P.len*sc)/2, oy=(H-14-P.wid*sc)/2;
+  let s=`<rect x="${ox}" y="${oy}" width="${P.len*sc}" height="${P.wid*sc}" fill="var(--slab)" rx="2"/>`;
+  const xs=[],ys=[];
+  for(let i=0;i<c.nx;i++) xs.push(c.nx>1? c.L/2+i*c.Bact : P.len/2);
+  for(let j=0;j<c.ny;j++) ys.push(c.ny>1? c.L/2+j*c.Cact : P.wid/2);
+  let k=0;
+  ys.forEach((y,j)=>{
+    const row=j%2?xs.slice().reverse():xs;
+    row.forEach((x,i)=>{
+      k++;
+      const hi=(j===0&&(i===0||i===1))||(j===1&&i===row.length-1);
+      s+=`<rect x="${ox+(x-c.L/2)*sc}" y="${oy+(y-c.L/2)*sc}" width="${c.L*sc}" height="${c.L*sc}" fill="${hi?'var(--fp)':'none'}" stroke="var(--fp-line)" stroke-width="${hi?1.2:0.6}" ${hi?'':'stroke-dasharray="3 3"'}/>`;
+    });
+  });
+  // path
+  let pts=[]; ys.forEach((y,j)=>{(j%2?xs.slice().reverse():xs).forEach(x=>pts.push(`${ox+x*sc},${oy+y*sc}`))});
+  s+=`<polyline points="${pts.join(' ')}" fill="none" stroke="var(--accent)" stroke-width="1.5"/>`;
+  k=0; ys.forEach((y,j)=>{(j%2?xs.slice().reverse():xs).forEach(x=>{k++; s+=`<circle cx="${ox+x*sc}" cy="${oy+y*sc}" r="4" fill="var(--cam)"/>`; if(c.n<=40) s+=`<text x="${ox+x*sc+5}" y="${oy+y*sc-5}">${k}</text>`;})});
+  s+=`<text x="${ox}" y="${H-4}">対象 ${P.len} m × ${P.wid} m　実間隔 B=${c.nx>1?fmt(c.Bact,2):'—'} m, C=${c.ny>1?fmt(c.Cact,2):'—'} m</text>`;
+  $('#svg-plan').innerHTML=s;
+}
+['#p-theta','#p-fw','#p-sd','#p-src','#p-len','#p-wid','#p-speed'].forEach(id=>$(id).addEventListener('input',renderPlan));
+$('#d-h').addEventListener('input',e=>{selH=+e.target.value;renderPlan()});
+document.querySelectorAll('[data-preset]').forEach(b=>b.addEventListener('click',()=>{const [a,c]=b.dataset.preset.split(',');$('#p-fw').value=a;$('#p-sd').value=c;renderPlan()}));
+renderPlan();
+
+
+/* ---- 画像ソース ---- */
+async function openFile(file){
+  try{
+    const bmp=await createImageBitmap(file);
+    return {el:bmp,W:bmp.width,H:bmp.height,close:()=>bmp.close&&bmp.close()};
+  }catch(e){
+    const url=URL.createObjectURL(file); const img=new Image(); img.src=url;
+    await img.decode();
+    return {el:img,W:img.naturalWidth,H:img.naturalHeight,close:()=>URL.revokeObjectURL(url)};
+  }
+}
+/* DJI の XMP から機体ヨー角を読む（360°画像は機体固定の向きで保存されるため回転の初期値に使う） */
+async function readYaw(file){
+  try{const t=await file.slice(0,400000).text();
+    const m=t.match(/FlightYawDegree="([-+\d.]+)"/)||t.match(/GimbalYawDegree="([-+\d.]+)"/);return m?parseFloat(m[1]):null;}catch(e){return null}
+}
+/* 天頂側の帯（正距円筒の上部）を画素配列として取り出す */
+function getBand(src,thetaDeg,maxW,rowFactor){
+  const W=src.W,H=src.H;
+  const rowsFull=Math.min(src.maxRows||H,Math.ceil(H*thetaDeg/180));
+  const bw=Math.min(W,maxW);
+  let bh=Math.min(rowsFull,Math.round(rowsFull*bw/W*rowFactor));
+  const data=new Uint8ClampedArray(bw*bh*4);
+  const stripW=Math.max(64,Math.floor(15.5e6/bh));
+  const cv=document.createElement('canvas'); const ctx=cv.getContext('2d',{willReadFrequently:true});
+  for(let x0=0;x0<bw;x0+=stripW){
+    const sw=Math.min(stripW,bw-x0);
+    cv.width=sw; cv.height=bh;
+    ctx.imageSmoothingEnabled=true; ctx.imageSmoothingQuality='high';
+    ctx.drawImage(src.el,x0*W/bw,0,sw*W/bw,rowsFull,0,0,sw,bh);
+    const d=ctx.getImageData(0,0,sw,bh).data;
+    for(let y=0;y<bh;y++) data.set(d.subarray(y*sw*4,(y+1)*sw*4),(y*bw+x0)*4);
+  }
+  cv.width=cv.height=1;
+  return {data,w:bw,h:bh,thb:rowsFull*Math.PI/H};
+}
+function sampleBand(b,theta,lon,out){
+  const fr=theta/b.thb*b.h-0.5, fc=(lon/TAU+0.5)*b.w-0.5;
+  let y0=Math.floor(fr), x0=Math.floor(fc); const ty=fr-y0, tx=fc-x0;
+  let y1=y0+1; if(y0<0){y0=0;} if(y1<0)y1=0; if(y1>=b.h)y1=b.h-1; if(y0>=b.h)y0=b.h-1;
+  let xa=((x0%b.w)+b.w)%b.w, xb=(xa+1)%b.w;
+  const d=b.data, i00=(y0*b.w+xa)*4,i01=(y0*b.w+xb)*4,i10=(y1*b.w+xa)*4,i11=(y1*b.w+xb)*4;
+  const w00=(1-tx)*(1-ty),w01=tx*(1-ty),w10=(1-tx)*ty,w11=tx*ty;
+  out[0]=d[i00]*w00+d[i01]*w01+d[i10]*w10+d[i11]*w11;
+  out[1]=d[i00+1]*w00+d[i01+1]*w01+d[i10+1]*w10+d[i11+1]*w11;
+  out[2]=d[i00+2]*w00+d[i01+2]*w01+d[i10+2]*w10+d[i11+2]*w11;
+}
+
+/* ---- 位置合わせ用の平面投影タイル ---- */
+const REG_N=1024, REG_TH=55;
+function makeRegTile(band,h){
+  const N=REG_N, a=h*Math.tan(REG_TH*D2R), g=2*a/N;
+  const gray=new Float32Array(N*N), rgba=new Uint8ClampedArray(N*N*4), out=[0,0,0];
+  const thLim=band.thb-0.01;
+  for(let v=0;v<N;v++){const Y=(N/2-v-0.5)*g;
+    for(let u=0;u<N;u++){const X=(u+0.5-N/2)*g;
+      const th=Math.atan(Math.hypot(X,Y)/h), i=v*N+u;
+      if(th>thLim){rgba[i*4+3]=255;continue;}
+      sampleBand(band,th,Math.atan2(Y,X),out);
+      gray[i]=(0.299*out[0]+0.587*out[1]+0.114*out[2])/255;
+      rgba[i*4]=out[0];rgba[i*4+1]=out[1];rgba[i*4+2]=out[2];rgba[i*4+3]=255;
+    }}
+  return {N,g,h,gray,rgba,rhoValid:h*Math.tan(thLim)};
+}
+function boxBlur(src,N,r){
+  const tmp=new Float32Array(N*N), dst=new Float32Array(N*N), k=2*r+1;
+  for(let y=0;y<N;y++){let s=0;const o=y*N;
+    for(let x=-r;x<=r;x++) s+=src[o+Math.min(N-1,Math.max(0,x))];
+    for(let x=0;x<N;x++){tmp[o+x]=s/k; s+=src[o+Math.min(N-1,x+r+1)]-src[o+Math.max(0,x-r)];}}
+  for(let x=0;x<N;x++){let s=0;
+    for(let y=-r;y<=r;y++) s+=tmp[Math.min(N-1,Math.max(0,y))*N+x];
+    for(let y=0;y<N;y++){dst[y*N+x]=s/k; s+=tmp[Math.min(N-1,y+r+1)*N+x]-tmp[Math.max(0,y-r)*N+x];}}
+  return dst;
+}
+/* BRIEF のサンプル対（固定乱数） */
+const PAIRS=(()=>{let s=12345;const rnd=()=>{s=(s*1103515245+12345)&0x7fffffff;return s/0x7fffffff};
+  const g=()=>{let t=0;for(let i=0;i<4;i++)t+=rnd();return (t-2)*1.73*5.2};
+  const cl=v=>Math.max(-13,Math.min(13,Math.round(v)));
+  const a=new Int8Array(256*4);for(let i=0;i<256;i++){a[i*4]=cl(g());a[i*4+1]=cl(g());a[i*4+2]=cl(g());a[i*4+3]=cl(g());}return a})();
+function detect(tile,K){
+  const N=tile.N, B1=boxBlur(tile.gray,N,1), B=boxBlur(B1,N,2);
+  const Ixx=new Float32Array(N*N),Iyy=new Float32Array(N*N),Ixy=new Float32Array(N*N);
+  for(let y=1;y<N-1;y++)for(let x=1;x<N-1;x++){const i=y*N+x;const gx=(B1[i+1]-B1[i-1])*0.5,gy=(B1[i+N]-B1[i-N])*0.5;Ixx[i]=gx*gx;Iyy[i]=gy*gy;Ixy[i]=gx*gy;}
+  const Sxx=boxBlur(Ixx,N,2),Syy=boxBlur(Iyy,N,2),Sxy=boxBlur(Ixy,N,2);
+  // 白飛び（照明器具など）の周辺は特徴点を取らない：同じ形の器具が並ぶと誤対応の原因になる
+  const sat=new Float32Array(N*N); for(let i=0;i<N*N;i++) sat[i]=tile.gray[i]>0.92?1:0;
+  const satD=boxBlur(sat,N,Math.max(4,Math.round(0.08/tile.g)));
+  const R=new Float32Array(N*N); let maxR=0;
+  for(let i=0;i<N*N;i++){const d=Sxx[i]*Syy[i]-Sxy[i]*Sxy[i],t=Sxx[i]+Syy[i];R[i]=d-0.04*t*t;if(R[i]>maxR&&satD[i]<=0.001)maxR=R[i];}
+  const thr=maxR*0.00002, border=20, rhoMax=tile.rhoValid-20*tile.g, cells=10, cand=[];
+  for(let y=border;y<N-border;y++){const Y=(N/2-y-0.5)*tile.g;
+    for(let x=border;x<N-border;x++){const i=y*N+x,r=R[i]; if(r<=thr)continue;
+      const X=(x+0.5-N/2)*tile.g; if(X*X+Y*Y>rhoMax*rhoMax)continue; if(satD[i]>0.001)continue;
+      let ok=true; for(let dy=-3;dy<=3&&ok;dy++)for(let dx=-3;dx<=3;dx++){if((dx||dy)&&R[i+dy*N+dx]>=r){ok=false;break;}}
+      if(ok) cand.push({x,y,r,c:Math.floor(y*cells/N)*cells+Math.floor(x*cells/N)});
+    }}
+  const per=Math.ceil(K/(cells*cells))*2, byCell=new Map();
+  cand.sort((a,b)=>b.r-a.r);
+  const kept=[]; for(const p of cand){const n=byCell.get(p.c)||0; if(n<per){byCell.set(p.c,n+1);kept.push(p);} if(kept.length>=K)break;}
+  const M=kept.length, desc=new Uint32Array(M*8), X=new Float32Array(M), Y=new Float32Array(M), lum=new Float32Array(M);
+  for(let k=0;k<M;k++){const p=kept[k];
+    let m10=0,m01=0; for(let dy=-15;dy<=15;dy++)for(let dx=-15;dx<=15;dx++){if(dx*dx+dy*dy>225)continue;const v=B[(p.y+dy)*N+p.x+dx];m10+=dx*v;m01+=dy*v;}
+    const an=Math.atan2(m01,m10), c=Math.cos(an), s=Math.sin(an);
+    for(let b=0;b<256;b++){
+      const ax=p.x+Math.round(c*PAIRS[b*4]-s*PAIRS[b*4+1]), ay=p.y+Math.round(s*PAIRS[b*4]+c*PAIRS[b*4+1]);
+      const bx=p.x+Math.round(c*PAIRS[b*4+2]-s*PAIRS[b*4+3]), by=p.y+Math.round(s*PAIRS[b*4+2]+c*PAIRS[b*4+3]);
+      if(B[ay*N+ax]<B[by*N+bx]) desc[k*8+(b>>5)]|=(1<<(b&31));
+    }
+    X[k]=(p.x+0.5-N/2)*tile.g; Y[k]=(N/2-p.y-0.5)*tile.g; lum[k]=B[p.y*N+p.x];
+  }
+  return {M,desc,X,Y,lum};
+}
+function pop(x){x=x-((x>>>1)&0x55555555);x=(x&0x33333333)+((x>>>2)&0x33333333);return(((x+(x>>>4))&0x0F0F0F0F)*0x01010101)>>>24}
+function matchFeat(A,Bf){
+  const m=A.M,n=Bf.M; if(!m||!n)return [];
+  const bestA=new Int32Array(m).fill(-1),dA=new Uint16Array(m).fill(999),d2A=new Uint16Array(m).fill(999);
+  const bestB=new Int32Array(n).fill(-1),dB=new Uint16Array(n).fill(999);
+  const a=A.desc,b=Bf.desc;
+  for(let i=0;i<m;i++){const o=i*8;const a0=a[o],a1=a[o+1],a2=a[o+2],a3=a[o+3],a4=a[o+4],a5=a[o+5],a6=a[o+6],a7=a[o+7];
+    for(let j=0;j<n;j++){const q=j*8;
+      const d=pop(a0^b[q])+pop(a1^b[q+1])+pop(a2^b[q+2])+pop(a3^b[q+3])+pop(a4^b[q+4])+pop(a5^b[q+5])+pop(a6^b[q+6])+pop(a7^b[q+7]);
+      if(d<dA[i]){d2A[i]=dA[i];dA[i]=d;bestA[i]=j;}else if(d<d2A[i])d2A[i]=d;
+      if(d<dB[j]){dB[j]=d;bestB[j]=i;}
+    }}
+  const out=[];for(let i=0;i<m;i++){const j=bestA[i];if(j<0)continue;if(bestB[j]!==i)continue;if(dA[i]>70)continue;if(dA[i]>0.85*d2A[i])continue;out.push([i,j]);}
+  return out;
+}
+/* 相似変換 q = z·p + t（複素数）を RANSAC で推定 */
+function ransacSim(A,Bf,mt,thr,rotPrior){
+  const n=mt.length; if(n<8)return null;
+  let s=987654321;const rnd=k=>{s=(s*1664525+1013904223)>>>0;return s%k};
+  let best=null,bestIn=0;
+  const px=i=>A.X[mt[i][0]],py=i=>A.Y[mt[i][0]],qx=i=>Bf.X[mt[i][1]],qy=i=>Bf.Y[mt[i][1]];
+  const thr2=thr*thr;
+  for(let it=0;it<600;it++){
+    const i=rnd(n),j=rnd(n); if(i===j)continue;
+    const dpx=px(j)-px(i),dpy=py(j)-py(i),dqx=qx(j)-qx(i),dqy=qy(j)-qy(i),den=dpx*dpx+dpy*dpy; if(den<1e-4)continue;
+    const a=(dqx*dpx+dqy*dpy)/den,b=(dqy*dpx-dqx*dpy)/den, sc=Math.hypot(a,b); if(sc<0.75||sc>1.33)continue;
+    if(rotPrior!=null){let dr=Math.atan2(b,a)-rotPrior;dr=Math.atan2(Math.sin(dr),Math.cos(dr));if(Math.abs(dr)>12*D2R)continue;}
+    const tx=qx(i)-(a*px(i)-b*py(i)),ty=qy(i)-(b*px(i)+a*py(i));
+    let c=0; for(let k=0;k<n;k++){const ex=a*px(k)-b*py(k)+tx-qx(k),ey=b*px(k)+a*py(k)+ty-qy(k); if(ex*ex+ey*ey<thr2)c++;}
+    if(c>bestIn){bestIn=c;best=[a,b,tx,ty];}
+  }
+  if(!best)return null;
+  let inl=[];
+  for(let pass=0;pass<2;pass++){
+    const [a,b,tx,ty]=best; inl=[];
+    for(let k=0;k<n;k++){const ex=a*px(k)-b*py(k)+tx-qx(k),ey=b*px(k)+a*py(k)+ty-qy(k); if(ex*ex+ey*ey<thr2)inl.push(k);}
+    if(inl.length<3)break;
+    let mpx=0,mpy=0,mqx=0,mqy=0; inl.forEach(k=>{mpx+=px(k);mpy+=py(k);mqx+=qx(k);mqy+=qy(k)}); const L=inl.length; mpx/=L;mpy/=L;mqx/=L;mqy/=L;
+    let sr=0,si=0,sp=0; inl.forEach(k=>{const ax=px(k)-mpx,ay=py(k)-mpy,bx=qx(k)-mqx,by=qy(k)-mqy; sr+=bx*ax+by*ay; si+=by*ax-bx*ay; sp+=ax*ax+ay*ay;});
+    const a2=sr/sp,b2=si/sp; best=[a2,b2,mqx-(a2*mpx-b2*mpy),mqy-(b2*mpx+a2*mpy)];
+  }
+  return {T:best,inliers:inl.map(k=>mt[k])};
+}
+function solveLin(A,b,n){ // Gauss with partial pivot, A n×n (Float64Array)
+  for(let c=0;c<n;c++){let p=c,mx=Math.abs(A[c*n+c]);for(let r=c+1;r<n;r++){const v=Math.abs(A[r*n+c]);if(v>mx){mx=v;p=r}}
+    if(mx<1e-12)return null;
+    if(p!==c){for(let k=0;k<n;k++){const t=A[c*n+k];A[c*n+k]=A[p*n+k];A[p*n+k]=t}const t=b[c];b[c]=b[p];b[p]=t}
+    for(let r=c+1;r<n;r++){const f=A[r*n+c]/A[c*n+c];if(!f)continue;for(let k=c;k<n;k++)A[r*n+k]-=f*A[c*n+k];b[r]-=f*b[c]}}
+  const x=new Float64Array(n);for(let r=n-1;r>=0;r--){let s=b[r];for(let k=r+1;k<n;k++)s-=A[r*n+k]*x[k];x[r]=s/A[r*n+r]}return x;
+}
+
+/* ---- 全体最適化 ---- */
+function globalSolve(nImg,feats,pairs){
+  // 連結成分
+  const adj=Array.from({length:nImg},()=>[]); pairs.forEach(p=>{adj[p.i].push(p.j);adj[p.j].push(p.i)});
+  const comp=new Int32Array(nImg).fill(-1); let bestC=-1,bestSize=0,cid=0;
+  for(let s=0;s<nImg;s++){if(comp[s]>=0)continue;const st=[s];comp[s]=cid;let sz=0;while(st.length){const u=st.pop();sz++;adj[u].forEach(v=>{if(comp[v]<0){comp[v]=cid;st.push(v)}})}
+    if(sz>bestSize){bestSize=sz;bestC=cid}cid++;}
+  const used=[];for(let i=0;i<nImg;i++)if(comp[i]===bestC)used.push(i);
+  const idx=new Map(used.map((v,k)=>[v,k])), n=used.length*4;
+  let anchor=used[0],deg=-1; used.forEach(u=>{if(adj[u].length>deg){deg=adj[u].length;anchor=u}});
+  const A=new Float64Array(n*n), b=new Float64Array(n);
+  const addRow=(cols,vals,rhs,w)=>{for(let x=0;x<cols.length;x++){for(let y=0;y<cols.length;y++)A[cols[x]*n+cols[y]]+=w*vals[x]*vals[y];b[cols[x]]+=w*vals[x]*rhs;}};
+  pairs.forEach(p=>{
+    if(!idx.has(p.i)||!idx.has(p.j))return;
+    const I=idx.get(p.i)*4,J=idx.get(p.j)*4, Fi=feats[p.i],Fj=feats[p.j];
+    const step=Math.max(1,Math.floor(p.inliers.length/60));
+    for(let k=0;k<p.inliers.length;k+=step){const [u,v]=p.inliers[k];
+      const px=Fi.X[u],py=Fi.Y[u],qx=Fj.X[v],qy=Fj.Y[v];
+      addRow([I,I+1,I+2,J,J+1,J+2],[px,-py,1,-qx,qy,-1],0,1);
+      addRow([I,I+1,I+3,J,J+1,J+3],[py,px,1,-qy,-qx,-1],0,1);
+    }});
+  const Ia=idx.get(anchor)*4; [1,0,0,0].forEach((v,k)=>addRow([Ia+k],[1],v,1e6));
+  const x=solveLin(A,b,n); if(!x)return null;
+  let cams=used.map((u,k)=>({i:u,a:x[k*4],b:x[k*4+1],tx:x[k*4+2],ty:x[k*4+3]}));
+  // 残差
+  const res=new Map(used.map(u=>[u,[0,0]]));
+  pairs.forEach(p=>{if(!idx.has(p.i)||!idx.has(p.j))return;const ci=cams[idx.get(p.i)],cj=cams[idx.get(p.j)],Fi=feats[p.i],Fj=feats[p.j];
+    p.inliers.forEach(([u,v])=>{const wx=ci.a*Fi.X[u]-ci.b*Fi.Y[u]+ci.tx-(cj.a*Fj.X[v]-cj.b*Fj.Y[v]+cj.tx),wy=ci.b*Fi.X[u]+ci.a*Fi.Y[u]+ci.ty-(cj.b*Fj.X[v]+cj.a*Fj.Y[v]+cj.ty);const e=wx*wx+wy*wy;
+      [p.i,p.j].forEach(q=>{const r=res.get(q);r[0]+=e;r[1]++})})});
+  cams.forEach(c=>{const r=res.get(c.i);c.rms=r[1]?Math.sqrt(r[0]/r[1]):0});
+  const pairErr=pairs.map(p=>{if(!idx.has(p.i)||!idx.has(p.j))return 0;const ci=cams[idx.get(p.i)],cj=cams[idx.get(p.j)],Fi=feats[p.i],Fj=feats[p.j];let e=0;
+    p.inliers.forEach(([u,v])=>{const wx=ci.a*Fi.X[u]-ci.b*Fi.Y[u]+ci.tx-(cj.a*Fj.X[v]-cj.b*Fj.Y[v]+cj.tx),wy=ci.b*Fi.X[u]+ci.a*Fi.Y[u]+ci.ty-(cj.b*Fj.X[v]+cj.a*Fj.Y[v]+cj.ty);e+=wx*wx+wy*wy});
+    return Math.sqrt(e/p.inliers.length)/Math.hypot(ci.a,ci.b);});
+  // 主方向を水平に、平均縮尺を1に
+  const s=cams.reduce((q,c)=>q+Math.hypot(c.a,c.b),0)/cams.length;
+  let mx=0,my=0;cams.forEach(c=>{mx+=c.tx;my+=c.ty});mx/=cams.length;my/=cams.length;
+  let sxx=0,syy=0,sxy=0;cams.forEach(c=>{const dx=c.tx-mx,dy=c.ty-my;sxx+=dx*dx;syy+=dy*dy;sxy+=dx*dy});
+  const phi=cams.length>1?0.5*Math.atan2(2*sxy,sxx-syy):0, rc=Math.cos(-phi)/s, rs=Math.sin(-phi)/s;
+  cams=cams.map(c=>({...c,a:rc*c.a-rs*c.b,b:rs*c.a+rc*c.b,tx:rc*c.tx-rs*c.ty,ty:rs*c.tx+rc*c.ty,rms:c.rms/s}));
+  cams.forEach(c=>c.s=Math.hypot(c.a,c.b));
+  return {cams,used,pairErr,dropped:[...Array(nImg).keys()].filter(i=>comp[i]!==bestC)};
+}
+function solveGains(nImg,feats,pairs,used){
+  const idx=new Map(used.map((v,k)=>[v,k])),n=used.length,A=new Float64Array(n*n),b=new Float64Array(n);
+  pairs.forEach(p=>{if(!idx.has(p.i)||!idx.has(p.j))return;let si=0,sj=0;p.inliers.forEach(([u,v])=>{si+=feats[p.i].lum[u];sj+=feats[p.j].lum[v]});
+    if(si<=0||sj<=0)return;const d=Math.log(si/sj),I=idx.get(p.i),J=idx.get(p.j),w=Math.min(50,p.inliers.length);
+    // l_i - l_j = -d
+    A[I*n+I]+=w;A[J*n+J]+=w;A[I*n+J]-=w;A[J*n+I]-=w;b[I]-=w*d;b[J]+=w*d;});
+  for(let i=0;i<n;i++)A[i*n+i]+=2; // 事前分布 l≈0
+  const x=solveLin(A,b,n)||new Float64Array(n);
+  const g=new Map();used.forEach((u,k)=>g.set(u,Math.max(0.6,Math.min(1.6,Math.exp(x[k])))));return g;
+}
+
+
+/* ---- サンプル（合成データ）：模擬床版の 360° 画像を端末内で生成 ---- */
+function makeSlabTexture(Lx,Ly,g){
+  const w=Math.round(Lx/g),h=Math.round(Ly/g),cv=document.createElement('canvas');cv.width=w;cv.height=h;
+  const ctx=cv.getContext('2d');const img=ctx.createImageData(w,h),d=img.data;
+  let s=7;const rnd=()=>{s=(s*16807)%2147483647;return s/2147483647};
+  const oct=[[160,0.5],[40,0.3],[10,0.22],[3,0.16]].map(([cell,amp])=>{const gw=Math.ceil(w/cell)+2,gh=Math.ceil(h/cell)+2,gr=new Float32Array(gw*gh);for(let i=0;i<gr.length;i++)gr[i]=rnd()-0.5;return {cell,amp,gw,gr}});
+  for(let y=0;y<h;y++)for(let x=0;x<w;x++){let v=0;for(const o of oct){const fx=x/o.cell,fy=y/o.cell,ix=fx|0,iy=fy|0,tx=fx-ix,ty=fy-iy,g0=o.gr;
+      const a=g0[iy*o.gw+ix],b=g0[iy*o.gw+ix+1],c=g0[(iy+1)*o.gw+ix],e=g0[(iy+1)*o.gw+ix+1];v+=o.amp*((a*(1-tx)+b*tx)*(1-ty)+(c*(1-tx)+e*tx)*ty);}
+    const q=(y*w+x)*4,base=150+v*70;d[q]=base+4;d[q+1]=base+3;d[q+2]=base-2;d[q+3]=255;}
+  ctx.putImageData(img,0,0);
+  ctx.strokeStyle='rgba(55,55,50,.45)';ctx.lineWidth=2;
+  for(let x=0.9;x<Lx;x+=0.9){ctx.beginPath();ctx.moveTo(x/g,0);ctx.lineTo(x/g,h);ctx.stroke();}
+  for(let y=1.8;y<Ly;y+=1.8){ctx.beginPath();ctx.moveTo(0,y/g);ctx.lineTo(w,y/g);ctx.stroke();}
+  for(let k=0;k<26;k++){ // ひび割れ
+    let x=rnd()*w,y=rnd()*h,a=rnd()*TAU;ctx.strokeStyle=`rgba(30,28,25,${0.5+rnd()*0.4})`;ctx.lineWidth=1+rnd()*1.5;ctx.beginPath();ctx.moveTo(x,y);
+    const L=40+rnd()*260;for(let i=0;i<L;i+=6){a+=(rnd()-0.5)*0.7;x+=Math.cos(a)*6;y+=Math.sin(a)*6;ctx.lineTo(x,y);}ctx.stroke();
+    if(rnd()<0.35){const gr=ctx.createRadialGradient(x,y,0,x,y,30+rnd()*60);gr.addColorStop(0,'rgba(245,245,238,.8)');gr.addColorStop(1,'rgba(245,245,238,0)');ctx.fillStyle=gr;ctx.beginPath();ctx.arc(x,y,90,0,TAU);ctx.fill();}
+  }
+  for(let k=0;k<9;k++){const x=rnd()*w,y=rnd()*h,r=30+rnd()*90,gr=ctx.createRadialGradient(x,y,0,x,y,r);gr.addColorStop(0,'rgba(120,70,30,.55)');gr.addColorStop(1,'rgba(120,70,30,0)');ctx.fillStyle=gr;ctx.beginPath();ctx.arc(x,y,r,0,TAU);ctx.fill();}
+  for(let k=0;k<5;k++){const x=rnd()*w,y=rnd()*h;ctx.fillStyle='rgba(70,70,70,.7)';ctx.fillRect(x,y,24+rnd()*50,18+rnd()*40);} // 剥離・補修跡
+  ctx.fillStyle='rgba(240,240,240,.9)';ctx.font=`${Math.round(0.12/g)}px sans-serif`;
+  [['A1',1.2,1.0],['A2',6.2,1.1],['B1',3.4,5.6],['B2',9.2,6.2]].forEach(([t,x,y])=>ctx.fillText(t,x/g,y/g));
+  return {cv,data:ctx.getImageData(0,0,w,h).data,w,h,g,Lx,Ly};
+}
+function synthEquirect(T,cam,W,H,thMaxDeg){
+  const rows=Math.ceil(H*thMaxDeg/180),cv=document.createElement('canvas');cv.width=W;cv.height=rows;
+  const ctx=cv.getContext('2d'),img=ctx.createImageData(W,rows),d=img.data,td=T.data;
+  const cs=Math.cos(cam.yaw),sn=Math.sin(cam.yaw);
+  for(let r=0;r<rows;r++){const th=(r+0.5)/H*Math.PI,rho=cam.h*Math.tan(th);
+    for(let c=0;c<W;c++){const lon=((c+0.5)/W-0.5)*TAU,X=rho*Math.cos(lon),Y=rho*Math.sin(lon);
+      const wx=cam.x+cs*X-sn*Y,wy=cam.y+sn*X+cs*Y,fx=wx/T.g-0.5,fy=(T.Ly-wy)/T.g-0.5,q=(r*W+c)*4;
+      if(fx<0||fy<0||fx>=T.w-1||fy>=T.h-1||th>1.45){const v=48+18*Math.cos(lon*3);d[q]=v;d[q+1]=v+2;d[q+2]=v+5;d[q+3]=255;continue;}
+      const ix=fx|0,iy=fy|0,tx=fx-ix,ty=fy-iy,i0=(iy*T.w+ix)*4,i1=i0+4,i2=i0+T.w*4,i3=i2+4;
+      const shade=cam.gain*(1-0.25*Math.sin(th)**2);
+      for(let k=0;k<3;k++)d[q+k]=((td[i0+k]*(1-tx)+td[i1+k]*tx)*(1-ty)+(td[i2+k]*(1-tx)+td[i3+k]*tx)*ty)*shade+(Math.random()-0.5)*6;
+      d[q+3]=255;}}
+  ctx.putImageData(img,0,0);
+  return {el:cv,W,H,maxRows:rows};
+}
+
+/* ================= JPEG エンコーダ（ベースライン 4:4:4、帯ごとに逐次処理） =================
+   iPad の Safari は canvas が約1,670万画素までのため、それを超える出力はこの自前エンコーダで書き出す */
+const JpegEncoder=(()=>{
+  const ZZ=[0,1,5,6,14,15,27,28,2,4,7,13,16,26,29,42,3,8,12,17,25,30,41,43,9,11,18,24,31,40,44,53,10,19,23,32,39,45,52,54,20,22,33,38,46,51,55,60,21,34,37,47,50,56,59,61,35,36,48,49,57,58,62,63];
+  const YQT=[16,11,10,16,24,40,51,61,12,12,14,19,26,58,60,55,14,13,16,24,40,57,69,56,14,17,22,29,51,87,80,62,18,22,37,56,68,109,103,77,24,35,55,64,81,104,113,92,49,64,78,87,103,121,120,101,72,92,95,98,112,100,103,99];
+  const UVQT=[17,18,24,47,99,99,99,99,18,21,26,66,99,99,99,99,24,26,56,99,99,99,99,99,47,66,99,99,99,99,99,99,99,99,99,99,99,99,99,99,99,99,99,99,99,99,99,99,99,99,99,99,99,99,99,99,99,99,99,99,99,99,99,99];
+  const AASF=[1.0,1.387039845,1.306562965,1.175875602,1.0,0.785694958,0.541196100,0.275899379];
+  const DC_L_N=[0,0,1,5,1,1,1,1,1,1,0,0,0,0,0,0,0], DC_L_V=[0,1,2,3,4,5,6,7,8,9,10,11];
+  const AC_L_N=[0,0,2,1,3,3,2,4,3,5,5,4,4,0,0,1,0x7d];
+  const AC_L_V=[0x01,0x02,0x03,0x00,0x04,0x11,0x05,0x12,0x21,0x31,0x41,0x06,0x13,0x51,0x61,0x07,0x22,0x71,0x14,0x32,0x81,0x91,0xa1,0x08,0x23,0x42,0xb1,0xc1,0x15,0x52,0xd1,0xf0,0x24,0x33,0x62,0x72,0x82,0x09,0x0a,0x16,0x17,0x18,0x19,0x1a,0x25,0x26,0x27,0x28,0x29,0x2a,0x34,0x35,0x36,0x37,0x38,0x39,0x3a,0x43,0x44,0x45,0x46,0x47,0x48,0x49,0x4a,0x53,0x54,0x55,0x56,0x57,0x58,0x59,0x5a,0x63,0x64,0x65,0x66,0x67,0x68,0x69,0x6a,0x73,0x74,0x75,0x76,0x77,0x78,0x79,0x7a,0x83,0x84,0x85,0x86,0x87,0x88,0x89,0x8a,0x92,0x93,0x94,0x95,0x96,0x97,0x98,0x99,0x9a,0xa2,0xa3,0xa4,0xa5,0xa6,0xa7,0xa8,0xa9,0xaa,0xb2,0xb3,0xb4,0xb5,0xb6,0xb7,0xb8,0xb9,0xba,0xc2,0xc3,0xc4,0xc5,0xc6,0xc7,0xc8,0xc9,0xca,0xd2,0xd3,0xd4,0xd5,0xd6,0xd7,0xd8,0xd9,0xda,0xe1,0xe2,0xe3,0xe4,0xe5,0xe6,0xe7,0xe8,0xe9,0xea,0xf1,0xf2,0xf3,0xf4,0xf5,0xf6,0xf7,0xf8,0xf9,0xfa];
+  const DC_C_N=[0,0,3,1,1,1,1,1,1,1,1,1,0,0,0,0,0], DC_C_V=[0,1,2,3,4,5,6,7,8,9,10,11];
+  const AC_C_N=[0,0,2,1,2,4,4,3,4,7,5,4,4,0,1,2,0x77];
+  const AC_C_V=[0x00,0x01,0x02,0x03,0x11,0x04,0x05,0x21,0x31,0x06,0x12,0x41,0x51,0x07,0x61,0x71,0x13,0x22,0x32,0x81,0x08,0x14,0x42,0x91,0xa1,0xb1,0xc1,0x09,0x23,0x33,0x52,0xf0,0x15,0x62,0x72,0xd1,0x0a,0x16,0x24,0x34,0xe1,0x25,0xf1,0x17,0x18,0x19,0x1a,0x26,0x27,0x28,0x29,0x2a,0x35,0x36,0x37,0x38,0x39,0x3a,0x43,0x44,0x45,0x46,0x47,0x48,0x49,0x4a,0x53,0x54,0x55,0x56,0x57,0x58,0x59,0x5a,0x63,0x64,0x65,0x66,0x67,0x68,0x69,0x6a,0x73,0x74,0x75,0x76,0x77,0x78,0x79,0x7a,0x82,0x83,0x84,0x85,0x86,0x87,0x88,0x89,0x8a,0x92,0x93,0x94,0x95,0x96,0x97,0x98,0x99,0x9a,0xa2,0xa3,0xa4,0xa5,0xa6,0xa7,0xa8,0xa9,0xaa,0xb2,0xb3,0xb4,0xb5,0xb6,0xb7,0xb8,0xb9,0xba,0xc2,0xc3,0xc4,0xc5,0xc6,0xc7,0xc8,0xc9,0xca,0xd2,0xd3,0xd4,0xd5,0xd6,0xd7,0xd8,0xd9,0xda,0xe2,0xe3,0xe4,0xe5,0xe6,0xe7,0xe8,0xe9,0xea,0xf2,0xf3,0xf4,0xf5,0xf6,0xf7,0xf8,0xf9,0xfa];
+  function huff(n,v){const t=[];let code=0,p=0;for(let k=1;k<=16;k++){for(let j=0;j<n[k];j++){t[v[p]]=[code,k];p++;code++;}code*=2;}return t;}
+  const HT_DC_L=huff(DC_L_N,DC_L_V),HT_AC_L=huff(AC_L_N,AC_L_V),HT_DC_C=huff(DC_C_N,DC_C_V),HT_AC_C=huff(AC_C_N,AC_C_V);
+  const CAT=new Int32Array(65535),BITC=new Array(65535);
+  (()=>{let lo=1,up=2;for(let c=1;c<=15;c++){for(let n=lo;n<up;n++){CAT[32767+n]=c;BITC[32767+n]=[n,c];}for(let n=-(up-1);n<=-lo;n++){CAT[32767+n]=c;BITC[32767+n]=[up-1+n,c];}lo<<=1;up<<=1;}})();
+
+  return class{
+    constructor(W,H,quality=90){
+      this.W=W;this.H=H;
+      const q=Math.max(1,Math.min(100,quality)),sf=q<50?Math.floor(5000/q):Math.floor(200-q*2);
+      this.YT=new Array(64);this.UT=new Array(64);
+      for(let i=0;i<64;i++){let t=Math.floor((YQT[i]*sf+50)/100);this.YT[ZZ[i]]=Math.min(255,Math.max(1,t));t=Math.floor((UVQT[i]*sf+50)/100);this.UT[ZZ[i]]=Math.min(255,Math.max(1,t));}
+      this.fY=new Float32Array(64);this.fU=new Float32Array(64);let k=0;
+      for(let r=0;r<8;r++)for(let c=0;c<8;c++){this.fY[k]=1/(this.YT[ZZ[k]]*AASF[r]*AASF[c]*8);this.fU[k]=1/(this.UT[ZZ[k]]*AASF[r]*AASF[c]*8);k++;}
+      this.parts=[];this.buf=new Uint8Array(1<<20);this.bp=0;this.bytenew=0;this.bytepos=7;
+      this.DCY=0;this.DCU=0;this.DCV=0;this.rowDone=0;
+      this.du=new Float32Array(64);this.DU=new Int32Array(64);this.q=new Int32Array(64);
+      this.Yb=new Float32Array(64);this.Ub=new Float32Array(64);this.Vb=new Float32Array(64);
+      this.header();
+    }
+    wb(v){if(this.bp>=this.buf.length){this.parts.push(this.buf);this.buf=new Uint8Array(1<<20);this.bp=0;}this.buf[this.bp++]=v;}
+    ww(v){this.wb((v>>8)&255);this.wb(v&255);}
+    bits(bs){let v=bs[0],p=bs[1]-1;while(p>=0){if(v&(1<<p))this.bytenew|=(1<<this.bytepos);p--;this.bytepos--;if(this.bytepos<0){if(this.bytenew===0xFF){this.wb(0xFF);this.wb(0);}else this.wb(this.bytenew);this.bytepos=7;this.bytenew=0;}}}
+    header(){
+      this.ww(0xFFD8);
+      this.ww(0xFFE0);this.ww(16);[0x4A,0x46,0x49,0x46,0,1,1,0].forEach(b=>this.wb(b));this.ww(1);this.ww(1);this.wb(0);this.wb(0);
+      this.ww(0xFFDB);this.ww(132);this.wb(0);for(let i=0;i<64;i++)this.wb(this.YT[i]);this.wb(1);for(let i=0;i<64;i++)this.wb(this.UT[i]);
+      this.ww(0xFFC0);this.ww(17);this.wb(8);this.ww(this.H);this.ww(this.W);this.wb(3);
+      this.wb(1);this.wb(0x11);this.wb(0);this.wb(2);this.wb(0x11);this.wb(1);this.wb(3);this.wb(0x11);this.wb(1);
+      this.ww(0xFFC4);this.ww(0x01A2);
+      const tb=(id,n,v)=>{this.wb(id);for(let i=1;i<=16;i++)this.wb(n[i]);v.forEach(x=>this.wb(x));};
+      tb(0,DC_L_N,DC_L_V);tb(0x10,AC_L_N,AC_L_V);tb(1,DC_C_N,DC_C_V);tb(0x11,AC_C_N,AC_C_V);
+      this.ww(0xFFDA);this.ww(12);this.wb(3);this.wb(1);this.wb(0);this.wb(2);this.wb(0x11);this.wb(3);this.wb(0x11);this.wb(0);this.wb(0x3f);this.wb(0);
+    }
+    fdct(d,f){
+      let o=0;
+      for(let i=0;i<8;i++){
+        const d0=d[o],d1=d[o+1],d2=d[o+2],d3=d[o+3],d4=d[o+4],d5=d[o+5],d6=d[o+6],d7=d[o+7];
+        const t0=d0+d7,t7=d0-d7,t1=d1+d6,t6=d1-d6,t2=d2+d5,t5=d2-d5,t3=d3+d4,t4=d3-d4;
+        let t10=t0+t3,t13=t0-t3,t11=t1+t2,t12=t1-t2;
+        d[o]=t10+t11;d[o+4]=t10-t11;const z1=(t12+t13)*0.707106781;d[o+2]=t13+z1;d[o+6]=t13-z1;
+        t10=t4+t5;t11=t5+t6;t12=t6+t7;
+        const z5=(t10-t12)*0.382683433,z2=0.541196100*t10+z5,z4=1.306562965*t12+z5,z3=t11*0.707106781,z11=t7+z3,z13=t7-z3;
+        d[o+5]=z13+z2;d[o+3]=z13-z2;d[o+1]=z11+z4;d[o+7]=z11-z4;o+=8;
+      }
+      o=0;
+      for(let i=0;i<8;i++){
+        const d0=d[o],d1=d[o+8],d2=d[o+16],d3=d[o+24],d4=d[o+32],d5=d[o+40],d6=d[o+48],d7=d[o+56];
+        const t0=d0+d7,t7=d0-d7,t1=d1+d6,t6=d1-d6,t2=d2+d5,t5=d2-d5,t3=d3+d4,t4=d3-d4;
+        let t10=t0+t3,t13=t0-t3,t11=t1+t2,t12=t1-t2;
+        d[o]=t10+t11;d[o+32]=t10-t11;const z1=(t12+t13)*0.707106781;d[o+16]=t13+z1;d[o+48]=t13-z1;
+        t10=t4+t5;t11=t5+t6;t12=t6+t7;
+        const z5=(t10-t12)*0.382683433,z2=0.541196100*t10+z5,z4=1.306562965*t12+z5,z3=t11*0.707106781,z11=t7+z3,z13=t7-z3;
+        d[o+40]=z13+z2;d[o+24]=z13-z2;d[o+8]=z11+z4;d[o+56]=z11-z4;o++;
+      }
+      const q=this.q;for(let i=0;i<64;i++){const v=d[i]*f[i];q[i]=v>0?(v+0.5)|0:(v-0.5)|0;}
+      return q;
+    }
+    du_(cdu,f,DC,HD,HA){
+      const q=this.fdct(cdu,f),DU=this.DU;for(let j=0;j<64;j++)DU[ZZ[j]]=q[j];
+      const diff=DU[0]-DC;DC=DU[0];
+      if(diff===0)this.bits(HD[0]);else{const p=32767+diff;this.bits(HD[CAT[p]]);this.bits(BITC[p]);}
+      let end=63;while(end>0&&DU[end]===0)end--;
+      if(end===0){this.bits(HA[0]);return DC;}
+      let i=1;
+      while(i<=end){const st=i;while(DU[i]===0&&i<=end)i++;let nz=i-st;
+        if(nz>=16){const l=nz>>4;for(let m=0;m<l;m++)this.bits(HA[0xF0]);nz&=15;}
+        const p=32767+DU[i];this.bits(HA[(nz<<4)+CAT[p]]);this.bits(BITC[p]);i++;}
+      if(end!==63)this.bits(HA[0]);
+      return DC;
+    }
+    /* RGBA の帯（幅 W、高さ h、8の倍数。最後の帯のみ端数可）を追加 */
+    addRows(rgba,h){
+      const W=this.W,Y=this.Yb,U=this.Ub,V=this.Vb;
+      for(let by=0;by<h;by+=8){
+        for(let bx=0;bx<W;bx+=8){
+          for(let k=0;k<64;k++){
+            const yy=Math.min(h-1,by+(k>>3)),xx=Math.min(W-1,bx+(k&7)),p=(yy*W+xx)*4;
+            const r=rgba[p],g=rgba[p+1],b=rgba[p+2];
+            Y[k]=0.299*r+0.587*g+0.114*b-128;U[k]=-0.16874*r-0.33126*g+0.5*b;V[k]=0.5*r-0.41869*g-0.08131*b;
+          }
+          this.DCY=this.du_(Y,this.fY,this.DCY,HT_DC_L,HT_AC_L);
+          this.DCU=this.du_(U,this.fU,this.DCU,HT_DC_C,HT_AC_C);
+          this.DCV=this.du_(V,this.fU,this.DCV,HT_DC_C,HT_AC_C);
+        }
+      }
+      this.rowDone+=h;
+    }
+    finish(){
+      if(this.bytepos>=0){const n=this.bytepos+1;this.bits([(1<<n)-1,n]);}
+      this.ww(0xFFD9);this.parts.push(this.buf.subarray(0,this.bp));
+      return new Blob(this.parts,{type:'image/jpeg'});
+    }
+  };
+})();
+
+/* ================= PDF（画像を貼り込んだ1ページ、文字は画像化） ================= */
+function buildPDF(pageW,pageH,images,ops){
+  // images: [{name:'Im1',bytes:Uint8Array(JPEG),pw,ph}]、ops: ページ描画命令（PDF 座標、pt）
+  const enc=new TextEncoder(),parts=[],offs=[];let len=0;
+  const put=x=>{const b=typeof x==='string'?enc.encode(x):x;parts.push(b);len+=b.length;};
+  const obj=(n,body)=>{offs[n]=len;put(`${n} 0 obj\n`);body();put('\nendobj\n');};
+  put('%PDF-1.4\n%\xE2\xE3\xCF\xD3\n');
+  const nImg=images.length, pageObj=3, contObj=4, fontObj=5, img0=6;
+  obj(1,()=>put('<< /Type /Catalog /Pages 2 0 R >>'));
+  obj(2,()=>put(`<< /Type /Pages /Kids [${pageObj} 0 R] /Count 1 >>`));
+  const xo=images.map((im,k)=>`/${im.name} ${img0+k} 0 R`).join(' ');
+  obj(pageObj,()=>put(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageW.toFixed(2)} ${pageH.toFixed(2)}] /Resources << /XObject << ${xo} >> /Font << /F1 ${fontObj} 0 R >> >> /Contents ${contObj} 0 R >>`));
+  const cs=enc.encode(ops);
+  obj(contObj,()=>{put(`<< /Length ${cs.length} >>\nstream\n`);put(cs);put('\nendstream');});
+  obj(fontObj,()=>put('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>'));
+  images.forEach((im,k)=>obj(img0+k,()=>{put(`<< /Type /XObject /Subtype /Image /Width ${im.pw} /Height ${im.ph} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${im.bytes.length} >>\nstream\n`);put(im.bytes);put('\nendstream');}));
+  const n=img0+nImg, xref=len;
+  let x=`xref\n0 ${n}\n0000000000 65535 f \n`;for(let i=1;i<n;i++)x+=String(offs[i]).padStart(10,'0')+' 00000 n \n';
+  put(x);put(`trailer\n<< /Size ${n} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`);
+  return new Blob(parts,{type:'application/pdf'});
+}
+
+/* ================= オルソ合成：状態 ================= */
+const S={files:[],names:[],yaws:[],getSrc:null,mode:null,sol:null,gains:null,o:null,srcInfo:null,autoG:0.002,
+  view:{plan:false,rot:false},crop:null,img:null,scaleFix:1,measure:[],tool:'measure',projectId:null,thumbs:[],exported:null,dirty:false};
+let busy=false;
+const logEl=$('#log');
+function log(s){logEl.textContent+=s+'\n';logEl.scrollTop=1e9}
+function prog(f){$('#prog').style.width=(Math.max(0,Math.min(1,f))*100)+'%'}
+function setBusy(b){busy=b;document.querySelectorAll('[data-busy]').forEach(e=>e.disabled=b||(e.dataset.busy==='need-img'&&!S.img)||(e.dataset.busy==='need-files'&&!S.files.length));}
+async function task(fn){
+  if(busy)return; setBusy(true);
+  try{await fn();}catch(err){console.error(err);log('エラー：'+(err&&err.message||err));}
+  finally{setBusy(false);}
+}
+const MAXPX=60e6, MAXDIM=16000;
+
+/* ---- 案件情報 ---- */
+function info(){return{bridge:$('#i-bridge').value.trim(),span:$('#i-span').value.trim(),date:$('#i-date').value,origin:$('#i-origin').value}}
+function setInfo(v){$('#i-bridge').value=v.bridge||'';$('#i-span').value=v.span||'';$('#i-date').value=v.date||'';$('#i-origin').value=v.origin||'none';}
+function dateFromName(n){const m=/(20\d\d)(\d\d)(\d\d)/.exec(n||'');return m?`${m[1]}-${m[2]}-${m[3]}`:''}
+function baseName(){const v=info();return [v.bridge||'床版下面',v.span,v.date].filter(Boolean).join('_').replace(/[\\/:*?"<>|\s]+/g,'_')}
+['#i-bridge','#i-span','#i-date','#i-origin'].forEach(id=>$(id).addEventListener('input',()=>{S.dirty=true;drawOverlay();}));
+
+$('#o-files').addEventListener('change',e=>{
+  S.files=[...e.target.files].sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true}));
+  S.mode='files'; S.projectId=null; S.crop=null;
+  logEl.textContent=''; log(`${S.files.length} 枚を選択しました。「合成を実行」を押してください。`);
+  if(!$('#i-date').value&&S.files[0]) $('#i-date').value=dateFromName(S.files[0].name);
+  setBusy(false);
+});
+
+/* ---- 合成（出力座標系：Wx = x0 + sx·(ox+0.5)·G、Wy = y0 + sy·(oy+0.5)·G） ---- */
+function frameFor(sol,o,crop,gsd){
+  const rho=o.h*Math.tan(o.th*D2R);
+  let minx=1e9,miny=1e9,maxx=-1e9,maxy=-1e9;
+  sol.cams.forEach(c=>{const r=c.s*rho;minx=Math.min(minx,c.tx-r);maxx=Math.max(maxx,c.tx+r);miny=Math.min(miny,c.ty-r);maxy=Math.max(maxy,c.ty+r)});
+  if(crop){minx=Math.max(minx,crop.x0);maxx=Math.min(maxx,crop.x1);miny=Math.max(miny,crop.y0);maxy=Math.min(maxy,crop.y1);}
+  if(!(maxx>minx&&maxy>miny))throw new Error('指定した範囲に画像がありません。範囲をリセットしてください。');
+  let G=gsd; const note=[];
+  const need=(maxx-minx)*(maxy-miny)/(G*G);
+  if(need>MAXPX){G=Math.sqrt((maxx-minx)*(maxy-miny)/MAXPX);note.push('画素数の上限');}
+  if(Math.max(maxx-minx,maxy-miny)/G>MAXDIM){G=Math.max(maxx-minx,maxy-miny)/MAXDIM;note.push('一辺の上限');}
+  if(note.length)log(`出力が大きいため画素寸法を ${fmt(G*1000,2)} mm にしました（${note.join('・')}）。範囲を指定すると細かくできます。`);
+  return {minx,miny,maxx,maxy,G,W:Math.ceil((maxx-minx)/G),H:Math.ceil((maxy-miny)/G)};
+}
+function applyView(F,view){
+  F.sx=view.rot?-1:1; let sy=view.plan?1:-1; if(view.rot)sy=-sy; F.sy=sy;
+  F.x0=F.sx>0?F.minx:F.maxx; F.y0=F.sy>0?F.miny:F.maxy; return F;
+}
+const toWorld=(F,ox,oy)=>[F.x0+F.sx*(ox+0.5)*F.G,F.y0+F.sy*(oy+0.5)*F.G];
+const toOut=(F,x,y)=>[(x-F.x0)*F.sx/F.G-0.5,(y-F.y0)*F.sy/F.G-0.5];
+
+async function renderMosaic2(sol,o,getSrc,gains,view,crop,gsd,names){
+  const F=applyView(frameFor(sol,o,crop,gsd),view);
+  const {W,H,G}=F;
+  log(`合成 ${W}×${H} px（${fmt(W*G,1)}×${fmt(H*G,1)} m、${fmt(G*1000,2)} mm/px）`);
+  const rgb=new Uint8ClampedArray(W*H*3), cov=new Uint8Array(Math.ceil(W*H/8));
+  const cams=sol.cams, nc=cams.length, rho=o.h*Math.tan(o.th*D2R);
+  const cx=cams.map(c=>c.tx),cy=cams.map(c=>c.ty),rr=cams.map(c=>(c.s*rho)**2);
+  const dab=cams.map(c=>cams.map(d=>Math.hypot(c.tx-d.tx,c.ty-d.ty)));
+  const band=Math.max(0.06,0.04*o.h), out=[0,0,0], h=o.h;
+  for(let k=0;k<nc;k++){
+    const c=cams[k], r=Math.sqrt(rr[k]);
+    const a=toOut(F,c.tx-r,c.ty-r),b=toOut(F,c.tx+r,c.ty+r);
+    const x0=Math.max(0,Math.floor(Math.min(a[0],b[0]))),x1=Math.min(W-1,Math.ceil(Math.max(a[0],b[0])));
+    const y0=Math.max(0,Math.floor(Math.min(a[1],b[1]))),y1=Math.min(H-1,Math.ceil(Math.max(a[1],b[1])));
+    if(x1<x0||y1<y0)continue;
+    prog(0.05+0.9*k/nc); log(`  ${k+1}/${nc}：${names[c.i]}`); await sleep();
+    const src=await getSrc(c.i); const bnd=getBand(src,Math.min(89,o.th+4),o.maxW,2); src.close&&src.close();
+    const nb=[];for(let j=0;j<nc;j++)if(dab[k][j]<=Math.sqrt(rr[k])+Math.sqrt(rr[j]))nb.push(j);
+    const gain=gains?(gains.get(c.i)||1):1, s2=c.s*c.s;
+    for(let oy=y0;oy<=y1;oy++){const Wy=F.y0+F.sy*(oy+0.5)*G;
+      for(let ox=x0;ox<=x1;ox++){const Wx=F.x0+F.sx*(ox+0.5)*G;
+        let da=1e18,db=1e18,ia=-1,ib=-1;
+        for(let q=0;q<nb.length;q++){const j=nb[q],dx=Wx-cx[j],dy=Wy-cy[j],d2=dx*dx+dy*dy;if(d2>rr[j])continue;
+          if(d2<da){db=da;ib=ia;da=d2;ia=j}else if(d2<db){db=d2;ib=j}}
+        if(ia!==k&&ib!==k)continue;
+        let w=255;
+        if(ib>=0){const t=(db-da)/(2*dab[ia][ib]);const wa=Math.round(255*(0.5+Math.min(t,band)/(2*band)));w=ia===k?wa:255-wa;}
+        if(w<=0)continue;
+        const dx=Wx-c.tx,dy=Wy-c.ty,X=(c.a*dx+c.b*dy)/s2,Y=(c.a*dy-c.b*dx)/s2;
+        sampleBand(bnd,Math.atan(Math.sqrt(X*X+Y*Y)/h),Math.atan2(Y,X),out);
+        const p=oy*W+ox,q3=p*3,f=w/255;
+        rgb[q3]+=Math.round(Math.min(255,out[0]*gain)*f);rgb[q3+1]+=Math.round(Math.min(255,out[1]*gain)*f);rgb[q3+2]+=Math.round(Math.min(255,out[2]*gain)*f);
+        cov[p>>3]|=1<<(p&7);
+      }}
+  }
+  return {...F,rgb,cov};
+}
+/* 見上げ図⇔平面図、180°回転は画素の入れ替えだけで済ませる */
+function flipImg(img,horiz){
+  const {W,H,rgb,cov}=img;
+  if(horiz){for(let y=0;y<H;y++){for(let x=0,x2=W-1;x<x2;x++,x2--){const a=(y*W+x),b=(y*W+x2);
+        for(let c=0;c<3;c++){const t=rgb[a*3+c];rgb[a*3+c]=rgb[b*3+c];rgb[b*3+c]=t;}
+        const ca=(cov[a>>3]>>(a&7))&1,cb=(cov[b>>3]>>(b&7))&1; if(ca!==cb){cov[a>>3]^=1<<(a&7);cov[b>>3]^=1<<(b&7);}}}
+    img.x0=img.x0+img.sx*W*img.G; img.sx=-img.sx;}
+  else{const row=new Uint8ClampedArray(W*3);
+    for(let y=0,y2=H-1;y<y2;y++,y2--){row.set(rgb.subarray(y*W*3,(y+1)*W*3));rgb.copyWithin(y*W*3,y2*W*3,(y2+1)*W*3);rgb.set(row,y2*W*3);
+      for(let x=0;x<W;x++){const a=y*W+x,b=y2*W+x;const ca=(cov[a>>3]>>(a&7))&1,cb=(cov[b>>3]>>(b&7))&1;if(ca!==cb){cov[a>>3]^=1<<(a&7);cov[b>>3]^=1<<(b&7);}}}
+    img.y0=img.y0+img.sy*H*img.G; img.sy=-img.sy;}
+}
+const BG=[228,231,232];
+/* 出力画像の一部を RGBA で取り出す（f 画素ごとに平均して縮小） */
+function readRGBA(img,y0,h,f){
+  const {W,rgb,cov}=img, H=img.H, w=Math.ceil(W/f), out=new Uint8ClampedArray(w*h*4);
+  for(let r=0;r<h;r++){const sy0=(y0+r)*f;
+    for(let x=0;x<w;x++){let R=0,Gc=0,B=0,n=0,m=0;
+      for(let dy=0;dy<f;dy++){const sy=sy0+dy;if(sy>=H)break;for(let dx=0;dx<f;dx++){const sx=x*f+dx;if(sx>=W)break;const p=sy*W+sx;m++;
+        if((cov[p>>3]>>(p&7))&1){R+=rgb[p*3];Gc+=rgb[p*3+1];B+=rgb[p*3+2];n++;}}}
+      const q=(r*w+x)*4;
+      if(n*2>=m&&n){out[q]=R/n;out[q+1]=Gc/n;out[q+2]=B/n;}else{out[q]=BG[0];out[q+1]=BG[1];out[q+2]=BG[2];}
+      out[q+3]=255;}}
+  return out;
+}
+
+/* ---- プレビュー ---- */
+const PV=$('#pv'), OV=$('#overlay');
+function buildPreview(){
+  const img=S.img, f=Math.max(1,Math.ceil(Math.max(img.W,img.H)/3200)), w=Math.ceil(img.W/f), h=Math.ceil(img.H/f);
+  PV.width=w;PV.height=h; PV.getContext('2d').putImageData(new ImageData(readRGBA(img,0,h,f),w,h),0,0);
+  $('#inner').hidden=false;$('#viewer-empty').hidden=true;
+  applyZoom();drawOverlay();updateOutInfo();
+}
+function applyZoom(){
+  if(!S.img)return; const z=+$('#v-zoom').value||1, vw=$('#viewer').clientWidth-2;
+  const fit=Math.min(vw/S.img.W,(window.innerHeight*0.72)/S.img.H);
+  const w=S.img.W*fit*z, h=S.img.H*fit*z; PV.style.width=w+'px';PV.style.height=h+'px';$('#inner').style.width=w+'px';$('#inner').style.height=h+'px';
+}
+function Geff(){return S.img?S.img.G*S.scaleFix:0}
+function camOut(c){return toOut(S.img,c.tx,c.ty)}
+function drawOverlay(){
+  const img=S.img; if(!img)return; OV.setAttribute('viewBox',`0 0 ${img.W} ${img.H}`);
+  const u=Math.max(img.W,img.H)/300, G=Geff(); let s='';
+  if($('#v-grid').checked){
+    for(let m=1;m*1/G<img.W;m++)s+=`<line x1="${m/G}" y1="0" x2="${m/G}" y2="${img.H}" stroke="rgba(255,255,255,.55)" stroke-width="${u*0.25}"/>`;
+    for(let m=1;m*1/G<img.H;m++)s+=`<line x1="0" y1="${m/G}" x2="${img.W}" y2="${m/G}" stroke="rgba(255,255,255,.55)" stroke-width="${u*0.25}"/>`;
+  }
+  if($('#v-cams').checked) S.sol.cams.forEach(c=>{const [x,y]=camOut(c);
+    s+=`<circle cx="${x}" cy="${y}" r="${u*1.4}" fill="#1b6784" stroke="#fff" stroke-width="${u*0.35}"/><text x="${x+u*2}" y="${y-u*1.5}" style="font-size:${u*4}px;fill:#fff;paint-order:stroke;stroke:#000;stroke-width:${u*0.6}px">${c.i+1}</text>`;});
+  const o=info().origin;
+  if(o!=='none'){const L=o==='left'?'起点側':'終点側',R=o==='left'?'終点側':'起点側';
+    s+=`<text x="${u*2}" y="${img.H/2}" style="font-size:${u*5}px;fill:#fff;paint-order:stroke;stroke:#000;stroke-width:${u*0.8}px">${L}</text>`;
+    s+=`<text x="${img.W-u*2}" y="${img.H/2}" text-anchor="end" style="font-size:${u*5}px;fill:#fff;paint-order:stroke;stroke:#000;stroke-width:${u*0.8}px">${R}</text>`;}
+  if(S.cropDraft){const r=S.cropDraft;s+=`<rect x="${Math.min(r[0],r[2])}" y="${Math.min(r[1],r[3])}" width="${Math.abs(r[2]-r[0])}" height="${Math.abs(r[3]-r[1])}" fill="rgba(242,193,78,.15)" stroke="#f2c14e" stroke-width="${u*0.5}" stroke-dasharray="${u*2} ${u}"/>`;}
+  S.measure.forEach(p=>{s+=`<circle cx="${p[0]}" cy="${p[1]}" r="${u*1.2}" fill="#f2c14e" stroke="#000" stroke-width="${u*0.3}"/>`});
+  if(S.measure.length===2){const [a,b]=S.measure;s+=`<line x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}" stroke="#f2c14e" stroke-width="${u*0.5}"/>`;}
+  OV.innerHTML=s;
+}
+function updateOutInfo(){
+  const img=S.img; if(!img){$('#out-info').textContent='—';return;}
+  $('#out-info').textContent=`${img.W.toLocaleString()} × ${img.H.toLocaleString()} px（${fmt(img.W*Geff(),2)} × ${fmt(img.H*Geff(),2)} m）・${fmt(Geff()*1000,2)} mm/px${S.crop?'・範囲指定あり':''}`;
+}
+/* 計測と範囲指定 */
+function evPt(e){const r=PV.getBoundingClientRect();return [(e.clientX-r.left)/r.width*S.img.W,(e.clientY-r.top)/r.height*S.img.H]}
+let drag=null;
+$('#inner').addEventListener('pointerdown',e=>{
+  if(!S.img||S.tool!=='crop')return; e.preventDefault(); $('#inner').setPointerCapture(e.pointerId);
+  const p=evPt(e); drag=p; S.cropDraft=[p[0],p[1],p[0],p[1]]; drawOverlay();
+});
+$('#inner').addEventListener('pointermove',e=>{if(!drag)return;const p=evPt(e);S.cropDraft[2]=p[0];S.cropDraft[3]=p[1];drawOverlay();});
+$('#inner').addEventListener('pointerup',e=>{if(!drag)return;drag=null;const r=S.cropDraft;
+  if(Math.abs(r[2]-r[0])<S.img.W/100||Math.abs(r[3]-r[1])<S.img.H/100){S.cropDraft=null;drawOverlay();return;}
+  $('#crop-apply').disabled=false; $('#crop-note').textContent='黄色の枠で合成し直せます。';});
+$('#inner').addEventListener('click',e=>{
+  if(!S.img||S.tool!=='measure')return; const p=evPt(e);
+  if(S.measure.length>=2)S.measure=[]; S.measure.push(p);
+  if(S.measure.length===2){const [a,b]=S.measure,d=Math.hypot(a[0]-b[0],a[1]-b[1])*Geff();S.measuredM=d;
+    $('#measure').textContent=`測定距離 ${fmt(d,3)} m`;$('#m-apply').disabled=false;}
+  else{$('#measure').textContent='もう1点タップしてください';$('#m-apply').disabled=true;}
+  drawOverlay();
+});
+document.querySelectorAll('[data-tool]').forEach(b=>b.addEventListener('click',()=>{
+  S.tool=b.dataset.tool;document.querySelectorAll('[data-tool]').forEach(x=>x.setAttribute('aria-pressed',x===b));
+  $('#inner').style.touchAction=S.tool==='crop'?'none':'auto';
+  $('#tool-measure').hidden=S.tool!=='measure';$('#tool-crop').hidden=S.tool!=='crop';
+}));
+$('#m-clear').addEventListener('click',()=>{S.measure=[];$('#measure').textContent='画像を2点タップすると距離を測れます';$('#m-apply').disabled=true;drawOverlay()});
+$('#m-apply').addEventListener('click',()=>{
+  const t=+$('#m-true').value;if(!S.img||!(t>0)||!S.measuredM)return;
+  const f=t/S.measuredM;S.scaleFix*=f;S.measuredM=t;S.dirty=true;
+  $('#measure').textContent=`縮尺を補正しました（係数 ${fmt(f,4)}）`;log(`縮尺補正：係数 ${fmt(f,4)}、画素寸法 ${fmt(Geff()*1000,2)} mm/px`);
+  drawOverlay();updateOutInfo();
+});
+$('#crop-apply').addEventListener('click',()=>task(async()=>{
+  const r=S.cropDraft,img=S.img; if(!r)return;
+  const a=toWorld(img,Math.min(r[0],r[2]),Math.min(r[1],r[3])),b=toWorld(img,Math.max(r[0],r[2]),Math.max(r[1],r[3]));
+  // 縮尺補正後の見かけの寸法ではなく、合成時の座標で範囲を持つ
+  S.crop={x0:Math.min(a[0],b[0]),x1:Math.max(a[0],b[0]),y0:Math.min(a[1],b[1]),y1:Math.max(a[1],b[1])};
+  S.cropDraft=null;$('#crop-apply').disabled=true;$('#crop-note').textContent='';S.dirty=true;
+  logEl.textContent='';log('指定範囲で合成し直します');await renderCurrent();
+}));
+$('#crop-reset').addEventListener('click',()=>task(async()=>{S.crop=null;S.cropDraft=null;S.dirty=true;logEl.textContent='';log('全体で合成し直します');await renderCurrent();}));
+$('#v-grid').addEventListener('change',drawOverlay);
+$('#v-cams').addEventListener('change',drawOverlay);
+$('#v-zoom').addEventListener('change',applyZoom);
+window.addEventListener('resize',applyZoom);
+$('#v-view').addEventListener('change',()=>{if(!S.img)return;const plan=$('#v-view').value==='plan';if(plan!==S.view.plan){flipImg(S.img,false);S.view.plan=plan;S.dirty=true;S.measure=[];buildPreview();}});
+$('#v-rot').addEventListener('click',()=>{if(!S.img)return;flipImg(S.img,true);flipImg(S.img,false);S.view.rot=!S.view.rot;S.dirty=true;S.measure=[];buildPreview();});
+$('#o-regsd').addEventListener('click',()=>task(async()=>{logEl.textContent='';log('画素寸法を変えて合成し直します');await renderCurrent();}));
+
+/* ---- サムネイル ---- */
+function addThumb(k,name,tile,st){
+  const box=$('#thumbs'); if(k===0)box.innerHTML='';
+  const cv=document.createElement('canvas');const Sz=160;cv.width=Sz;cv.height=Sz;
+  const t=document.createElement('canvas');t.width=tile.N;t.height=tile.N;t.getContext('2d').putImageData(new ImageData(tile.rgba,tile.N,tile.N),0,0);
+  cv.getContext('2d').drawImage(t,0,0,Sz,Sz);t.width=t.height=1;
+  S.thumbs[k]=cv.toDataURL('image/jpeg',0.7);
+  showThumb(k,name,S.thumbs[k],st);
+}
+function showThumb(k,name,url,st){
+  const box=$('#thumbs'); if(k===0)box.innerHTML='';
+  const d=document.createElement('div');d.className='thumb';d.id='th-'+k;
+  d.innerHTML=`<img src="${url}" alt=""><div class="nm">${k+1}. ${name}</div><div class="st">${st}</div>`;box.appendChild(d);
+}
+function setThumbStatus(k,html){const e=document.querySelector('#th-'+k+' .st');if(e)e.innerHTML=html}
+
+/* ---- 位置合わせ ---- */
+function readOpts(){
+  const h=Math.max(0.3,+$('#o-h').value||3), th=Math.max(30,Math.min(75,+$('#o-theta').value||55));
+  return {h,th,maxW:+$('#o-q').value,gain:$('#o-gain').value==='1'};
+}
+function currentGsd(){const v=$('#o-gsd').value;return v==='auto'?S.autoG:(+v)/1000}
+async function register(n,names,getSrc,yaws,truth){
+  const o=readOpts(); const t0=performance.now();
+  const feats=[],srcInfo=[];
+  for(let k=0;k<n;k++){
+    prog(0.4*k/n); log(`投影・特徴点 ${k+1}/${n}：${names[k]}`); await sleep();
+    const src=await getSrc(k);
+    if(Math.abs(src.W/src.H-2)>0.05) log(`  注意：縦横比が 2:1 ではありません（${src.W}×${src.H}）。360° の正距円筒画像か確認してください。`);
+    else if(!truth&&src.W<15000) log(`  注意：画像の幅が ${src.W} px です。本体の 120MP（15520×7760）より小さく、取り込み時に縮小された可能性があります。`);
+    const band=getBand(src,Math.min(89,REG_TH*1.25),3072,2); src.close&&src.close();
+    const tile=makeRegTile(band,o.h); const f=detect(tile,1500); feats.push(f);
+    addThumb(k,names[k],tile,`<span class="chip warn">特徴点 ${f.M}</span>`);
+    srcInfo.push({W:src.W,H:src.H});
+  }
+  const pairs=[]; const np=n*(n-1)/2; let pc=0;
+  const thr=3*(2*o.h*Math.tan(REG_TH*D2R)/REG_N);
+  for(let i=0;i<n;i++)for(let j=i+1;j<n;j++){
+    pc++; if(pc%2===0){prog(0.4+0.2*pc/np);await sleep();}
+    const prior=(yaws&&yaws[i]!=null&&yaws[j]!=null)?(yaws[i]-yaws[j])*D2R:null;
+    const mt=matchFeat(feats[i],feats[j]); const r=ransacSim(feats[i],feats[j],mt,thr,prior);
+    if(r&&r.inliers.length>=20&&r.inliers.length>=0.18*mt.length) pairs.push({i,j,T:r.T,inliers:r.inliers});
+  }
+  log(`重なりを検出したペア：${pairs.length} 組${yaws&&yaws.some(v=>v!=null)?'（ヨー角で回転を拘束）':''}`);
+  if(!pairs.length) throw new Error('どの画像同士も位置合わせできませんでした。ラップ率を上げるか、離隔 h を確認してください。');
+  let sol;
+  for(let it=0;it<30;it++){
+    sol=globalSolve(n,feats,pairs); if(!sol) throw new Error('全体の位置合わせ計算に失敗しました。');
+    const errs=sol.pairErr.filter(e=>e>0).sort((a,b)=>a-b), med=errs.length?errs[Math.floor(errs.length/2)]:0;
+    const lim=Math.max(2.5*thr,3*med); let w=-1,we=lim;
+    sol.pairErr.forEach((e,k)=>{if(e>we){we=e;w=k}});
+    if(w<0)break;
+    log(`  除外したペア：${names[pairs[w].i]} – ${names[pairs[w].j]}（食い違い ${fmt(we*1000,0)} mm）`);
+    pairs.splice(w,1);
+  }
+  const deg=new Map();pairs.forEach(p=>{deg.set(p.i,(deg.get(p.i)||0)+1);deg.set(p.j,(deg.get(p.j)||0)+1)});
+  sol.cams.forEach(c=>setThumbStatus(c.i,`<span class="chip ok">接続 ${deg.get(c.i)||0} 枚</span> <span class="num">±${fmt(c.rms*1000,0)}mm</span>`));
+  sol.dropped.forEach(i=>setThumbStatus(i,`<span class="chip bad">未接続（除外）</span>`));
+  if(sol.dropped.length) log(`除外：${sol.dropped.map(i=>names[i]).join(', ')}（重なる画像が見つかりません）`);
+  const rmsAll=Math.sqrt(sol.cams.reduce((s,c)=>s+c.rms*c.rms,0)/sol.cams.length);
+  log(`位置合わせ残差 RMS ${fmt(rmsAll*1000,1)} mm（${sol.cams.length}/${n} 枚）・${fmt((performance.now()-t0)/1000,1)} 秒`);
+  $('#thumb-note').textContent=`${sol.cams.length}/${n} 枚を使用`;
+  if(truth){
+    const P=sol.cams.map(c=>[c.tx,c.ty]),Q=sol.cams.map(c=>truth[c.i]);
+    let mp=[0,0],mq=[0,0];P.forEach((p,k)=>{mp[0]+=p[0];mp[1]+=p[1];mq[0]+=Q[k][0];mq[1]+=Q[k][1]});const L=P.length;mp=mp.map(v=>v/L);mq=mq.map(v=>v/L);
+    let sr=0,si=0,sp=0;P.forEach((p,k)=>{const ax=p[0]-mp[0],ay=p[1]-mp[1],bx=Q[k][0]-mq[0],by=Q[k][1]-mq[1];sr+=bx*ax+by*ay;si+=by*ax-bx*ay;sp+=ax*ax+ay*ay});
+    const a=sr/sp,b=si/sp;let e=0;P.forEach((p,k)=>{const ax=p[0]-mp[0],ay=p[1]-mp[1];const x=a*ax-b*ay+mq[0],y=b*ax+a*ay+mq[1];e+=(x-Q[k][0])**2+(y-Q[k][1])**2});
+    log(`サンプル検証：撮影位置の誤差 RMS ${fmt(Math.sqrt(e/L)*1000,1)} mm、縮尺 ${fmt(Math.hypot(a,b),3)}`);
+  }
+  const gains=o.gain?solveGains(n,feats,pairs,sol.used):null;
+  const s0=srcInfo[0];
+  S.autoG=Math.max(0.0008,Math.ceil(o.h*Math.PI/s0.H*Math.max(1,s0.W/o.maxW/2)*2000)/2000);
+  Object.assign(S,{sol,gains,o,srcInfo,names,getSrc,yaws});
+}
+async function renderCurrent(){
+  const t0=performance.now();
+  S.img=null; S.measure=[]; S.exported=null; $('#export-ready').hidden=true; setBusy(true);
+  const img=await renderMosaic2(S.sol,S.o,S.getSrc,S.gains,S.view,S.crop,currentGsd(),S.names);
+  S.img=img; prog(1); buildPreview();
+  log(`合成完了（${fmt((performance.now()-t0)/1000,1)} 秒）`);
+}
+async function runPipeline(n,names,getSrc,yaws,truth){
+  S.img=null;S.crop=null;S.cropDraft=null;S.scaleFix=1;S.thumbs=[];S.view={plan:$('#v-view').value==='plan',rot:false};
+  $('#inner').hidden=true;$('#viewer-empty').hidden=false;$('#viewer-empty').textContent='処理中…';
+  await register(n,names,getSrc,yaws,truth);
+  await renderCurrent();
+  if(S.mode==='files'){await saveProject(true);}
+}
+$('#o-run').addEventListener('click',()=>task(async()=>{
+  if(!S.files.length)return; logEl.textContent='';
+  const files=S.files; S.mode='files'; S.projectId=null;
+  const yaws=await Promise.all(files.map(readYaw));
+  if(yaws.some(v=>v!=null)) log(`XMP のヨー角：${yaws.map(v=>v==null?'—':fmt(v,1)+'°').join(', ')}`);
+  await runPipeline(files.length,files.map(f=>f.name),k=>openFile(files[k]),yaws,null);
+}));
+$('#o-sample').addEventListener('click',()=>task(async()=>{
+  logEl.textContent=''; S.files=[]; $('#o-files').value=''; S.mode='sample'; S.projectId=null;
+  log('サンプル：12 m × 7.5 m の模擬床版を h = 3.0 m から 2コース×4枚 撮影した 360° 画像を生成します');
+  $('#o-h').value='3.0'; if(!$('#i-bridge').value){setInfo({bridge:'サンプル橋',span:'第1径間',date:new Date().toISOString().slice(0,10),origin:'left'});}
+  await sleep();
+  const T=makeSlabTexture(12,7.5,0.005);
+  let s=3;const rnd=()=>{s=(s*16807)%2147483647;return s/2147483647-0.5};
+  const cams=[];const xs=[3.0,4.8,6.6,8.4],ys=[2.6,5.0];
+  ys.forEach((y,j)=>{(j?xs.slice().reverse():xs).forEach(x=>cams.push({x:x+rnd()*0.3,y:y+rnd()*0.3,h:3.0+rnd()*0.12,yaw:(j?Math.PI:0)+rnd()*0.3,gain:1+rnd()*0.2}))});
+  const srcs=[];for(let k=0;k<cams.length;k++){prog(0.1*k/cams.length);srcs.push(synthEquirect(T,cams[k],4096,2048,72));await sleep();}
+  T.cv.width=T.cv.height=1;
+  await runPipeline(srcs.length,srcs.map((_,k)=>`SAMPLE_${String(k+1).padStart(3,'0')}.JPG`),async k=>srcs[k],null,cams.map(c=>[c.x,c.y]));
+}));
+
+/* ================= 書き出し ================= */
+function overlayFont(px){return `${Math.round(px)}px "Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif`}
+/* JPEG 用の書き込み（グリッド・縮尺バー・表題・起終点） */
+function drawBurn(ctx,W,H,G,opt){
+  const fs=Math.max(14,Math.round(Math.min(W,H)/55)), lw=Math.max(1,Math.round(Math.min(W,H)/1500));
+  if(opt.grid){ctx.strokeStyle='rgba(255,255,255,.6)';ctx.lineWidth=lw;ctx.fillStyle='rgba(255,255,255,.95)';ctx.font=overlayFont(fs*0.7);
+    for(let m=1;m/G<W;m++){const x=Math.round(m/G)+0.5;ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();ctx.fillText(m+'m',x+4,fs*0.8);}
+    for(let m=1;m/G<H;m++){const y=Math.round(m/G)+0.5;ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();ctx.fillText(m+'m',4,y-4);}}
+  const v=info(), title=[v.bridge,v.span,v.date].filter(Boolean).join('　');
+  const view=(S.view.plan?'平面図':'見上げ図');
+  const bar=[0.5,1,2,5,10].find(b=>b/G>=W*0.12)||10, bpx=bar/G;
+  const lines=[title||'床版下面オルソ',`${view}　${fmt(G*1000,2)} mm/px`];
+  ctx.font=overlayFont(fs);
+  const tw=Math.max(...lines.map(t=>ctx.measureText(t).width),bpx)+fs*1.4, th=fs*(lines.length*1.45+2.2);
+  const bx=fs*0.8, by=H-th-fs*0.8;
+  ctx.fillStyle='rgba(0,0,0,.6)';ctx.fillRect(bx,by,tw,th);
+  ctx.fillStyle='#fff';lines.forEach((t,i)=>ctx.fillText(t,bx+fs*0.7,by+fs*(1.3+i*1.45)));
+  const sy=by+th-fs*1.4, sx=bx+fs*0.7;
+  for(let i=0;i<4;i++){ctx.fillStyle=i%2?'#222':'#fff';ctx.fillRect(sx+bpx*i/4,sy,bpx/4,fs*0.45);}
+  ctx.strokeStyle='#fff';ctx.lineWidth=lw;ctx.strokeRect(sx,sy,bpx,fs*0.45);
+  ctx.fillStyle='#fff';ctx.font=overlayFont(fs*0.75);ctx.fillText('0',sx-fs*0.2,sy+fs*1.25);ctx.fillText(bar+' m',sx+bpx-fs*0.6,sy+fs*1.25);
+  if(v.origin!=='none'){const L=v.origin==='left'?'起点側':'終点側',R=v.origin==='left'?'終点側':'起点側';ctx.font=overlayFont(fs*1.1);
+    const lab=(t,x,al)=>{ctx.textAlign=al;ctx.lineWidth=fs*0.18;ctx.strokeStyle='rgba(0,0,0,.8)';ctx.strokeText(t,x,H/2);ctx.fillStyle='#fff';ctx.fillText(t,x,H/2);ctx.textAlign='left';};
+    lab(L,fs*0.8,'left');lab(R,W-fs*0.8,'right');}
+}
+async function exportJPEG(){
+  const img=S.img,{W,H}=img,G=Geff(),opt={grid:$('#x-grid').checked};
+  const canvasOK=W*H<=16e6&&W<=16384&&H<=16384;
+  if(canvasOK){
+    const cv=document.createElement('canvas');cv.width=W;cv.height=H;const ctx=cv.getContext('2d');
+    ctx.putImageData(new ImageData(readRGBA(img,0,H,1),W,H),0,0);drawBurn(ctx,W,H,G,opt);
+    const b=await new Promise(r=>cv.toBlob(r,'image/jpeg',0.92));cv.width=cv.height=1;return b;
+  }
+  const enc=new JpegEncoder(W,H,92), SH=Math.max(8,Math.floor(Math.min(4096,15e6/W)/8)*8);
+  const cv=document.createElement('canvas');cv.width=W;cv.height=SH;const ctx=cv.getContext('2d',{willReadFrequently:true});
+  for(let y=0;y<H;y+=SH){
+    const h=Math.min(SH,H-y); prog(y/H); if((y/SH)%2===0)await sleep();
+    ctx.setTransform(1,0,0,1,0,0);ctx.putImageData(new ImageData(readRGBA(img,y,h,1),W,h),0,0);
+    ctx.save();ctx.beginPath();ctx.rect(0,0,W,h);ctx.clip();ctx.translate(0,-y);drawBurn(ctx,W,H,G,opt);ctx.restore();
+    enc.addRows(ctx.getImageData(0,0,W,h).data,h);
+  }
+  cv.width=cv.height=1; prog(1);
+  return enc.finish();
+}
+const SCALES=[10,20,25,30,40,50,60,75,100,125,150,200,250,300,400,500,750,1000,1500,2000];
+async function exportPDF(){
+  const img=S.img,G=Geff(),paper=$('#x-paper').value, v=info();
+  const [PWmm,PHmm]=paper==='A4'?[297,210]:[420,297], mm=72/25.4;
+  const M=10, TB=paper==='A4'?18:22, gap=4;                   // 余白・表題欄の高さ（mm）
+  const areaW=PWmm-2*M-2*gap, areaH=PHmm-2*M-TB-2*gap;
+  const realW=img.W*G*1000, realH=img.H*G*1000;               // mm
+  const n=SCALES.find(s=>realW/s<=areaW&&realH/s<=areaH)||Math.ceil(Math.max(realW/areaW,realH/areaH));
+  const iw=realW/n, ih=realH/n, ix=M+gap+(areaW-iw)/2, iy=M+TB+gap+(areaH-ih)/2; // mm（下からの座標）
+  // 画像：約 250 dpi に縮小して貼り込む
+  const target=Math.max(iw,ih)/25.4*250, f=Math.max(1,Math.ceil(Math.max(img.W,img.H)/target));
+  const w=Math.ceil(img.W/f),h=Math.ceil(img.H/f);
+  const cv=document.createElement('canvas');cv.width=w;cv.height=h;const ctx=cv.getContext('2d');
+  ctx.putImageData(new ImageData(readRGBA(img,0,h,f),w,h),0,0);
+  if(v.origin!=='none'){const L=v.origin==='left'?'起点側':'終点側',R=v.origin==='left'?'終点側':'起点側',fs=Math.max(14,w/45);ctx.font=overlayFont(fs);
+    const lab=(t,x,al)=>{ctx.textAlign=al;ctx.lineWidth=fs*0.18;ctx.strokeStyle='rgba(0,0,0,.8)';ctx.strokeText(t,x,h/2);ctx.fillStyle='#fff';ctx.fillText(t,x,h/2);};
+    lab(L,fs*0.6,'left');lab(R,w-fs*0.6,'right');ctx.textAlign='left';}
+  const imBytes=new Uint8Array(await (await new Promise(r=>cv.toBlob(r,'image/jpeg',0.9))).arrayBuffer());cv.width=cv.height=1;
+  // 表題欄（日本語は画像として描く）
+  const tbW=PWmm-2*M, dpmm=300/25.4, tw=Math.round(tbW*dpmm), th=Math.round(TB*dpmm);
+  const tc=document.createElement('canvas');tc.width=tw;tc.height=th;const t=tc.getContext('2d');
+  t.fillStyle='#fff';t.fillRect(0,0,tw,th);t.strokeStyle='#000';t.lineWidth=Math.max(2,dpmm*0.25);
+  const cells=[['橋梁名',v.bridge||'—',0.26],['径間番号',v.span||'—',0.12],['撮影日',v.date||'—',0.14],['図の種類',S.view.plan?'平面図（上から透視）':'見上げ図',0.15],['縮尺',`1 : ${n}（${paper}）`,0.15],['縮尺バー','',0.18]];
+  let cx=0;const lab=th*0.26,val=th*0.36;
+  cells.forEach(([k,val_,wf],i)=>{const cw=tw*wf;t.strokeRect(cx,0,cw,th);
+    t.fillStyle='#555';t.font=overlayFont(lab*0.8);t.fillText(k,cx+dpmm*2,lab*1.05);
+    t.fillStyle='#000';t.font=`bold ${overlayFont(val)}`;
+    if(k!=='縮尺バー'){let fsz=val;t.font=`bold ${overlayFont(fsz)}`;while(t.measureText(val_).width>cw-dpmm*4&&fsz>val*0.55){fsz*=0.94;t.font=`bold ${overlayFont(fsz)}`;}
+      let s=val_;while(t.measureText(s).width>cw-dpmm*4&&s.length>1)s=s.slice(0,-1);t.fillText(s,cx+dpmm*2,th*0.78);}
+    else{const barM=[20,10,5,2,1,0.5,0.2,0.1].find(b=>b*1000/n*dpmm<=cw-dpmm*10)||0.1, bl=barM*1000/n*dpmm, bx=cx+dpmm*4, by=th*0.5, bh=th*0.14;
+      for(let q=0;q<4;q++){t.fillStyle=q%2?'#fff':'#000';t.fillRect(bx+bl*q/4,by,bl/4,bh);}t.lineWidth=Math.max(1,dpmm*0.15);t.strokeRect(bx,by,bl,bh);
+      t.fillStyle='#000';t.font=overlayFont(lab*0.8);t.fillText('0',bx-dpmm,by+bh+lab*0.95);t.fillText(barM+' m',bx+bl-dpmm*2,by+bh+lab*0.95);}
+    cx+=cw;});
+  const tbBytes=new Uint8Array(await (await new Promise(r=>tc.toBlob(r,'image/jpeg',0.92))).arrayBuffer());tc.width=tc.height=1;
+  // ページ描画命令（単位 pt、原点左下）
+  const P=x=>(x*mm).toFixed(2);
+  let ops=`q ${P(tbW)} 0 0 ${P(TB)} ${P(M)} ${P(M)} cm /Tb Do Q\n`;
+  ops+=`q ${P(iw)} 0 0 ${P(ih)} ${P(ix)} ${P(iy)} cm /Im Do Q\n`;
+  ops+=`0.6 w 0 G ${P(M)} ${P(M)} ${P(PWmm-2*M)} ${P(PHmm-2*M)} re S\n0.3 w ${P(ix)} ${P(iy)} ${P(iw)} ${P(ih)} re S\n`;
+  if($('#x-grid').checked){ // 1m グリッド（ベクター）
+    ops+='0.25 w 1 1 1 RG [2 2] 0 d\n';
+    for(let m=1;m*1000<realW;m++){const x=ix+m*1000/n;ops+=`${P(x)} ${P(iy)} m ${P(x)} ${P(iy+ih)} l S\n`;}
+    for(let m=1;m*1000<realH;m++){const y=iy+ih-m*1000/n;ops+=`${P(ix)} ${P(y)} m ${P(ix+iw)} ${P(y)} l S\n`;}
+    ops+='[] 0 d 0 G\nBT /F1 6 Tf 1 1 1 rg\n';
+    for(let m=1;m*1000<realW;m++){ops+=`1 0 0 1 ${P(ix+m*1000/n+0.6)} ${P(iy+ih-2.6)} Tm (${m}m) Tj\n`;}
+    for(let m=1;m*1000<realH;m++){ops+=`1 0 0 1 ${P(ix+0.6)} ${P(iy+ih-m*1000/n+0.6)} Tm (${m}m) Tj\n`;}
+    ops+='ET 0 g\n';
+  }
+  return {blob:buildPDF(PWmm*mm,PHmm*mm,[{name:'Im',bytes:imBytes,pw:w,ph:h},{name:'Tb',bytes:tbBytes,pw:tw,ph:th}],ops),scale:n};
+}
+function readyExport(blob,name){
+  S.exported={blob,name};
+  $('#export-name').textContent=`${name}（${fmt(blob.size/1048576,1)} MB）`;$('#export-ready').hidden=false;
+}
+$('#x-jpg').addEventListener('click',()=>task(async()=>{
+  if(!S.img)return; log('JPEG を作成しています…'); await sleep(); const t0=performance.now();
+  const b=await exportJPEG(); readyExport(b,`${baseName()}_オルソ.jpg`);
+  log(`JPEG 作成完了 ${S.img.W}×${S.img.H} px、${fmt(b.size/1048576,1)} MB（${fmt((performance.now()-t0)/1000,1)} 秒）`);
+  if(S.projectId)await saveProject(false);
+}));
+$('#x-pdf').addEventListener('click',()=>task(async()=>{
+  if(!S.img)return; log('PDF を作成しています…'); await sleep();
+  const {blob,scale}=await exportPDF(); readyExport(blob,`${baseName()}_オルソ_${$('#x-paper').value}.pdf`);
+  log(`PDF 作成完了（${$('#x-paper').value}、縮尺 1:${scale}、${fmt(blob.size/1048576,1)} MB）`);
+  if(S.projectId)await saveProject(false);
+}));
+/* 共有シート（「ファイル」に保存・AirDrop・メール）。押した操作の直後でないと iPad が許可しないため、ボタンを分けている */
+$('#x-share').addEventListener('click',async()=>{
+  const ex=S.exported;if(!ex)return;
+  const file=new File([ex.blob],ex.name,{type:ex.blob.type});
+  try{
+    if(navigator.canShare&&navigator.canShare({files:[file]})){await navigator.share({files:[file],title:ex.name});return;}
+  }catch(e){if(e&&e.name==='AbortError')return;}
+  const a=document.createElement('a');a.href=URL.createObjectURL(ex.blob);a.download=ex.name;document.body.appendChild(a);a.click();
+  setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},30000);
+});
+
+/* ================= 保存（端末内の IndexedDB） ================= */
+const DB=(()=>{let dbp=null;
+  function open(){if(dbp)return dbp;dbp=new Promise((res,rej)=>{const r=indexedDB.open('slabortho',1);
+    r.onupgradeneeded=()=>{const d=r.result;d.createObjectStore('projects',{keyPath:'id'});d.createObjectStore('images');};
+    r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});return dbp;}
+  const tx=async(store,mode,fn)=>{const d=await open();return new Promise((res,rej)=>{const t=d.transaction(store,mode);const out=fn(t.objectStore(store));t.oncomplete=()=>res(out&&out.result!==undefined?out.result:out);t.onerror=()=>rej(t.error);t.onabort=()=>rej(t.error);});};
+  return{
+    put:(store,val,key)=>tx(store,'readwrite',s=>s.put(val,key)),
+    get:(store,key)=>tx(store,'readonly',s=>s.get(key)),
+    all:(store)=>tx(store,'readonly',s=>s.getAll()),
+    del:async(store,key)=>tx(store,'readwrite',s=>s.delete(key)),
+    delRange:async(store,lo,hi)=>tx(store,'readwrite',s=>s.delete(IDBKeyRange.bound(lo,hi))),
+  };})();
+async function saveProject(withImages){
+  try{
+    if(!S.sol)return;
+    if(navigator.storage&&navigator.storage.persist)navigator.storage.persist().catch(()=>{});
+    const isNew=!S.projectId; if(isNew)S.projectId='p'+Date.now();
+    const id=S.projectId;
+    let thumb='';try{const tc=document.createElement('canvas');const r=Math.min(1,480/Math.max(PV.width,PV.height));tc.width=Math.round(PV.width*r);tc.height=Math.round(PV.height*r);tc.getContext('2d').drawImage(PV,0,0,tc.width,tc.height);thumb=tc.toDataURL('image/jpeg',0.75);tc.width=tc.height=1;}catch(e){}
+    if(isNew&&withImages&&S.files.length){
+      log('元画像を端末内に保存しています…');await sleep();
+      for(let k=0;k<S.files.length;k++)await DB.put('images',S.files[k],id+'/'+String(k).padStart(3,'0'));
+    }
+    const rec={id,updated:Date.now(),info:info(),o:S.o,names:S.names,yaws:S.yaws,sol:S.sol,gains:S.gains?[...S.gains]:null,srcInfo:S.srcInfo,autoG:S.autoG,
+      view:S.view,crop:S.crop,scaleFix:S.scaleFix,gsdSel:$('#o-gsd').value,thumbs:S.thumbs,thumb,nImg:S.names.length};
+    await DB.put('projects',rec);S.dirty=false;
+    log(isNew?`案件を保存しました（「保存データ」から開き直せます）`:'案件を上書き保存しました');
+    refreshProjects();
+  }catch(e){console.error(e);log('保存できませんでした：'+(e&&e.message||e)+'（端末の空き容量を確認してください）');}
+}
+$('#p-save').addEventListener('click',()=>task(()=>saveProject(false)));
+async function openProject(id){
+  const rec=await DB.get('projects',id); if(!rec)throw new Error('案件が見つかりません');
+  showTab('ortho'); logEl.textContent=''; log(`案件を開きます：${rec.info.bridge||'（名称なし）'} ${rec.info.span||''}`);
+  setInfo(rec.info); $('#o-h').value=rec.o.h; $('#o-theta').value=rec.o.th; $('#o-q').value=String(rec.o.maxW); $('#o-gain').value=rec.o.gain?'1':'0';
+  $('#o-gsd').value=rec.gsdSel||'auto'; $('#v-view').value=rec.view&&rec.view.plan?'plan':'up';
+  const blobs=[];for(let k=0;k<rec.nImg;k++)blobs.push(await DB.get('images',id+'/'+String(k).padStart(3,'0')));
+  if(blobs.some(b=>!b))throw new Error('元画像が保存されていないため開けません');
+  Object.assign(S,{mode:'project',projectId:id,files:[],names:rec.names,yaws:rec.yaws,sol:rec.sol,gains:rec.gains?new Map(rec.gains):null,o:rec.o,srcInfo:rec.srcInfo,autoG:rec.autoG,
+    view:rec.view||{plan:false,rot:false},crop:rec.crop,scaleFix:rec.scaleFix||1,thumbs:rec.thumbs||[],getSrc:k=>openFile(blobs[k])});
+  $('#thumbs').innerHTML='';(rec.names||[]).forEach((n,k)=>{const used=rec.sol.cams.find(c=>c.i===k);showThumb(k,n,S.thumbs[k]||'',used?'<span class="chip ok">使用</span>':'<span class="chip bad">除外</span>');});
+  $('#thumb-note').textContent=`${rec.sol.cams.length}/${rec.nImg} 枚を使用`;
+  await renderCurrent();
+}
+async function refreshProjects(){
+  const box=$('#projects'); let list=[];
+  try{list=(await DB.all('projects')).sort((a,b)=>b.updated-a.updated);}catch(e){box.innerHTML='<div class="empty">この環境では保存機能を使えません。</div>';return;}
+  if(!list.length){box.innerHTML='<div class="empty">保存した案件はまだありません。合成が終わると自動で保存されます。</div>';}
+  else box.innerHTML=list.map(r=>`<div class="proj" data-id="${r.id}">
+      <img src="${r.thumb||''}" alt="">
+      <div class="meta"><div class="pn">${esc(r.info.bridge||'（名称なし）')} <span class="muted">${esc(r.info.span||'')}</span></div>
+      <div class="muted num">撮影日 ${esc(r.info.date||'—')}・${r.nImg} 枚・h ${r.o.h} m・更新 ${new Date(r.updated).toLocaleString('ja-JP')}</div>
+      <div class="acts"><button class="btn small primary" data-open>開く</button><button class="btn small" data-del>削除</button>
+      <span class="confirm" hidden>削除しますか？ <button class="btn small danger" data-del-yes>削除する</button><button class="btn small" data-del-no>やめる</button></span></div></div></div>`).join('');
+  box.querySelectorAll('.proj').forEach(el=>{const id=el.dataset.id;
+    el.querySelector('[data-open]').addEventListener('click',()=>task(()=>openProject(id)));
+    el.querySelector('[data-del]').addEventListener('click',()=>{el.querySelector('.confirm').hidden=false;});
+    el.querySelector('[data-del-no]').addEventListener('click',()=>{el.querySelector('.confirm').hidden=true;});
+    el.querySelector('[data-del-yes]').addEventListener('click',async()=>{await DB.del('projects',id);await DB.delRange('images',id+'/',id+'/\uffff');if(S.projectId===id)S.projectId=null;refreshProjects();});
+  });
+  try{const e=await navigator.storage.estimate();const u=e.usage||0;$('#storage').textContent=`端末内の使用量 ${u>=1073741824?fmt(u/1073741824,2)+' GB':fmt(u/1048576,0)+' MB'}`;}catch(e){}
+}
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+
+/* オフライン対応（Service Worker） */
+(function(){
+  const el=$('#offline');
+  const set=(ok,t)=>{el.classList.toggle('ok',ok);el.querySelector('span').textContent=t;};
+  if(!('serviceWorker' in navigator)||location.protocol!=='https:'&&location.hostname!=='localhost'){set(false,'オフライン対応は https で公開したときに有効になります');return;}
+  navigator.serviceWorker.register('sw.js').then(()=>navigator.serviceWorker.ready).then(()=>set(true,'オフラインで使えます')).catch(()=>set(false,'オフライン対応を登録できませんでした'));
+})();
+try{const t=localStorage.getItem('slabortho-tab');if(t&&$('#panel-'+t))showTab(t)}catch(e){}
+setBusy(false);
+</script>
+</body>
+</html>

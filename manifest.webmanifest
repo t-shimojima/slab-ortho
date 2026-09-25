@@ -1,0 +1,17 @@
+{
+  "name": "床版下面オルソ",
+  "short_name": "床版オルソ",
+  "description": "DJI Avata 360 の 360° 静止画から床版下面の平面オルソ画像を端末内で合成します",
+  "lang": "ja",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#eceeed",
+  "theme_color": "#1b6784",
+  "icons": [
+    {"src": "icon-192.png", "sizes": "192x192", "type": "image/png"},
+    {"src": "icon-512.png", "sizes": "512x512", "type": "image/png"},
+    {"src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}
+  ]
+}
