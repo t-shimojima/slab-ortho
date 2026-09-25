@@ -1,6 +1,6 @@
 /* 床版下面オルソ：オフライン用 Service Worker
    版を更新したら VERSION を変える。起動時に新しいファイルを取りに行き、通信できないときは保存済みの版で動く */
-const VERSION='slabortho-v1.0.0';
+const VERSION='slabortho-v1.1.0';
 const ASSETS=['./','./index.html','./manifest.webmanifest','./icon-180.png','./icon-192.png','./icon-512.png'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(VERSION).then(c=>c.addAll(ASSETS)).then(()=>self.skipWaiting()));});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k!==VERSION).map(k=>caches.delete(k)))).then(()=>self.clients.claim()));});

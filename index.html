@@ -119,6 +119,14 @@ svg text{font-family:var(--mono);fill:var(--muted);font-size:11px}
 @media (prefers-reduced-motion: reduce){.progress div{transition:none}}
 
 [hidden]{display:none!important}
+.fields,.fields>*,.field,.pair>*,.field .row{min-width:0}
+.fields input,.fields select{max-width:100%;min-width:0}
+.field .row input{flex:1 1 auto;width:auto}
+input[type=date]{-webkit-appearance:none;appearance:none;display:block;text-align:left;line-height:22px}
+input[type=date]::-webkit-date-and-time-value{text-align:left}
+input[type=file]{width:100%;min-width:0}
+#log{overflow-wrap:anywhere;word-break:break-all}
+.progress{width:100%}
 html{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
 body{margin:0}
 .offline{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px}
@@ -280,7 +288,7 @@ input[type=text],input[type=date]{font:inherit;font-size:15px;width:100%;padding
       <div class="box">
         <div class="toolbar">
           <h3 style="margin:0;margin-right:auto">合成結果</h3>
-          <select id="v-view" style="width:auto;min-height:36px;padding:4px 8px"><option value="up">見上げ図</option><option value="plan">平面図（上から透視）</option></select>
+          <span class="seg" role="group" aria-label="図の向き"><button data-view="down" aria-pressed="true">見下げ図</button><button data-view="up" aria-pressed="false">見上げ図</button></span>
           <button class="btn small" id="v-rot" data-busy="need-img" disabled>180°回転</button>
           <label><input type="checkbox" id="v-grid" checked> 1m グリッド</label>
           <label><input type="checkbox" id="v-cams" checked> 撮影位置</label>
@@ -963,7 +971,7 @@ async function renderMosaic2(sol,o,getSrc,gains,view,crop,gsd,names){
   }
   return {...F,rgb,cov};
 }
-/* 見上げ図⇔平面図、180°回転は画素の入れ替えだけで済ませる */
+/* 見上げ図⇔見下げ図、180°回転は画素の入れ替えだけで済ませる */
 function flipImg(img,horiz){
   const {W,H,rgb,cov}=img;
   if(horiz){for(let y=0;y<H;y++){for(let x=0,x2=W-1;x<x2;x++,x2--){const a=(y*W+x),b=(y*W+x2);
@@ -1070,8 +1078,19 @@ $('#v-grid').addEventListener('change',drawOverlay);
 $('#v-cams').addEventListener('change',drawOverlay);
 $('#v-zoom').addEventListener('change',applyZoom);
 window.addEventListener('resize',applyZoom);
-$('#v-view').addEventListener('change',()=>{if(!S.img)return;const plan=$('#v-view').value==='plan';if(plan!==S.view.plan){flipImg(S.img,false);S.view.plan=plan;S.dirty=true;S.measure=[];buildPreview();}});
-$('#v-rot').addEventListener('click',()=>{if(!S.img)return;flipImg(S.img,true);flipImg(S.img,false);S.view.rot=!S.view.rot;S.dirty=true;S.measure=[];buildPreview();});
+/* 見下げ図（橋面側から透視＝点検のスケッチと同じ向き）⇔ 見上げ図。合成後いつでも切り替えられる */
+function setViewPref(v){try{localStorage.setItem('slabortho-view',v)}catch(e){}}
+function viewSel(){return document.querySelector('[data-view][aria-pressed="true"]').dataset.view}
+function markView(v){document.querySelectorAll('[data-view]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.view===v));}
+document.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',()=>{
+  const v=b.dataset.view; markView(v); setViewPref(v);
+  if(!S.img)return; const plan=v==='down';
+  if(plan!==S.view.plan){flipImg(S.img,false);S.view.plan=plan;S.dirty=true;S.measure=[];buildPreview();}
+}));
+try{const v=localStorage.getItem('slabortho-view');markView(v==='up'?'up':'down');}catch(e){markView('down');}
+$('#v-rot').addEventListener('click',()=>{if(!S.img)return;flipImg(S.img,true);flipImg(S.img,false);S.view.rot=!S.view.rot;S.dirty=true;S.measure=[];
+  const o=$('#i-origin'); if(o.value==='left')o.value='right'; else if(o.value==='right')o.value='left';
+  buildPreview();});
 $('#o-regsd').addEventListener('click',()=>task(async()=>{logEl.textContent='';log('画素寸法を変えて合成し直します');await renderCurrent();}));
 
 /* ---- サムネイル ---- */
@@ -1156,7 +1175,7 @@ async function renderCurrent(){
   log(`合成完了（${fmt((performance.now()-t0)/1000,1)} 秒）`);
 }
 async function runPipeline(n,names,getSrc,yaws,truth){
-  S.img=null;S.crop=null;S.cropDraft=null;S.scaleFix=1;S.thumbs=[];S.view={plan:$('#v-view').value==='plan',rot:false};
+  S.img=null;S.crop=null;S.cropDraft=null;S.scaleFix=1;S.thumbs=[];S.view={plan:viewSel()==='down',rot:false};
   $('#inner').hidden=true;$('#viewer-empty').hidden=false;$('#viewer-empty').textContent='処理中…';
   await register(n,names,getSrc,yaws,truth);
   await renderCurrent();
@@ -1192,7 +1211,7 @@ function drawBurn(ctx,W,H,G,opt){
     for(let m=1;m/G<W;m++){const x=Math.round(m/G)+0.5;ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();ctx.fillText(m+'m',x+4,fs*0.8);}
     for(let m=1;m/G<H;m++){const y=Math.round(m/G)+0.5;ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();ctx.fillText(m+'m',4,y-4);}}
   const v=info(), title=[v.bridge,v.span,v.date].filter(Boolean).join('　');
-  const view=(S.view.plan?'平面図':'見上げ図');
+  const view=(S.view.plan?'見下げ図':'見上げ図');
   const bar=[0.5,1,2,5,10].find(b=>b/G>=W*0.12)||10, bpx=bar/G;
   const lines=[title||'床版下面オルソ',`${view}　${fmt(G*1000,2)} mm/px`];
   ctx.font=overlayFont(fs);
@@ -1249,7 +1268,7 @@ async function exportPDF(){
   const tbW=PWmm-2*M, dpmm=300/25.4, tw=Math.round(tbW*dpmm), th=Math.round(TB*dpmm);
   const tc=document.createElement('canvas');tc.width=tw;tc.height=th;const t=tc.getContext('2d');
   t.fillStyle='#fff';t.fillRect(0,0,tw,th);t.strokeStyle='#000';t.lineWidth=Math.max(2,dpmm*0.25);
-  const cells=[['橋梁名',v.bridge||'—',0.26],['径間番号',v.span||'—',0.12],['撮影日',v.date||'—',0.14],['図の種類',S.view.plan?'平面図（上から透視）':'見上げ図',0.15],['縮尺',`1 : ${n}（${paper}）`,0.15],['縮尺バー','',0.18]];
+  const cells=[['橋梁名',v.bridge||'—',0.26],['径間番号',v.span||'—',0.12],['撮影日',v.date||'—',0.14],['図の種類',S.view.plan?'見下げ図':'見上げ図',0.15],['縮尺',`1 : ${n}（${paper}）`,0.15],['縮尺バー','',0.18]];
   let cx=0;const lab=th*0.26,val=th*0.36;
   cells.forEach(([k,val_,wf],i)=>{const cw=tw*wf;t.strokeRect(cx,0,cw,th);
     t.fillStyle='#555';t.font=overlayFont(lab*0.8);t.fillText(k,cx+dpmm*2,lab*1.05);
@@ -1340,7 +1359,7 @@ async function openProject(id){
   const rec=await DB.get('projects',id); if(!rec)throw new Error('案件が見つかりません');
   showTab('ortho'); logEl.textContent=''; log(`案件を開きます：${rec.info.bridge||'（名称なし）'} ${rec.info.span||''}`);
   setInfo(rec.info); $('#o-h').value=rec.o.h; $('#o-theta').value=rec.o.th; $('#o-q').value=String(rec.o.maxW); $('#o-gain').value=rec.o.gain?'1':'0';
-  $('#o-gsd').value=rec.gsdSel||'auto'; $('#v-view').value=rec.view&&rec.view.plan?'plan':'up';
+  $('#o-gsd').value=rec.gsdSel||'auto'; markView(rec.view&&rec.view.plan?'down':'up');
   const blobs=[];for(let k=0;k<rec.nImg;k++)blobs.push(await DB.get('images',id+'/'+String(k).padStart(3,'0')));
   if(blobs.some(b=>!b))throw new Error('元画像が保存されていないため開けません');
   Object.assign(S,{mode:'project',projectId:id,files:[],names:rec.names,yaws:rec.yaws,sol:rec.sol,gains:rec.gains?new Map(rec.gains):null,o:rec.o,srcInfo:rec.srcInfo,autoG:rec.autoG,
