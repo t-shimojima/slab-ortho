@@ -153,6 +153,10 @@ input[type=text],input[type=date]{font:inherit;font-size:15px;width:100%;padding
 .proj .pn{font-weight:700;font-size:16px}
 .proj .acts{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;align-items:center}
 .muted{color:var(--muted);font-weight:400;font-size:13px}
+.modal{position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.72);display:flex;align-items:center;justify-content:center;padding:12px}
+.modal .card{background:var(--surface);color:var(--ink);border-radius:12px;padding:14px;width:min(1400px,100%);max-height:100%;overflow:auto;display:grid;gap:10px}
+.modal canvas{width:100%;height:auto;display:block;border-radius:6px;touch-action:manipulation;cursor:crosshair;background:#000}
+.modal .row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .btn.danger{background:var(--bad);border-color:var(--bad);color:#fff}
 #projects{display:grid;gap:10px}
 @media (max-width:600px){.proj{grid-template-columns:1fr}}
@@ -268,7 +272,7 @@ input[type=text],input[type=date]{font:inherit;font-size:15px;width:100%;padding
         <div class="field"><label for="i-span">径間番号</label><input type="text" id="i-span" placeholder="例：第1径間" autocomplete="off"></div>
         <div class="field"><label for="i-date">撮影日</label><input type="date" id="i-date"></div>
       </div>
-      <div class="field"><label for="i-origin">起点・終点の表示</label>
+      <div class="field"><label for="i-origin" id="lbl-origin">起点・終点の表示</label>
         <select id="i-origin"><option value="none">表示しない</option><option value="left">左が起点側</option><option value="right">右が起点側</option></select></div>
 
       <div class="sec">画像と設定</div>
@@ -286,6 +290,13 @@ input[type=text],input[type=date]{font:inherit;font-size:15px;width:100%;padding
       <div class="pair">
         <div class="field"><label for="o-q">読込画質</label><select id="o-q"><option value="6144">標準</option><option value="10240">高（メモリ大）</option></select></div>
         <div class="field"><label for="o-gain">露出補正</label><select id="o-gain"><option value="1">する</option><option value="0">しない</option></select></div>
+      </div>
+      <div id="wall-row" hidden style="display:grid;gap:12px">
+        <div class="field"><label>壁の正面方向</label>
+          <div class="row" style="flex-wrap:wrap;gap:8px"><button class="btn" id="wd-open" data-busy="need-files" disabled>画像で指定…</button><span class="hint" id="wd-status" style="margin:0">自動で推定します</span></div></div>
+        <div class="field"><label for="o-seam">水平線付近の除外（レンズのつなぎ目）</label>
+          <select id="o-seam"><option value="3">±3°（標準・範囲を広く使う）</option><option value="6">±6°</option><option value="10">±10°</option><option value="15">±15°（画質優先）</option></select>
+          <p class="hint">±15° 以内は、ほかの画像に写っていればそちらを優先して使います。</p></div>
       </div>
       <div class="field" id="o-level-row"><label for="o-level">自動水平補正（画像内の直線に合わせる）</label><select id="o-level"><option value="1">する</option><option value="0">しない</option></select></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -412,7 +423,9 @@ input[type=text],input[type=date]{font:inherit;font-size:15px;width:100%;padding
     <ol class="steps">
       <li><div>「オルソ合成」の撮影対象で「橋台・壁面（横向き）」を選び、離隔 D（カメラから壁面まで）を入力します。</div></li>
       <li><div>機首を壁に向けたまま、壁に沿って水平に飛びます。撮影間隔とコース間隔は「撮影計画」の壁面の表を使います。</div></li>
-      <li><div>壁の正面方向は自動で求めます。合成後は「範囲を指定」で壁の部分に絞り、型枠の目地など実寸の分かる箇所で「縮尺を補正」してください。</div></li>
+      <li><div>画像を選んだら「壁の正面方向」の「画像で指定…」を押します。天端と床版の境目や打継目など<b>壁の水平な線の左右2か所</b>をタップすると、正面方向を正確に計算します（壁の中央を1点タップするだけでも可）。機体が壁の中央からずれていても正しく正対します。</div></li>
+      <li><div>「水平線付近の除外」は標準の ±3° で使います。水平線の近くはやや甘く写りますが、ほかの画像に同じ箇所が写っていればそちらを優先します。画質を優先したいときは ±6°〜±15° に変えると、合成し直さずに反映されます。</div></li>
+      <li><div>離隔が取れない短い橋でも、機体の高さを1m程度ずつ変えて2〜3枚撮れば壁の上下を覆えます。合成後は「範囲を指定」で壁の部分に絞り、型枠の目地など実寸の分かる箇所で「縮尺を補正」してください。</div></li>
     </ol>
   </div>
   <div class="box" style="margin-top:20px">
@@ -427,6 +440,16 @@ input[type=text],input[type=date]{font:inherit;font-size:15px;width:100%;padding
 
 </div>
 
+<div class="modal" id="wd-modal" hidden>
+  <div class="card">
+    <div class="row"><h3 style="margin:0;margin-right:auto">壁の正面方向を指定</h3>
+      <button class="btn small" id="wd-prev">◀ 前の画像</button><span id="wd-name" class="muted"></span><button class="btn small" id="wd-next">次の画像 ▶</button></div>
+    <p class="hint" style="margin:0"><b>1点</b>：壁の中央をタップ（正面の向きは自動で微調整）　<b>2点</b>：天端・打継目など<b>壁の水平な線</b>の左右2か所をタップ（向きを正確に計算）。線が水平線（赤帯）から離れて写っている画像を選ぶと正確です。iPad は横向きが見やすくなります。</p>
+    <canvas id="wd-cv"></canvas>
+    <div class="row"><span id="wd-msg" class="muted" style="margin-right:auto"></span>
+      <button class="btn small" id="wd-clear">やり直す</button><button class="btn small" id="wd-auto">自動推定に戻す</button><button class="btn small" id="wd-cancel">キャンセル</button><button class="btn primary small" id="wd-ok">この向きで決定</button></div>
+  </div>
+</div>
 <script>
 "use strict";
 const $=s=>document.querySelector(s);
@@ -931,7 +954,9 @@ function buildPDF(pageW,pageH,images,ops){
 /* ================= 橋台モード（壁面・横向き） =================
    壁面は水平方向（カメラの真横）を写すため、上下レンズのつなぎ目（水平±数度）を避けて使う。
    壁の座標：u＝壁に沿って右向き、v＝上向き（m）。カメラ正面（壁の法線方向）を経度 phi とする。 */
-const WALL_SEAM_REG=12, WALL_SEAM=15, WALL_LON=80, WALL_LAT=75;
+const WALL_LON=80, WALL_LAT=75;
+/* 水平線（上下レンズのつなぎ目）付近の扱い：seam° 以内は使わない。15° までは他の画像があればそちらを優先 */
+const WALL_SEAM_PREF=15;
 /* 経度 phi±80°・緯度±75°の範囲を画素配列として取り出す（経度の折り返しに対応） */
 function getWallBand(src,phi,maxW){
   const W=src.W,H=src.H, lonSpan=2*WALL_LON*D2R, latSpan=2*WALL_LAT*D2R;
@@ -967,7 +992,8 @@ function sampleWall(b,lonRel,lat,out){
   out[2]=d[i00+2]*w00+d[i01+2]*w01+d[i10+2]*w10+d[i11+2]*w11;
 }
 /* 位置合わせ用の壁面タイル（つなぎ目付近・空・地面を除外するマスク付き） */
-function makeWallTile(band,D,alt){
+function makeWallTile(band,D,seamDeg){
+  const seamReg=Math.max(5,seamDeg)*D2R;
   const N=REG_N, a=D*Math.tan(REG_TH*D2R), g=2*a/N, out=[0,0,0];
   const gray=new Float32Array(N*N), rgba=new Uint8ClampedArray(N*N*4), m=new Float32Array(N*N);
   for(let v=0;v<N;v++){const Y=(N/2-v-0.5)*g;
@@ -978,8 +1004,7 @@ function makeWallTile(band,D,alt){
       rgba[i*4]=out[0];rgba[i*4+1]=out[1];rgba[i*4+2]=out[2];rgba[i*4+3]=255;
       const R=out[0],B=out[2],mn=Math.min(out[0],out[1],out[2]);
       const sky=(B>R+45&&B>150)||mn>248;
-      const ground=(alt!=null)&&(alt+Y<0.05);
-      m[i]=(Math.abs(lat)>=WALL_SEAM_REG*D2R&&ang<=60*D2R&&!sky&&!ground)?1:0;
+      m[i]=(Math.abs(lat)>=seamReg&&ang<=60*D2R&&!sky)?1:0;
       if(!m[i]){rgba[i*4]>>=2;rgba[i*4+1]>>=2;rgba[i*4+2]>>=2;}
     }}
   // 模様のない青みのある面（空）も除外：局所の標準偏差で判定
@@ -990,7 +1015,8 @@ function makeWallTile(band,D,alt){
   return {N,g,h:D,gray,rgba,mask,rhoValid:1e9};
 }
 /* 壁の正面方向（経度）を推定：投影した壁で水平・垂直の直線がそろう向きを探す */
-function estimateWallPhi(src,center){
+function estimateWallPhi(src,center,range,step){
+  range=range||40; step=step||4;
   const band=getWallBand(src,center,1536), D=2.5, N=360, a=D*Math.tan(50*D2R), g=2*a/N, out=[0,0,0];
   const score=dphi=>{
     const gr=new Float32Array(N*N);
@@ -1004,16 +1030,27 @@ function estimateWallPhi(src,center){
     return tot?al/tot:0;
   };
   let best=0,bs=-1;
-  for(let d=-40;d<=40;d+=4){const s=score(d*D2R);if(s>bs){bs=s;best=d;}}
-  for(let d=best-3;d<=best+3;d+=0.5){const s=score(d*D2R);if(s>bs){bs=s;best=d;}}
+  for(let d=-range;d<=range;d+=step){const s=score(d*D2R);if(s>bs){bs=s;best=d;}}
+  const f=Math.min(3,step*0.75);
+  for(let d=best-f;d<=best+f;d+=0.5){const s=score(d*D2R);if(s>bs){bs=s;best=d;}}
   return center+best*D2R;
+}
+/* 壁の水平な線（天端・目地など）上の2点 {lon,lat}（ラジアン）から壁の正面方向を求める。
+   同じ高さの2点なので、水平距離 r=z/tan(lat) で平面上の位置にすると壁の線が得られ、その法線が正面方向。 */
+function phiFromLine(p1,p2){
+  if(Math.sign(p1.lat)!==Math.sign(p2.lat)||Math.abs(p1.lat)<3*D2R||Math.abs(p2.lat)<3*D2R) return null;
+  const r1=1/Math.tan(Math.abs(p1.lat)), r2=1/Math.tan(Math.abs(p2.lat));
+  const x1=r1*Math.cos(p1.lon),y1=r1*Math.sin(p1.lon),x2=r2*Math.cos(p2.lon),y2=r2*Math.sin(p2.lon);
+  let nx=-(y2-y1), ny=x2-x1; if(nx*x1+ny*y1<0){nx=-nx;ny=-ny;}
+  if(Math.hypot(nx,ny)<1e-6) return null;
+  return Math.atan2(ny,nx);
 }
 /* 壁面の合成：各点で「つなぎ目を避け、壁に最も正対して写っている画像」を選び、境目はぼかす */
 async function renderWall(sol,o,getSrc,gains,view,crop,gsd,names){
   const F=applyView(frameFor(sol,o,crop,gsd,30e6),{plan:false,rot:false});
   const {W,H,G}=F, D=o.h, cams=sol.cams, nc=cams.length;
   log(`合成 ${W}×${H} px（${fmt(W*G,1)}×${fmt(H*G,1)} m、${fmt(G*1000,2)} mm/px）`);
-  const seam=WALL_SEAM*D2R, maxA=Math.min(o.th,60)*D2R;
+  const seam=(o.seam!=null?o.seam:15)*D2R, pref=WALL_SEAM_PREF*D2R, maxA=Math.min(o.th,60)*D2R;
   // 1) 各画素の担当画像（最良 ia・次点 ib・重み wa）を先に決める
   const IA=new Int8Array(W*H).fill(-1), IB=new Int8Array(W*H).fill(-1), WA=new Uint8Array(W*H);
   const inv=cams.map(c=>({a:c.a/(c.s*c.s),b:c.b/(c.s*c.s),tx:c.tx,ty:c.ty}));
@@ -1024,7 +1061,7 @@ async function renderWall(sol,o,getSrc,gains,view,crop,gsd,names){
       for(let k=0;k<nc;k++){const q=inv[k],dx=Wx-q.tx,dy=Wy-q.ty,X=q.a*dx+q.b*dy,Y=q.a*dy-q.b*dx;
         const r2=D*D+X*X, lat=Math.atan2(Y,Math.sqrt(r2)); if(Math.abs(lat)<seam)continue;
         const ang=Math.acos(D/Math.sqrt(r2+Y*Y)); if(ang>maxA)continue;
-        const sc=ang/D2R+(Math.abs(lat)<20*D2R?8:0);
+        const al=Math.abs(lat), sc=ang/D2R+(al<pref?30*(1-(al-seam)/(pref-seam)):0);
         if(sc<sa){sb=sa;ib=ia;sa=sc;ia=k}else if(sc<sb){sb=sc;ib=k}}
       const p=oy*W+ox; IA[p]=ia; IB[p]=ib; WA[p]=ib<0?255:Math.round(255*(0.5+0.5*Math.min(1,(sb-sa)/3)));
     }}
@@ -1072,17 +1109,22 @@ function dateFromName(n){const m=/(20\d\d)(\d\d)(\d\d)/.exec(n||'');return m?`${
 function baseName(){const v=info();return [v.bridge||'床版下面',v.span,v.date].filter(Boolean).join('_').replace(/[\\/:*?"<>|\s]+/g,'_')}
 ['#i-bridge','#i-span','#i-date','#i-origin'].forEach(id=>$(id).addEventListener('input',()=>{S.dirty=true;drawOverlay();}));
 
+/* 左右の表記：床版は起点側・終点側、橋台（壁面）は上流側・下流側 */
+function sideNames(){const w=(S.o&&S.img?S.o.mode:$('#o-mode').value)==='wall';return w?['上流側','下流側']:['起点側','終点側'];}
 function modeUI(){const w=$('#o-mode').value==='wall';
+  $('#lbl-origin').textContent=w?'上流・下流の表示':'起点・終点の表示';
+  const op=$('#i-origin').options; op[1].textContent=w?'左が上流側':'左が起点側'; op[2].textContent=w?'右が上流側':'右が起点側';
+  if(typeof drawOverlay==='function'&&S.img)drawOverlay();
   $('#lbl-h').textContent=w?'離隔 D（壁面まで）':'離隔 h（床版まで）';
   $('#o-theta-lbl').textContent=w?'使う視野角（正面から）':'使用する天頂角';
-  $('#o-level-row').hidden=w; $('#view-seg').hidden=w;
+  $('#o-level-row').hidden=w; $('#view-seg').hidden=w; $('#wall-row').hidden=!w;
   try{localStorage.setItem('slabortho-mode',$('#o-mode').value)}catch(e){}
 }
 $('#o-mode').addEventListener('change',modeUI);
 try{const m=localStorage.getItem('slabortho-mode');if(m)$('#o-mode').value=m;}catch(e){}
 $('#o-files').addEventListener('change',e=>{
   S.files=[...e.target.files].sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true}));
-  S.mode='files'; S.projectId=null; S.crop=null;
+  S.mode='files'; S.projectId=null; S.crop=null; S.wallDir=null; wdStatus();
   logEl.textContent=''; log(`${S.files.length} 枚を選択しました。「合成を実行」を押してください。`);
   if(!$('#i-date').value&&S.files[0]) $('#i-date').value=dateFromName(S.files[0].name);
   setBusy(false);
@@ -1198,7 +1240,7 @@ function drawOverlay(){
   if($('#v-cams').checked) S.sol.cams.forEach(c=>{const [x,y]=camOut(c);
     s+=`<circle cx="${x}" cy="${y}" r="${u*1.4}" fill="#1b6784" stroke="#fff" stroke-width="${u*0.35}"/><text x="${x+u*2}" y="${y-u*1.5}" style="font-size:${u*4}px;fill:#fff;paint-order:stroke;stroke:#000;stroke-width:${u*0.6}px">${c.i+1}</text>`;});
   const o=info().origin;
-  if(o!=='none'){const L=o==='left'?'起点側':'終点側',R=o==='left'?'終点側':'起点側';
+  if(o!=='none'){const [A,B]=sideNames(),L=o==='left'?A:B,R=o==='left'?B:A;
     s+=`<text x="${u*2}" y="${img.H/2}" style="font-size:${u*5}px;fill:#fff;paint-order:stroke;stroke:#000;stroke-width:${u*0.8}px">${L}</text>`;
     s+=`<text x="${img.W-u*2}" y="${img.H/2}" text-anchor="end" style="font-size:${u*5}px;fill:#fff;paint-order:stroke;stroke:#000;stroke-width:${u*0.8}px">${R}</text>`;}
   if(S.cropDraft){const r=S.cropDraft;s+=`<rect x="${Math.min(r[0],r[2])}" y="${Math.min(r[1],r[3])}" width="${Math.abs(r[2]-r[0])}" height="${Math.abs(r[3]-r[1])}" fill="rgba(242,193,78,.15)" stroke="#f2c14e" stroke-width="${u*0.5}" stroke-dasharray="${u*2} ${u}"/>`;}
@@ -1355,15 +1397,20 @@ function rotateSol(sol,phi){
 /* ---- 位置合わせ ---- */
 function readOpts(){
   const h=Math.max(0.3,+$('#o-h').value||3), th=Math.max(30,Math.min(75,+$('#o-theta').value||55));
-  return {h,th,maxW:+$('#o-q').value,gain:$('#o-gain').value==='1',mode:$('#o-mode').value};
+  return {h,th,maxW:+$('#o-q').value,gain:$('#o-gain').value==='1',mode:$('#o-mode').value,seam:+$('#o-seam').value};
 }
 function currentGsd(){const v=$('#o-gsd').value;return v==='auto'?S.autoG:(+v)/1000}
 async function register(n,names,getSrc,yaws,truth,alts){
   const o=readOpts(); const t0=performance.now(); const wall=o.mode==='wall';
-  if(wall){ // 壁の正面方向：最初の画像で推定し、機体の向きの差で各画像に配る
-    const src=await getSrc(0); const phi0=estimateWallPhi(src,0); src.close&&src.close();
-    o.phis=names.map((_,k)=>(yaws&&yaws[k]!=null&&yaws[0]!=null)?phi0-(yaws[k]-yaws[0])*D2R:phi0);
-    log(`壁の正面方向：画像の正面から ${fmt(phi0/D2R,1)}°（自動推定）`);
+  if(wall){ // 壁の正面方向：指定した画像（なければ1枚目を自動推定）から、機体の向きの差で各画像に配る
+    let k0=0,phi0,how;
+    const wd=S.wallDir&&S.wallDir.n===n?S.wallDir:null;
+    if(wd&&wd.method==='line'){k0=wd.k;phi0=wd.phi;how=`画像 ${k0+1} の水平線 2 点から計算`;}
+    else if(wd&&wd.method==='tap'){k0=wd.k;const src=await getSrc(k0);phi0=estimateWallPhi(src,wd.phi,8,1);src.close&&src.close();how=`画像 ${k0+1} で指定（${fmt(wd.phi/D2R,1)}°）を微調整`;}
+    else{const src=await getSrc(0);phi0=estimateWallPhi(src,0);src.close&&src.close();how='自動推定。ずれる場合は「画像で指定…」';}
+    o.phis=names.map((_,k)=>(yaws&&yaws[k]!=null&&yaws[k0]!=null)?phi0-(yaws[k]-yaws[k0])*D2R:phi0);
+    log(`壁の正面方向：画像の正面から ${fmt(phi0/D2R,1)}°（${how}）`);
+    log(`水平線付近の除外：±${o.seam}°`);
   }
   const feats=[],srcInfo=[],hists=[];
   for(let k=0;k<n;k++){
@@ -1372,7 +1419,7 @@ async function register(n,names,getSrc,yaws,truth,alts){
     if(Math.abs(src.W/src.H-2)>0.05) log(`  注意：縦横比が 2:1 ではありません（${src.W}×${src.H}）。360° の正距円筒画像か確認してください。`);
     else if(!truth&&src.W<15000) log(`  注意：画像の幅が ${src.W} px です。本体の 120MP（15520×7760）より小さく、取り込み時に縮小された可能性があります。`);
     let tile;
-    if(wall){const band=getWallBand(src,o.phis[k],2048); src.close&&src.close(); tile=makeWallTile(band,o.h,alts?alts[k]:null);}
+    if(wall){const band=getWallBand(src,o.phis[k],2048); src.close&&src.close(); tile=makeWallTile(band,o.h,o.seam);}
     else{const band=getBand(src,Math.min(89,REG_TH*1.25),3072,2); src.close&&src.close(); tile=makeRegTile(band,o.h); hists[k]=tileOrient(tile,o.h);}
     const f=detect(tile,1500); feats.push(f);
     addThumb(k,names[k],tile,`<span class="chip warn">特徴点 ${f.M}</span>`);
@@ -1484,7 +1531,7 @@ function drawBurn(ctx,W,H,G,opt){
   for(let i=0;i<4;i++){ctx.fillStyle=i%2?'#222':'#fff';ctx.fillRect(sx+bpx*i/4,sy,bpx/4,fs*0.45);}
   ctx.strokeStyle='#fff';ctx.lineWidth=lw;ctx.strokeRect(sx,sy,bpx,fs*0.45);
   ctx.fillStyle='#fff';ctx.font=overlayFont(fs*0.75);ctx.fillText('0',sx-fs*0.2,sy+fs*1.25);ctx.fillText(bar+' m',sx+bpx-fs*0.6,sy+fs*1.25);
-  if(v.origin!=='none'){const L=v.origin==='left'?'起点側':'終点側',R=v.origin==='left'?'終点側':'起点側';ctx.font=overlayFont(fs*1.1);
+  if(v.origin!=='none'){const [A,B]=sideNames(),L=v.origin==='left'?A:B,R=v.origin==='left'?B:A;ctx.font=overlayFont(fs*1.1);
     const lab=(t,x,al)=>{ctx.textAlign=al;ctx.lineWidth=fs*0.18;ctx.strokeStyle='rgba(0,0,0,.8)';ctx.strokeText(t,x,H/2);ctx.fillStyle='#fff';ctx.fillText(t,x,H/2);ctx.textAlign='left';};
     lab(L,fs*0.8,'left');lab(R,W-fs*0.8,'right');}
 }
@@ -1521,7 +1568,7 @@ async function exportPDF(){
   const w=Math.ceil(img.W/f),h=Math.ceil(img.H/f);
   const cv=document.createElement('canvas');cv.width=w;cv.height=h;const ctx=cv.getContext('2d');
   ctx.putImageData(new ImageData(readRGBA(img,0,h,f),w,h),0,0);
-  if(v.origin!=='none'){const L=v.origin==='left'?'起点側':'終点側',R=v.origin==='left'?'終点側':'起点側',fs=Math.max(14,w/45);ctx.font=overlayFont(fs);
+  if(v.origin!=='none'){const [A,B]=sideNames(),L=v.origin==='left'?A:B,R=v.origin==='left'?B:A,fs=Math.max(14,w/45);ctx.font=overlayFont(fs);
     const lab=(t,x,al)=>{ctx.textAlign=al;ctx.lineWidth=fs*0.18;ctx.strokeStyle='rgba(0,0,0,.8)';ctx.strokeText(t,x,h/2);ctx.fillStyle='#fff';ctx.fillText(t,x,h/2);};
     lab(L,fs*0.6,'left');lab(R,w-fs*0.6,'right');ctx.textAlign='left';}
   const imBytes=new Uint8Array(await (await new Promise(r=>cv.toBlob(r,'image/jpeg',0.9))).arrayBuffer());cv.width=cv.height=1;
@@ -1619,7 +1666,7 @@ $('#p-save').addEventListener('click',()=>task(()=>saveProject(false)));
 async function openProject(id){
   const rec=await DB.get('projects',id); if(!rec)throw new Error('案件が見つかりません');
   showTab('ortho'); logEl.textContent=''; log(`案件を開きます：${rec.info.bridge||'（名称なし）'} ${rec.info.span||''}`);
-  setInfo(rec.info); $('#o-mode').value=rec.o.mode||'slab'; modeUI(); $('#o-h').value=rec.o.h; $('#o-theta').value=rec.o.th; $('#o-q').value=String(rec.o.maxW); $('#o-gain').value=rec.o.gain?'1':'0';
+  setInfo(rec.info); $('#o-mode').value=rec.o.mode||'slab'; if(rec.o.mode==='wall')$('#o-seam').value=String(rec.o.seam!=null?rec.o.seam:15); modeUI(); $('#o-h').value=rec.o.h; $('#o-theta').value=rec.o.th; $('#o-q').value=String(rec.o.maxW); $('#o-gain').value=rec.o.gain?'1':'0';
   $('#o-gsd').value=rec.gsdSel||'auto'; markView(rec.view&&rec.view.plan?'down':'up');
   const blobs=[];for(let k=0;k<rec.nImg;k++)blobs.push(await DB.get('images',id+'/'+String(k).padStart(3,'0')));
   if(blobs.some(b=>!b))throw new Error('元画像が保存されていないため開けません');
@@ -1648,6 +1695,74 @@ async function refreshProjects(){
   try{const e=await navigator.storage.estimate();const u=e.usage||0;$('#storage').textContent=`端末内の使用量 ${u>=1073741824?fmt(u/1073741824,2)+' GB':fmt(u/1048576,0)+' MB'}`;}catch(e){}
 }
 function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+
+/* ================= 壁の正面方向を画像で指定 ================= */
+S.wallDir=null;
+const WD={k:0,pts:[],img:null,cv:$('#wd-cv'),phi:null,method:null,busy:false};
+function wdStatus(){
+  const d=S.wallDir;
+  $('#wd-status').textContent=!d?'自動で推定します':d.method==='line'?`画像 ${d.k+1}：水平線 2 点から ${fmt(d.phi/D2R,1)}°`:`画像 ${d.k+1}：タップした方向 ${fmt(d.phi/D2R,1)}°（自動で微調整）`;
+}
+async function wdLoad(k){
+  const files=S.files; if(!files.length)return;
+  WD.k=(k+files.length)%files.length; WD.pts=[]; WD.phi=null; WD.method=null;
+  $('#wd-name').textContent=`${WD.k+1}/${files.length}　${files[WD.k].name}`; $('#wd-msg').textContent='読み込み中…'; wdDraw();
+  const src=await openFile(files[WD.k]);
+  const c=document.createElement('canvas'); c.width=2048; c.height=1024;
+  const x=c.getContext('2d'); x.imageSmoothingQuality='high'; x.drawImage(src.el,0,0,src.W,src.H,0,0,2048,1024); src.close&&src.close();
+  WD.img=c;
+  if(S.wallDir&&S.wallDir.k===WD.k){WD.pts=S.wallDir.pts.slice();wdCompute();}
+  $('#wd-msg').textContent=WD.pts.length?'':'壁の中央、または壁の水平な線の左右2か所をタップしてください';
+  wdDraw();
+}
+function wdCompute(){
+  WD.phi=null;WD.method=null;
+  if(WD.pts.length===1){WD.phi=WD.pts[0].lon;WD.method='tap';$('#wd-msg').textContent=`正面方向 ${fmt(WD.phi/D2R,1)}°（合成時に ±8° の範囲で自動微調整）。2点目をタップすると水平線から計算します。`;}
+  else if(WD.pts.length===2){const p=phiFromLine(WD.pts[0],WD.pts[1]);
+    if(p==null){$('#wd-msg').textContent='2点は同じ水平な線の上（どちらも水平線より上、またはどちらも下で、水平線から少し離れた位置）を指定してください。';}
+    else{WD.phi=p;WD.method='line';$('#wd-msg').textContent=`正面方向 ${fmt(p/D2R,1)}°（水平線 2 点から計算）`;}}
+}
+function wdDraw(){
+  const cv=WD.cv; const Wd=2048,Hd=1024; cv.width=Wd; cv.height=Hd; const x=cv.getContext('2d');
+  x.fillStyle='#111';x.fillRect(0,0,Wd,Hd); if(WD.img)x.drawImage(WD.img,0,0);
+  const X=lon=>((lon/TAU+0.5)%1+1)%1*Wd, Y=lat=>(0.5-lat/Math.PI)*Hd;
+  // 除外する水平線付近
+  const sm=+$('#o-seam').value*D2R; x.fillStyle='rgba(255,80,80,.22)'; x.fillRect(0,Y(sm),Wd,Y(-sm)-Y(sm));
+  x.strokeStyle='rgba(255,255,255,.5)';x.lineWidth=1;x.beginPath();x.moveTo(0,Hd/2);x.lineTo(Wd,Hd/2);x.stroke();
+  if(WD.phi!=null){
+    const th=Math.min(+$('#o-theta').value||55,60)*D2R;
+    x.fillStyle='rgba(0,0,0,.45)'; // 使う範囲の外を暗く
+    const a=X(WD.phi-th), b=X(WD.phi+th);
+    if(a<b){x.fillRect(0,0,a,Hd);x.fillRect(b,0,Wd-b,Hd);}else{x.fillRect(b,0,a-b,Hd);}
+    x.strokeStyle='#4ec9f2';x.lineWidth=4;x.beginPath();x.moveTo(X(WD.phi),0);x.lineTo(X(WD.phi),Hd);x.stroke();
+    x.fillStyle='#4ec9f2';x.font='bold 30px sans-serif';x.fillText('正面',X(WD.phi)+8,40);
+  }
+  if(WD.pts.length===2){x.strokeStyle='#ffd23f';x.lineWidth=3;x.setLineDash([10,8]);x.beginPath();x.moveTo(X(WD.pts[0].lon),Y(WD.pts[0].lat));x.lineTo(X(WD.pts[1].lon),Y(WD.pts[1].lat));x.stroke();x.setLineDash([]);}
+  WD.pts.forEach((p,i)=>{const px=X(p.lon),py=Y(p.lat);x.lineWidth=5;x.strokeStyle='#000';x.beginPath();x.arc(px,py,20,0,TAU);x.stroke();x.strokeStyle='#ffd23f';x.beginPath();x.arc(px,py,16,0,TAU);x.stroke();
+    x.fillStyle='#ffd23f';x.font='bold 26px sans-serif';x.fillText(String(i+1),px+16,py-14);});
+}
+WD.cv.addEventListener('click',e=>{
+  if(!WD.img)return; const r=WD.cv.getBoundingClientRect();
+  const fx=(e.clientX-r.left)/r.width, fy=(e.clientY-r.top)/r.height;
+  const p={lon:(fx-0.5)*TAU, lat:(0.5-fy)*Math.PI};
+  if(WD.pts.length>=2)WD.pts=[];
+  WD.pts.push(p); wdCompute(); wdDraw();
+});
+$('#wd-open').addEventListener('click',()=>{ if(!S.files.length)return; $('#wd-modal').hidden=false; wdLoad(S.wallDir?S.wallDir.k:0).catch(e=>{$('#wd-msg').textContent='読み込めませんでした：'+(e.message||e)}); });
+$('#wd-prev').addEventListener('click',()=>wdLoad(WD.k-1));
+$('#wd-next').addEventListener('click',()=>wdLoad(WD.k+1));
+$('#wd-clear').addEventListener('click',()=>{WD.pts=[];wdCompute();$('#wd-msg').textContent='壁の中央、または壁の水平な線の左右2か所をタップしてください';wdDraw();});
+$('#wd-auto').addEventListener('click',()=>{S.wallDir=null;wdStatus();$('#wd-modal').hidden=true;WD.img=null;});
+$('#wd-cancel').addEventListener('click',()=>{$('#wd-modal').hidden=true;WD.img=null;});
+$('#wd-ok').addEventListener('click',()=>{
+  if(WD.phi==null){$('#wd-msg').textContent='壁の中央をタップするか、水平な線の2点を指定してください。';return;}
+  S.wallDir={k:WD.k,phi:WD.phi,method:WD.method,pts:WD.pts.slice(),n:S.files.length};
+  wdStatus(); $('#wd-modal').hidden=true; WD.img=null;
+  log(`壁の正面方向を指定しました（${$('#wd-status').textContent}）。「合成を実行」で反映されます。`);
+});
+$('#o-seam').addEventListener('change',()=>{ if(WD.img)wdDraw();
+  if(S.sol&&S.o&&S.o.mode==='wall'&&!busy){S.o.seam=+$('#o-seam').value;task(async()=>{await renderCurrent();if(S.projectId)await saveProject(false);});}
+});
 
 /* オフライン対応（Service Worker） */
 (function(){
