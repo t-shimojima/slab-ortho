@@ -167,7 +167,7 @@ input[type=text],input[type=date]{font:inherit;font-size:15px;width:100%;padding
 <header class="top">
   <div class="brand">
     <h1>床版下面オルソ</h1>
-    <p>DJI Avata 360 の 360° 静止画から、床版下面の平面オルソ画像を端末内で合成します</p>
+    <p>DJI Avata 360 の 360° 静止画から、床版下面の平面オルソ画像を端末内で合成します（v1.6）</p>
     <div class="offline" id="offline"><i></i><span>オフライン対応を確認中…</span></div>
   </div>
   <nav class="tabs" role="tablist">
@@ -218,6 +218,11 @@ input[type=text],input[type=date]{font:inherit;font-size:15px;width:100%;padding
         <label for="p-speed">動画から切り出す場合の飛行速度</label>
         <div class="row"><input type="number" id="p-speed" min="0.1" max="3" step="0.1" value="0.5"><span class="unit">m/s</span></div>
       </div>
+      <div class="field">
+        <label for="p-grade">床版の縦断勾配</label>
+        <div class="row"><input type="number" id="p-grade" min="0" max="20" step="0.5" value="0"><span class="unit">%</span></div>
+        <p class="hint">勾配があるときは、橋軸方向に進むたびに高度を変えて離隔を一定に保ちます。調整量の目安を下の飛行計画に表示します。</p>
+      </div>
     </div>
 
     <div style="display:grid;gap:14px;min-width:0">
@@ -260,6 +265,37 @@ input[type=text],input[type=date]{font:inherit;font-size:15px;width:100%;padding
     </tr></thead><tbody></tbody></table></div>
     <p class="hint">1本目のコースは地面から約1 m、最後のコースは壁の上端より約0.5 m下。各コースは壁の両端より0.5 m外側から撮ります。</p>
   </div>
+  <div class="box" style="margin-top:20px" id="pier-plan">
+    <h3>橋脚（円柱・小判型）の撮影計画</h3>
+    <p class="hint" style="margin-bottom:10px">機首は常に面（円柱は柱の中心）に向け、各位置で高さだけを変えて撮ります。高さの違う画像から離隔を自動で補正するため、各位置で2段以上撮ってください。</p>
+    <div class="grid2">
+      <div class="fields">
+        <div class="field"><label for="pp-shape">断面形状</label>
+          <select id="pp-shape"><option value="round">円柱</option><option value="oval">小判型</option></select></div>
+        <div class="pair" id="pp-round-row">
+          <div class="field"><label for="pp-d">直径</label><div class="row"><input type="number" id="pp-d" min="0.5" max="15" step="0.1" value="5.0"><span class="unit">m</span></div></div>
+          <div class="field"></div>
+        </div>
+        <div class="pair" id="pp-oval-row" hidden>
+          <div class="field"><label for="pp-w">幅（長手方向）</label><div class="row"><input type="number" id="pp-w" min="1" max="20" step="0.1" value="7.0"><span class="unit">m</span></div></div>
+          <div class="field"><label for="pp-t">厚さ（＝曲面部の直径）</label><div class="row"><input type="number" id="pp-t" min="0.5" max="8" step="0.1" value="2.5"><span class="unit">m</span></div></div>
+        </div>
+        <div class="pair">
+          <div class="field"><label for="pp-h">水面から梁下までの高さ</label><div class="row"><input type="number" id="pp-h" min="2" max="30" step="0.5" value="8"><span class="unit">m</span></div></div>
+          <div class="field"><label for="pp-D">離隔（表面から）</label><div class="row"><input type="number" id="pp-D" min="1" max="5" step="0.1" value="2.0"><span class="unit">m</span></div></div>
+        </div>
+        <p class="hint">離隔は2〜2.5mを標準とします。30MPの静止画で約2mm/px、損傷図には十分な解像度です。</p>
+      </div>
+      <div style="display:grid;gap:12px;min-width:0">
+        <div class="stats" id="pp-stats"></div>
+      </div>
+    </div>
+    <div class="diagrams" style="margin-top:12px">
+      <div><div class="tag">平面図（撮影位置と機首の向き）</div><svg id="pp-svg-plan" viewBox="0 0 520 360" role="img" aria-label="橋脚の撮影位置"></svg></div>
+      <div><div class="tag" id="pp-elev-tag">正面図（撮影する高さ）</div><svg id="pp-svg-elev" viewBox="0 0 420 360" role="img" aria-label="撮影する高さ"></svg></div>
+    </div>
+    <div class="tablewrap" style="margin-top:12px"><table id="pp-table" style="min-width:560px"><thead><tr><th>コース</th><th>位置</th><th>機首の向き</th><th>撮影する高さ（水面から）</th><th>枚数</th></tr></thead><tbody></tbody></table></div>
+  </div>
 </section>
 
 
@@ -277,7 +313,9 @@ input[type=text],input[type=date]{font:inherit;font-size:15px;width:100%;padding
 
       <div class="sec">画像と設定</div>
       <div class="field"><label for="o-mode">撮影対象</label>
-        <select id="o-mode"><option value="slab">床版下面（上向き）</option><option value="wall">橋台・壁面（横向き）</option></select></div>
+        <select id="o-mode"><option value="slab">床版下面（上向き）</option><option value="wall">橋台・壁面（横向き）</option><option value="pier-round">円柱橋脚</option><option value="pier-oval">小判型橋脚</option></select></div>
+      <div class="pair" id="pier-row-round" hidden><div class="field"><label for="o-pd">柱の直径</label><div class="row"><input type="number" id="o-pd" min="0.5" max="15" step="0.1" value="5.0"><span class="unit">m</span></div></div><div class="field"></div></div>
+      <div class="pair" id="pier-row-oval" hidden><div class="field"><label for="o-pw">幅（長手方向）</label><div class="row"><input type="number" id="o-pw" min="1" max="20" step="0.1" value="7.0"><span class="unit">m</span></div></div><div class="field"><label for="o-pt">厚さ</label><div class="row"><input type="number" id="o-pt" min="0.5" max="8" step="0.1" value="2.5"><span class="unit">m</span></div></div></div>
       <div class="field">
         <label for="o-files">360° 画像（2〜20枚程度）</label>
         <input type="file" id="o-files" accept="image/jpeg,image/*" multiple style="font-size:14px;max-width:100%">
@@ -286,6 +324,13 @@ input[type=text],input[type=date]{font:inherit;font-size:15px;width:100%;padding
       <div class="pair">
         <div class="field"><label for="o-h" id="lbl-h">離隔 h（床版まで）</label><div class="row"><input type="number" id="o-h" min="0.5" max="20" step="0.1" value="3.0"><span class="unit">m</span></div></div>
         <div class="field"><label for="o-theta" id="o-theta-lbl">使用する天頂角</label><div class="row"><input type="number" id="o-theta" min="35" max="70" step="1" value="55"><span class="unit">°</span></div></div>
+      </div>
+      <div id="grade-row" style="display:grid;gap:8px">
+        <div class="pair">
+          <div class="field"><label for="o-grade">縦断勾配</label><div class="row"><input type="number" id="o-grade" min="0" max="20" step="0.1" value="0"><span class="unit">%</span></div></div>
+          <div class="field"><label for="o-gdir">勾配の向き</label><select id="o-gdir"><option value="1">画像1から離れるほど床版が高い</option><option value="-1">画像1から離れるほど床版が低い</option></select></div>
+        </div>
+        <p class="hint" id="grade-hint">0% のときは従来どおり、離隔 h が一定として合成します。勾配を入れると、離隔 h は「画像1を撮った位置での離隔」として扱い、床版下面を傾いた平面として合成します（機体の高度も使って各画像の離隔を計算）。</p>
       </div>
       <div class="pair">
         <div class="field"><label for="o-q">読込画質</label><select id="o-q"><option value="6144">標準</option><option value="10240">高（メモリ大）</option></select></div>
@@ -313,6 +358,7 @@ input[type=text],input[type=date]{font:inherit;font-size:15px;width:100%;padding
       <div class="box">
         <div class="toolbar">
           <h3 style="margin:0;margin-right:auto">合成結果</h3>
+          <span class="seg" role="group" aria-label="面の切り替え" id="face-seg" hidden></span>
           <span class="seg" role="group" aria-label="図の向き" id="view-seg"><button data-view="down" aria-pressed="true">見下げ図</button><button data-view="up" aria-pressed="false">見上げ図</button></span>
           <button class="btn small" id="v-rot" data-busy="need-img" disabled>180°回転</button>
           <label><input type="checkbox" id="v-grid" checked> 1m グリッド</label>
@@ -392,6 +438,7 @@ input[type=text],input[type=date]{font:inherit;font-size:15px;width:100%;padding
         <li><div>「撮影計画」で h を選び、撮影間隔 B とコース間隔 C を確認。床版にチョークで間隔の目印を付けると飛行が安定します。</div></li>
         <li><div>360° モード・静止画・最高解像度（120MP）で撮影。各地点で1〜2秒ホバリングしてから撮るとブレを防げます。</div></li>
         <li><div>橋軸方向に1コース撮ったら横へ C だけずらして戻る。端部は床版の縁より外側まで撮る。</div></li>
+        <li><div>縦断勾配がある床版では、1枚進むごとに高度を「撮影間隔 B × 勾配」だけ上げ下げして離隔を一定に保つ（「撮影計画」に目安を表示）。合成時は「縦断勾配」に図面の値を入れると、残った離隔の差も補正します。</div></li>
         <li><div>床版上の既知寸法（目地間隔、スケール板、チョークの 1 m 目印など）を1か所以上写しておく。合成後の縮尺補正に使います。</div></li>
       </ol>
     </div>
@@ -426,6 +473,17 @@ input[type=text],input[type=date]{font:inherit;font-size:15px;width:100%;padding
       <li><div>画像を選んだら「壁の正面方向」の「画像で指定…」を押します。天端と床版の境目や打継目など<b>壁の水平な線の左右2か所</b>をタップすると、正面方向を正確に計算します（壁の中央を1点タップするだけでも可）。機体が壁の中央からずれていても正しく正対します。</div></li>
       <li><div>「水平線付近の除外」は標準の ±3° で使います。水平線の近くはやや甘く写りますが、ほかの画像に同じ箇所が写っていればそちらを優先します。画質を優先したいときは ±6°〜±15° に変えると、合成し直さずに反映されます。</div></li>
       <li><div>離隔が取れない短い橋でも、機体の高さを1m程度ずつ変えて2〜3枚撮れば壁の上下を覆えます。合成後は「範囲を指定」で壁の部分に絞り、型枠の目地など実寸の分かる箇所で「縮尺を補正」してください。</div></li>
+    </ol>
+  </div>
+  <div class="box" style="margin-top:20px">
+    <h3>橋脚を撮るとき（円柱橋脚・小判型橋脚）</h3>
+    <ol class="steps">
+      <li><div>「撮影計画」タブの「橋脚の撮影計画」に、柱の寸法・高さ・離隔を入れると、コースの位置・機首の向き・撮影する高さ・枚数が出ます。</div></li>
+      <li><div><b>円柱：</b>左岸側から時計回りに、柱の中心へ機首を向けて一周します。コースの間隔は30°以内。各コースで下から上（または上から下）へ、2m以内の間隔で撮ります。</div></li>
+      <li><div><b>小判型：</b>前面（F1…）は面に直角に機首を向け、平面部の左右に1.5m程度の間隔で並べます。両端（S1・S2）は半円の中心に機首を向けて1コースずつ。背面も前面と同じです。平面部の列は左右対称に配置してください（面の中心の推定に使います）。</div></li>
+      <li><div>各コースは<b>高さだけを変えて</b>撮ります（横に流されない、機首を回さない）。高さの違う画像から離隔を自動で補正するため、最低2段は撮ってください。30MPの静止画で十分です。</div></li>
+      <li><div>合成は「撮影対象」で「円柱橋脚」または「小判型橋脚」を選び、直径（または幅・厚さ）と計画した離隔を入れて「合成を実行」。小判型は「前面・右端・背面・左端」のボタンで面を切り替え、面ごとに JPEG・PDF を保存します。</div></li>
+      <li><div>円柱の展開図には C1 の位置に「左岸側」、反対側に「右岸側」の線が入ります。縮尺は機体の高度計を基準にしているため、±10%程度の誤差があります。図面の寸法があれば「距離を測る」で補正してください。</div></li>
     </ol>
   </div>
   <div class="box" style="margin-top:20px">
@@ -469,7 +527,7 @@ const P={};
 function readPlan(){
   P.theta=+$('#p-theta').value; P.fw=Math.min(95,Math.max(0,+$('#p-fw').value||0)); P.sd=Math.min(95,Math.max(0,+$('#p-sd').value||0));
   P.imgW=+$('#p-src').value; P.len=Math.max(0.5,+$('#p-len').value||1); P.wid=Math.max(0.5,+$('#p-wid').value||1);
-  P.speed=Math.max(0.05,+$('#p-speed').value||0.5);
+  P.speed=Math.max(0.05,+$('#p-speed').value||0.5); P.grade=Math.max(0,+$('#p-grade').value||0);
   $('#p-theta-v').textContent=P.theta+'°';
 }
 function calc(h){
@@ -504,7 +562,8 @@ function renderDiagram(){
   const tFrame=c.B/P.speed;
   $('#d-stats').innerHTML=[
     ['有効範囲 L',fmt(c.L,2),'m'],['撮影間隔 B（最大）',fmt(c.B,2),'m'],['コース間隔 C（最大）',fmt(c.C,2),'m'],
-    ['必要枚数',c.n,`枚（${c.ny}コース×${c.nx}）`],['範囲端の画素寸法',fmt(c.gEdge,1),'mm'],['動画の切出し間隔',fmt(tFrame,1),'秒']
+    ['必要枚数',c.n,`枚（${c.ny}コース×${c.nx}）`],['範囲端の画素寸法',fmt(c.gEdge,1),'mm'],['動画の切出し間隔',fmt(tFrame,1),'秒'],
+    ...(P.grade>0?[['高度の調整（1枚ごと）',fmt(c.B*P.grade,0),`cm（勾配 ${fmt(P.grade,1)}%）`],['対象範囲全体での高低差',fmt(P.len*P.grade/100,2),'m']]:[])
   ].map(([k,v,u])=>`<div class="stat"><div class="k">${k}</div><div class="v">${v}<small>${u}</small></div></div>`).join('');
   sideSVG(c); planSVG(c);
 }
@@ -553,7 +612,7 @@ function planSVG(c){
   s+=`<text x="${ox}" y="${H-4}">対象 ${P.len} m × ${P.wid} m　実間隔 B=${c.nx>1?fmt(c.Bact,2):'—'} m, C=${c.ny>1?fmt(c.Cact,2):'—'} m</text>`;
   $('#svg-plan').innerHTML=s;
 }
-['#p-theta','#p-fw','#p-sd','#p-src','#p-len','#p-wid','#p-speed'].forEach(id=>$(id).addEventListener('input',renderPlan));
+['#p-theta','#p-fw','#p-sd','#p-src','#p-len','#p-wid','#p-speed','#p-grade'].forEach(id=>$(id).addEventListener('input',renderPlan));
 $('#d-h').addEventListener('input',e=>{selH=+e.target.value;renderPlan()});
 document.querySelectorAll('[data-preset]').forEach(b=>b.addEventListener('click',()=>{const [a,c]=b.dataset.preset.split(',');$('#p-fw').value=a;$('#p-sd').value=c;renderPlan()}));
 function renderWallTable(){
@@ -563,6 +622,69 @@ function renderWallTable(){
 renderWallTable();
 renderPlan();
 
+/* ================= 橋脚の撮影計画 ================= */
+function pierPlan(){
+  const shape=$('#pp-shape').value, H=+$('#pp-h').value||8, D=+$('#pp-D').value||2;
+  // 高さ：最下段は水面上1m、最上段は梁下1m、間隔2m以内
+  const lo=Math.min(1,H/4), hi=Math.max(lo,H-1), nh=Math.max(2,Math.ceil((hi-lo)/2)+1);
+  const hs=[...Array(nh)].map((_,i)=>lo+(hi-lo)*i/(nh-1));
+  const courses=[];
+  if(shape==='round'){
+    const R=(+$('#pp-d').value||5)/2, dpsi=Math.min(30,1.5/R/D2R), N=Math.max(8,Math.ceil(360/dpsi)), step=360/N;
+    for(let i=0;i<N;i++){const a=i*step*D2R, L=R+D;courses.push({name:'C'+(i+1),x:-L*Math.sin(a),y:-L*Math.cos(a),hx:Math.sin(a),hy:Math.cos(a),pos:i===0?'左岸側（基準）':`C1から ${Math.round(i*step)}°`,head:'柱の中心',kind:'c'});}
+    return {shape,R,D,H,hs,courses,step,arc:R*step*D2R};
+  }
+  const Wd=+$('#pp-w').value||7, T=Math.min(+$('#pp-t').value||2.5,Wd), r=T/2, flat=Wd-T;
+  const nf=flat<0.3?1:Math.max(2,Math.ceil(flat/1.5)+1), xs=nf===1?[0]:[...Array(nf)].map((_,i)=>-flat/2+flat*i/(nf-1));
+  xs.forEach((x,i)=>courses.push({name:'F'+(i+1),x,y:-(r+D),hx:0,hy:1,pos:`前面・左から ${fmt(x+flat/2,2)} m`,head:'前面に直角',kind:'f'}));
+  courses.push({name:'S1',x:flat/2+r+D,y:0,hx:-1,hy:0,pos:'右端の正面',head:'右端の半円の中心',kind:'s'});
+  xs.slice().reverse().forEach((x,i)=>courses.push({name:'B'+(i+1),x,y:r+D,hx:0,hy:-1,pos:`背面・前面から見て左から ${fmt(x+flat/2,2)} m`,head:'背面に直角',kind:'b'}));
+  courses.push({name:'S2',x:-(flat/2+r+D),y:0,hx:1,hy:0,pos:'左端の正面',head:'左端の半円の中心',kind:'s'});
+  return {shape,Wd,T,r,flat,D,H,hs,courses,nf,sp:nf>1?flat/(nf-1):0};
+}
+function renderPierPlan(){
+  const p=pierPlan(), oval=p.shape==='oval';
+  $('#pp-round-row').hidden=oval; $('#pp-oval-row').hidden=!oval;
+  const nImg=p.courses.length*p.hs.length, sec=nImg*9;
+  const gsd=(p.D*2*Math.PI/7776*1000);
+  $('#pp-stats').innerHTML=[
+    ['コース数',p.courses.length,oval?`本（前面${p.nf}・背面${p.nf}・両端各1）`:`本（${fmt(p.step,1)}°ごと）`],
+    [oval?'平面部の列間隔':'表面での間隔',fmt(oval?p.sp:p.arc,2),'m'],
+    ['1コースの段数',p.hs.length,`段（間隔 ${fmt(p.hs.length>1?p.hs[1]-p.hs[0]:0,2)} m）`],
+    ['撮影枚数',nImg,'枚'],
+    ['飛行時間の目安',Math.round(sec/60),'分（30MP・1枚約9秒）'],
+    ['画素寸法（正面）',fmt(gsd,1),'mm（30MP）']
+  ].map(([k,v,u])=>`<div class="stat"><div class="k">${k}</div><div class="v">${v}<small>${u}</small></div></div>`).join('');
+  // 平面図
+  const W=520,Hs=360, ext=oval?Math.max(p.Wd/2+p.D+0.8,p.r+p.D+0.8):p.R+p.D+0.8, sc=Math.min((W-40)/(2*ext*(oval?1:1)),(Hs-40)/(2*(oval?p.r+p.D+0.9:ext)));
+  const X=x=>W/2+x*sc, Y=y=>Hs/2+y*sc;   // y 正 = 図の下（前面側）
+  let s='';
+  if(oval){const a=p.flat/2,r=p.r;
+    s+=`<path d="M ${X(-a)} ${Y(-r)} L ${X(a)} ${Y(-r)} A ${r*sc} ${r*sc} 0 0 1 ${X(a)} ${Y(r)} L ${X(-a)} ${Y(r)} A ${r*sc} ${r*sc} 0 0 1 ${X(-a)} ${Y(-r)} Z" fill="var(--slab)" stroke="var(--ink)" stroke-width="1.5"/>`;
+    s+=`<text x="${X(0)}" y="${Y(0)+4}" text-anchor="middle">橋脚</text><text x="${X(0)}" y="${Y(p.r)+16}" text-anchor="middle" style="font-size:11px">前面</text><text x="${X(0)}" y="${Y(-p.r)-6}" text-anchor="middle" style="font-size:11px">背面</text>`;
+  }else{s+=`<circle cx="${X(0)}" cy="${Y(0)}" r="${p.R*sc}" fill="var(--slab)" stroke="var(--ink)" stroke-width="1.5"/><text x="${X(0)}" y="${Y(0)+4}" text-anchor="middle">橋脚</text>`;}
+  const col={c:'var(--cam)',f:'#1565c0',b:'#2e7d32',s:'#e65100'};
+  p.courses.forEach(c=>{const x=c.x,y=-c.y, hx=c.hx, hy=-c.hy; // 画面は前面が下
+    s+=`<line x1="${X(x)}" y1="${Y(y)}" x2="${X(x)+hx*22}" y2="${Y(y)+hy*22}" stroke="${col[c.kind]}" style="color:${col[c.kind]}" stroke-width="2" marker-end="url(#pp-arrow)"/>`;
+    s+=`<circle cx="${X(x)}" cy="${Y(y)}" r="6" fill="${col[c.kind]}"/>`;
+    const lx=X(x)-hx*16, ly=Y(y)-hy*16+4; s+=`<text x="${lx}" y="${ly}" text-anchor="middle" style="font-size:11px;font-weight:700">${c.name}</text>`;});
+  s=`<defs><marker id="pp-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker></defs>`+s;
+  s+=`<text x="10" y="${Hs-8}" style="font-size:11px">${oval?`幅 ${fmt(p.Wd,1)} m × 厚さ ${fmt(p.T,1)} m・離隔 ${fmt(p.D,1)} m`:`直径 ${fmt(2*p.R,1)} m・離隔 ${fmt(p.D,1)} m・C1（左岸側）から順に一周（図は時計回りの例）`}</text>`;
+  $('#pp-svg-plan').innerHTML=s;
+  // 正面図（高さ）
+  const EW=420,EH=360, wid=oval?p.Wd:2*p.R, sc2=Math.min((EW-120)/wid,(EH-60)/p.H), ex=EW/2-wid*sc2/2, eb=EH-30;
+  let e=`<rect x="${ex}" y="${eb-p.H*sc2}" width="${wid*sc2}" height="${p.H*sc2}" fill="var(--slab)" stroke="var(--ink)"/>`;
+  e+=`<rect x="${ex-14}" y="${eb}" width="${wid*sc2+28}" height="10" fill="#9fd3e6"/><text x="${ex-14}" y="${eb+24}" style="font-size:11px">水面</text>`;
+  const cols=oval?p.courses.filter(c=>c.kind==='f').map(c=>({x:c.x+p.Wd/2,n:c.name})):[{x:p.R,n:'各コース'}];
+  cols.forEach(c=>{p.hs.forEach(h=>{e+=`<circle cx="${ex+c.x*sc2}" cy="${eb-h*sc2}" r="5" fill="${oval?'#1565c0':'var(--cam)'}"/>`});e+=`<text x="${ex+c.x*sc2}" y="${eb-p.H*sc2-8}" text-anchor="middle" style="font-size:11px;font-weight:700">${c.n}</text>`;});
+  p.hs.forEach(h=>{e+=`<text x="${ex+wid*sc2+18}" y="${eb-h*sc2+4}" style="font-size:11px">${fmt(h,1)} m</text>`});
+  $('#pp-elev-tag').textContent=oval?'前面図（撮影する高さ・背面と両端も同じ高さ）':'正面図（撮影する高さ・全コース共通）';
+  $('#pp-svg-elev').innerHTML=e;
+  document.querySelector('#pp-table tbody').innerHTML=p.courses.map(c=>`<tr><td class="num key">${c.name}</td><td>${c.pos}</td><td>${c.head}</td><td class="num">${p.hs.map(h=>fmt(h,1)).join('・')} m</td><td class="num">${p.hs.length}</td></tr>`).join('')+
+    `<tr><td colspan="4" style="text-align:right">合計</td><td class="num key">${p.courses.length*p.hs.length}</td></tr>`;
+}
+['#pp-shape','#pp-d','#pp-w','#pp-t','#pp-h','#pp-D'].forEach(id=>$(id).addEventListener('input',renderPierPlan));
+renderPierPlan();
 
 /* ---- 画像ソース ---- */
 async function openFile(file){
@@ -614,13 +736,16 @@ function sampleBand(b,theta,lon,out){
 
 /* ---- 位置合わせ用の平面投影タイル ---- */
 const REG_N=1024, REG_TH=55;
-function makeRegTile(band,h){
+function makeRegTile(band,h,gx,gy){ // gx,gy：床版の傾き（タイル座標 1 m あたりの離隔の増分）
+  gx=gx||0; gy=gy||0;
   const N=REG_N, a=h*Math.tan(REG_TH*D2R), g=2*a/N;
   const gray=new Float32Array(N*N), rgba=new Uint8ClampedArray(N*N*4), out=[0,0,0];
   const thLim=band.thb-0.01;
   for(let v=0;v<N;v++){const Y=(N/2-v-0.5)*g;
     for(let u=0;u<N;u++){const X=(u+0.5-N/2)*g;
-      const th=Math.atan(Math.hypot(X,Y)/h), i=v*N+u;
+      const hl=h+gx*X+gy*Y, i=v*N+u;
+      if(hl<0.05){rgba[i*4+3]=255;continue;}
+      const th=Math.atan(Math.hypot(X,Y)/hl);
       if(th>thLim){rgba[i*4+3]=255;continue;}
       sampleBand(band,th,Math.atan2(Y,X),out);
       gray[i]=(0.299*out[0]+0.587*out[1]+0.114*out[2])/255;
@@ -742,6 +867,7 @@ function globalSolve(nImg,feats,pairs,keepOrient){
   pairs.forEach(p=>{
     if(!idx.has(p.i)||!idx.has(p.j))return;
     const I=idx.get(p.i)*4,J=idx.get(p.j)*4, Fi=feats[p.i],Fj=feats[p.j];
+    if(p.pts){p.pts.forEach(([px,py,qx,qy])=>{addRow([I,I+1,I+2,J,J+1,J+2],[px,-py,1,-qx,qy,-1],0,1);addRow([I,I+1,I+3,J,J+1,J+3],[py,px,1,-qy,-qx,-1],0,1);});return;}
     const step=Math.max(1,Math.floor(p.inliers.length/60));
     for(let k=0;k<p.inliers.length;k+=step){const [u,v]=p.inliers[k];
       const px=Fi.X[u],py=Fi.Y[u],qx=Fj.X[v],qy=Fj.Y[v];
@@ -753,11 +879,11 @@ function globalSolve(nImg,feats,pairs,keepOrient){
   let cams=used.map((u,k)=>({i:u,a:x[k*4],b:x[k*4+1],tx:x[k*4+2],ty:x[k*4+3]}));
   // 残差
   const res=new Map(used.map(u=>[u,[0,0]]));
-  pairs.forEach(p=>{if(!idx.has(p.i)||!idx.has(p.j))return;const ci=cams[idx.get(p.i)],cj=cams[idx.get(p.j)],Fi=feats[p.i],Fj=feats[p.j];
+  pairs.forEach(p=>{if(p.pts||!idx.has(p.i)||!idx.has(p.j))return;const ci=cams[idx.get(p.i)],cj=cams[idx.get(p.j)],Fi=feats[p.i],Fj=feats[p.j];
     p.inliers.forEach(([u,v])=>{const wx=ci.a*Fi.X[u]-ci.b*Fi.Y[u]+ci.tx-(cj.a*Fj.X[v]-cj.b*Fj.Y[v]+cj.tx),wy=ci.b*Fi.X[u]+ci.a*Fi.Y[u]+ci.ty-(cj.b*Fj.X[v]+cj.a*Fj.Y[v]+cj.ty);const e=wx*wx+wy*wy;
       [p.i,p.j].forEach(q=>{const r=res.get(q);r[0]+=e;r[1]++})})});
   cams.forEach(c=>{const r=res.get(c.i);c.rms=r[1]?Math.sqrt(r[0]/r[1]):0});
-  const pairErr=pairs.map(p=>{if(!idx.has(p.i)||!idx.has(p.j))return 0;const ci=cams[idx.get(p.i)],cj=cams[idx.get(p.j)],Fi=feats[p.i],Fj=feats[p.j];let e=0;
+  const pairErr=pairs.map(p=>{if(p.pts||!idx.has(p.i)||!idx.has(p.j))return 0;const ci=cams[idx.get(p.i)],cj=cams[idx.get(p.j)],Fi=feats[p.i],Fj=feats[p.j];let e=0;
     p.inliers.forEach(([u,v])=>{const wx=ci.a*Fi.X[u]-ci.b*Fi.Y[u]+ci.tx-(cj.a*Fj.X[v]-cj.b*Fj.Y[v]+cj.tx),wy=ci.b*Fi.X[u]+ci.a*Fi.Y[u]+ci.ty-(cj.b*Fj.X[v]+cj.a*Fj.Y[v]+cj.ty);e+=wx*wx+wy*wy});
     return Math.sqrt(e/p.inliers.length)/Math.hypot(ci.a,ci.b);});
   // 主方向を水平に、平均縮尺を1に
@@ -1087,6 +1213,335 @@ async function readAlt(file){
   try{const t=await file.slice(0,400000).text();const m=t.match(/RelativeAltitude="([-+\d.]+)"/);return m?parseFloat(m[1]):null;}catch(e){return null}
 }
 
+/* ================= 橋脚モード（円柱・小判型） =================
+   円柱：柱の周りを1周した展開図。小判型：前面・背面・両端の4面の立面図。
+   どちらも「機首を面（柱の中心）に向け、高さだけを変えて撮る」ことが前提。
+   - 機首方位（XMP）が近い連続画像を1コースとみなす
+   - 各画像は、機首方向の正面を基準に、面の形（平面・円筒）へ投影してから位置合わせ
+   - 同じコースで高さの違う画像の写り方から、離隔を自動で補正する（高度計を基準に縮尺を決める） */
+const PIER_SEAM_REG=4;
+function isPier(m){return m==='pier-round'||m==='pier-oval'}
+function angDiff(a,b){return ((a-b+540)%360)-180}
+/* 機首方位で連続画像をコースに分ける */
+function groupCourses(yaws,alts){
+  const cs=[];
+  yaws.forEach((y,k)=>{const last=cs[cs.length-1], p=last?last[last.length-1]:-1;
+    // 機首方位が変わった、または同じ高さのまま横へ移動した（＝次の列）ら新しいコース
+    const sameH=alts&&alts[k]!=null&&alts[p]!=null&&Math.abs(alts[k]-alts[p])<0.3&&last.length>=2;
+    if(last&&Math.abs(angDiff(y,yaws[p]))<8&&!sameH)last.push(k); else cs.push([k]);});
+  return cs;
+}
+/* 形状に合わせた位置合わせ用タイル。shape: {type:'plane'} / {type:'cyl',R}（局所座標 X は面上の距離） */
+function makePierTile(band,D,shape){
+  const cyl=shape&&shape.type==='cyl', R=cyl?shape.R:0;
+  // 円柱は近くから撮っても隣のコースと重なるよう、柱の周方向に広め（最大±1.3R）に取る
+  const N=REG_N, a=cyl?Math.max(D*Math.tan(REG_TH*D2R),Math.min(1.3*R,3.2)):D*Math.tan(REG_TH*D2R), g=2*a/N, out=[0,0,0];
+  const gray=new Float32Array(N*N), rgba=new Uint8ClampedArray(N*N*4), m=new Float32Array(N*N);
+  const seam=PIER_SEAM_REG*D2R;
+  for(let v=0;v<N;v++){const Y=(N/2-v-0.5)*g;
+    for(let u=0;u<N;u++){const X=(u+0.5-N/2)*g, i=v*N+u;
+      let xo=X,hd=D,cosi;
+      if(cyl){const t=X/R; if(Math.abs(t)>1.4){rgba[i*4+3]=255;continue;} xo=R*Math.sin(t); hd=D+R*(1-Math.cos(t));
+        cosi=(-xo*Math.sin(t)+hd*Math.cos(t))/Math.sqrt(xo*xo+hd*hd+Y*Y);}
+      else cosi=D/Math.sqrt(X*X+D*D+Y*Y);
+      const lat=Math.atan2(Y,Math.hypot(hd,xo));
+      sampleWall(band,Math.atan2(xo,hd),lat,out);
+      gray[i]=(0.299*out[0]+0.587*out[1]+0.114*out[2])/255;
+      rgba[i*4]=out[0];rgba[i*4+1]=out[1];rgba[i*4+2]=out[2];rgba[i*4+3]=255;
+      const B=out[2],Rr=out[0],mn=Math.min(out[0],out[1],out[2]);
+      const sky=(B>Rr+45&&B>150)||mn>248, water=(out[1]>Rr+25&&B>Rr+15&&out[1]>90);
+      m[i]=(Math.abs(lat)>=seam&&cosi>=0.3&&!sky&&!water)?1:0;
+      if(!m[i]){rgba[i*4]>>=2;rgba[i*4+1]>>=2;rgba[i*4+2]>>=2;}
+    }}
+  const mask=boxBlur(m,N,18);
+  return {N,g,h:D,gray,rgba,mask,rhoValid:1e9};
+}
+/* 予想される位置のずれ（機首方位と高度から）の周りだけで対応点を探す。型枠の繰り返し模様での取り違えを防ぐ */
+function guidedMatch(A,Bf,dx,dy,wx,wy){
+  const m=A.M,n=Bf.M; if(!m||!n)return [];
+  const a=A.desc,b=Bf.desc, out=[];
+  for(let i=0;i<m;i++){const o=i*8, px=A.X[i]+dx, py=A.Y[i]+dy; let d1=999,d2=999,bj=-1;
+    for(let j=0;j<n;j++){if(Math.abs(Bf.X[j]-px)>wx||Math.abs(Bf.Y[j]-py)>wy)continue;const q=j*8;
+      const d=pop(a[o]^b[q])+pop(a[o+1]^b[q+1])+pop(a[o+2]^b[q+2])+pop(a[o+3]^b[q+3])+pop(a[o+4]^b[q+4])+pop(a[o+5]^b[q+5])+pop(a[o+6]^b[q+6])+pop(a[o+7]^b[q+7]);
+      if(d<d1){d2=d1;d1=d;bj=j}else if(d<d2)d2=d;}
+    if(bj>=0&&d1<=75&&d1<=0.88*d2)out.push([i,bj]);}
+  return out;
+}
+/* 平行移動だけの全体解（タイルは実寸で作ってあるので、回転・縮尺は解かない） */
+function solveTrans(n,feats,pairs){
+  const P=pairs.map(p=>{if(p.pts)return {i:p.i,j:p.j,dx:p.pts[0][2]-p.pts[0][0],dy:p.pts[0][3]-p.pts[0][1],w:0.3};
+    const xs=[],ys=[];p.inliers.forEach(([u,v])=>{xs.push(feats[p.j].X[v]-feats[p.i].X[u]);ys.push(feats[p.j].Y[v]-feats[p.i].Y[u]);});
+    xs.sort((a,b)=>a-b);ys.sort((a,b)=>a-b);return {i:p.i,j:p.j,dx:xs[xs.length>>1],dy:ys[ys.length>>1],w:Math.sqrt(p.inliers.length)};});
+  const adj=Array.from({length:n},()=>[]);P.forEach(p=>{adj[p.i].push(p.j);adj[p.j].push(p.i)});
+  const comp=new Int32Array(n).fill(-1);let best=-1,bs=0,cid=0;
+  for(let s0=0;s0<n;s0++){if(comp[s0]>=0)continue;const st=[s0];comp[s0]=cid;let sz=0;while(st.length){const u=st.pop();sz++;adj[u].forEach(v=>{if(comp[v]<0){comp[v]=cid;st.push(v)}})}if(sz>bs){bs=sz;best=cid}cid++;}
+  const used=[];for(let i=0;i<n;i++)if(comp[i]===best)used.push(i);
+  const idx=new Map(used.map((v,k)=>[v,k])), m=used.length, A=new Float64Array(m*m), bx=new Float64Array(m), by=new Float64Array(m);
+  // X_j = X_i + (tx_i - tx_j)  →  tx_j - tx_i = -dx
+  P.forEach(p=>{if(!idx.has(p.i)||!idx.has(p.j))return;const I=idx.get(p.i),J=idx.get(p.j),w=p.w;
+    A[I*m+I]+=w;A[J*m+J]+=w;A[I*m+J]-=w;A[J*m+I]-=w; bx[J]-=w*p.dx;bx[I]+=w*p.dx; by[J]-=w*p.dy;by[I]+=w*p.dy;});
+  A[0]+=1e3;
+  const tx=solveLin(A.slice(),bx,m), ty=solveLin(A.slice(),by,m); if(!tx||!ty)return null;
+  const cams=used.map((u,k)=>({i:u,a:1,b:0,s:1,tx:tx[k],ty:ty[k],rms:0}));
+  const pairErr=P.map(p=>{if(p.w<1||!idx.has(p.i)||!idx.has(p.j))return 0;const I=idx.get(p.i),J=idx.get(p.j);return Math.hypot(tx[J]-tx[I]+p.dx,ty[J]-ty[I]+p.dy);});
+  const acc=new Map();P.forEach((p,k)=>{[p.i,p.j].forEach(q=>{const r=acc.get(q)||[0,0];r[0]+=pairErr[k]**2;r[1]++;acc.set(q,r)})});
+  cams.forEach(c=>{const r=acc.get(c.i);c.rms=r&&r[1]?Math.sqrt(r[0]/r[1]):0});
+  return {cams,used,pairErr,dropped:[...Array(n).keys()].filter(i=>comp[i]!==best)};
+}
+/* 画像の一部（list）だけで位置合わせする。pairOK(i,j) で組み合わせを絞る */
+async function pierRegister(list,names,getSrc,phis,Dk,shapeOf,pairOK,label,pred,link){
+  const feats=[], n=list.length;
+  for(let q=0;q<n;q++){const k=list[q];
+    prog(0.4*q/n); log(`${label} 投影・特徴点 ${q+1}/${n}：${names[k]}`); await sleep();
+    const src=await getSrc(k); const band=getWallBand(src,phis[k],2048); src.close&&src.close();
+    const tile=makePierTile(band,Dk[k],shapeOf(k)); const f=detect(tile,1500); feats.push(f);
+    addThumb(k,names[k],tile,`<span class="chip warn">特徴点 ${f.M}</span>`);
+  }
+  const Dm=list.map(k=>Dk[k]).sort((a,b)=>a-b)[n>>1], thr=3*(2*Dm*Math.tan(REG_TH*D2R)/REG_N);
+  const pairs=[];
+  for(let i=0;i<n;i++)for(let j=i+1;j<n;j++){
+    if(!pairOK(list[i],list[j]))continue;
+    const g=pred?pred(list[i],list[j]):null;
+    const mt=g?guidedMatch(feats[i],feats[j],g.dx,g.dy,g.wx,g.wy):matchFeat(feats[i],feats[j]); const r=ransacSim(feats[i],feats[j],mt,thr,0);
+    if(r&&r.inliers.length>=(g?15:20)&&r.inliers.length>=(g?0.04:0.15)*mt.length) pairs.push({i,j,T:r.T,inliers:r.inliers});
+  }
+  await sleep();
+  if(!pairs.length) return null;
+  let sol, nSyn=0;
+  for(let it=0;it<40;it++){
+    sol=solveTrans(n,feats,pairs); if(!sol)return null;
+    if(link&&sol.dropped.length){ // 重なりで結び付かない画像は、機首方位と高度から予想した位置で弱くつなぐ
+      const used=new Set(sol.used); let best=null;
+      sol.dropped.forEach(d=>sol.used.forEach(u=>{if(!pairOK(list[d],list[u]))return;const g=link(list[u],list[d]);if(!g)return;
+        const c=Math.abs(g.dx)+Math.abs(g.dy); if(!best||c<best.c)best={u,d,g,c};}));
+      if(best){const {dx,dy}=best.g, P=[[0,0],[1,0],[-1,0],[0,1],[0,-1]];
+        pairs.push({i:best.u,j:best.d,pts:P.map(([x,y])=>[x,y,x+dx,y+dy]),inliers:[]}); nSyn++; continue;}
+    }
+    const errs=sol.pairErr.filter(e=>e>0).sort((a,b)=>a-b), med=errs.length?errs[errs.length>>1]:0;
+    const lim=Math.max(0.05,3*med); let w=-1,we=lim;
+    sol.pairErr.forEach((e,k)=>{if(e>we){we=e;w=k}});
+    if(w<0)break; pairs.splice(w,1);
+  }
+  if(nSyn)log(`${label}重なりが足りない ${nSyn} か所は、機首方位と高度から位置を推定してつなぎました（境目がずれることがあります）`);
+  const gl=solveGains(n,feats,pairs.filter(p=>!p.pts),sol.used), gains=new Map();
+  gl.forEach((v,k)=>gains.set(list[k],v));
+  sol.cams.forEach(c=>{c.i=list[c.i]}); sol.dropped=sol.dropped.map(i=>list[i]);
+  const deg=new Map();pairs.filter(p=>!p.pts).forEach(p=>{[list[p.i],list[p.j]].forEach(k=>deg.set(k,(deg.get(k)||0)+1))});
+  sol.cams.forEach(c=>setThumbStatus(c.i,`<span class="chip ok">接続 ${deg.get(c.i)||0} 枚</span> <span class="num">±${fmt(c.rms*1000,0)}mm</span>`));
+  sol.dropped.forEach(i=>setThumbStatus(i,`<span class="chip bad">未接続（除外）</span>`));
+  sol.npairs=pairs.length;
+  return {sol,gains};
+}
+/* 高度計で縮尺と離隔を求める：同じコース内で、機体の高さの差と、画像上の上下のずれの比を使う */
+function pierAltCalib(sol,alts,courseOf,Dk){
+  const by=new Map();
+  sol.cams.forEach(c=>{if(alts[c.i]==null)return;const g=courseOf[c.i];if(!by.has(g))by.set(g,[]);by.get(g).push(c)});
+  const ks=[], Dt=new Map();
+  by.forEach((cs,g)=>{if(cs.length<2)return;
+    const za=cs.map(c=>alts[c.i]), zm=za.reduce((a,b)=>a+b)/cs.length, tm=cs.reduce((a,c)=>a+c.ty,0)/cs.length;
+    let sxy=0,sxx=0;cs.forEach((c,q)=>{sxy+=(za[q]-zm)*(c.ty-tm);sxx+=(za[q]-zm)**2});
+    if(sxx<0.5)return; const k=sxy/sxx; if(!(k>0.2&&k<5))return;
+    const sm=cs.reduce((a,c)=>a+c.s,0)/cs.length;
+    ks.push({k,w:cs.length}); Dt.set(g,sm*Dk[cs[0].i]/k);});
+  if(!ks.length) return null;
+  ks.sort((a,b)=>a.k-b.k); let acc=0,tot=ks.reduce((a,b)=>a+b.w,0),K=ks[0].k; for(const q of ks){acc+=q.w;if(acc>=tot/2){K=q.k;break}}
+  sol.cams.forEach(c=>{c.a/=K;c.b/=K;c.tx/=K;c.ty/=K;c.s/=K;c.rms/=K;});
+  return {K,Dt};
+}
+/* 小判型の断面（面ごとの奥行き）：x0 は面の中心、a は平面部の半分、r は曲面部の半径 */
+function faceDepth(face,x){
+  const u=x-face.x0;
+  if(face.type==='tip'){const r=face.r;if(Math.abs(u)>=r*0.995)return null;const d=r-Math.sqrt(r*r-u*u);return {d,nx:u/r}}
+  const t=Math.abs(u)-face.a; if(t<=0)return {d:0,nx:0};
+  if(t>=face.r*0.995)return null; const d=face.r-Math.sqrt(face.r*face.r-t*t); return {d,nx:Math.sign(u)*t/face.r};
+}
+/* 面ごとの合成。cyl は展開図（world x＝周方向の長さ）、face/tip は立面図（world x＝水平位置） */
+async function renderPier(face,o,getSrc,crop,gsd,names){
+  const sol=face.sol, cams=sol.cams, nc=cams.length;
+  let cr=crop;
+  if(!cr&&face.xr) cr={x0:face.xr[0],x1:face.xr[1],y0:-1e9,y1:1e9};
+  const F=applyView(frameFor(sol,o,cr,gsd,30e6),{plan:false,rot:false});
+  const {W,H,G}=F;
+  log(`合成 ${W}×${H} px（${fmt(W*G,1)}×${fmt(H*G,1)} m、${fmt(G*1000,2)} mm/px）`);
+  const seam=3*D2R, pref=15*D2R;
+  // 実寸（m）の座標で、画像 k のカメラから点 (Wx,Wy) を見た方向と入射角を求める。
+  // カメラの位置は「正面の点」(tx,ty)、そこから離隔 Dt だけ手前にある
+  const inv=cams.map(c=>({a:c.a/c.s,b:c.b/c.s,tx:c.tx,ty:c.ty,Dt:(face.Dk?face.Dk[c.i]:face.Dt[c.i])*c.s}));  // 位置合わせの縮尺 s と整合する実効的な離隔
+  const geo=(k,Wx,Wy,dep)=>{const q=inv[k],dx=Wx-q.tx,dy=Wy-q.ty,X=q.a*dx+q.b*dy,Y=q.a*dy-q.b*dx;
+    let xo,hd,cosi;
+    if(face.type==='cyl'){const R=face.R, t=X/R; if(Math.abs(t)>1.45)return null; xo=R*Math.sin(t); hd=q.Dt+R*(1-Math.cos(t));
+      cosi=(-xo*Math.sin(t)+hd*Math.cos(t))/Math.sqrt(xo*xo+hd*hd+Y*Y);}
+    else{if(!dep)return null; xo=X; hd=q.Dt+dep.d; const ny=Math.sqrt(Math.max(0,1-dep.nx*dep.nx));
+      cosi=(-xo*dep.nx+hd*ny)/Math.sqrt(xo*xo+hd*hd+Y*Y);}
+    if(cosi<0.08)return null;
+    const lat=Math.atan2(Y,Math.hypot(hd,xo)); if(Math.abs(lat)<seam)return null;
+    return {lon:Math.atan2(xo,hd),lat,inc:Math.acos(Math.min(1,cosi)),dist:Math.sqrt(xo*xo+hd*hd+Y*Y)};};
+  const IA=new Int8Array(W*H).fill(-1), IB=new Int8Array(W*H).fill(-1), WA=new Uint8Array(W*H);
+  const depCol=new Array(W);
+  for(let ox=0;ox<W;ox++){const Wx=F.x0+F.sx*(ox+0.5)*G; depCol[ox]=face.type==='cyl'?{d:0,nx:0}:faceDepth(face,Wx);}
+  for(let oy=0;oy<H;oy++){ if(oy%128===0){prog(0.05+0.15*oy/H);await sleep();}
+    const Wy=F.y0+F.sy*(oy+0.5)*G;
+    for(let ox=0;ox<W;ox++){const Wx=F.x0+F.sx*(ox+0.5)*G, dep=depCol[ox]; if(!dep)continue;
+      let sa=1e9,sb=1e9,ia=-1,ib=-1;
+      for(let k=0;k<nc;k++){const g=geo(k,Wx,Wy,dep); if(!g)continue;
+        const al=Math.abs(g.lat), sc=g.inc/D2R+(al<pref?30*(1-(al-seam)/(pref-seam)):0)+6*g.dist;
+        if(sc<sa){sb=sa;ib=ia;sa=sc;ia=k}else if(sc<sb){sb=sc;ib=k}}
+      const p=oy*W+ox; IA[p]=ia; IB[p]=ib; WA[p]=ib<0?255:Math.round(255*(0.5+0.5*Math.min(1,(sb-sa)/6)));
+    }}
+  const rgb=new Uint8ClampedArray(W*H*3), cov=new Uint8Array(Math.ceil(W*H/8)), out=[0,0,0];
+  for(let k=0;k<nc;k++){
+    const c=cams[k]; prog(0.2+0.75*k/nc); log(`  ${k+1}/${nc}：${names[c.i]}`); await sleep();
+    const src=await getSrc(c.i); const bnd=getWallBand(src,face.phis[c.i],o.maxW); src.close&&src.close();
+    const gain=face.gains?(face.gains.get(c.i)||1):1;
+    for(let oy=0;oy<H;oy++){const Wy=F.y0+F.sy*(oy+0.5)*G;
+      for(let ox=0;ox<W;ox++){const p=oy*W+ox; let w;
+        if(IA[p]===k)w=WA[p]; else if(IB[p]===k)w=255-WA[p]; else continue;
+        if(w<=0)continue;
+        const g=geo(k,F.x0+F.sx*(ox+0.5)*G,Wy,depCol[ox]); if(!g)continue;
+        sampleWall(bnd,g.lon,g.lat,out);
+        const f=w/255,q3=p*3;
+        rgb[q3]+=Math.round(Math.min(255,out[0]*gain)*f);rgb[q3+1]+=Math.round(Math.min(255,out[1]*gain)*f);rgb[q3+2]+=Math.round(Math.min(255,out[2]*gain)*f);
+        cov[p>>3]|=1<<(p&7);
+      }}
+  }
+  return {...F,rgb,cov};
+}
+
+/* 端部の正面画像から柱の左右の輪郭（上下に長く続く縦の境目）を探し、半円の中心の向き（ラジアン）を返す */
+function tipCenterLon(band){
+  const cols=band.w, out=[0,0,0], L=new Float32Array(cols), lats=[];
+  for(let la=-8;la>=-45;la-=1)lats.push(la*D2R);
+  const lum=lats.map(la=>{const row=new Float32Array(cols);for(let x=0;x<cols;x++){sampleWall(band,((x+0.5)/cols-0.5)*band.lonSpan,la,out);row[x]=0.299*out[0]+0.587*out[1]+0.114*out[2];}return row;});
+  const d=Math.max(2,Math.round(cols/400));
+  for(let x=d;x<cols-d;x++){let sg=0;for(const row of lum)sg+=row[x+d]-row[x-d];L[x]=sg/lum.length;}
+  const deg=cols/(band.lonSpan/D2R), mid=cols>>1, lo=Math.round(4*deg), hi=Math.round(50*deg);
+  let bl=-1,vl=0,br=-1,vr=0;
+  for(let x=mid-hi;x<=mid-lo;x++)if(Math.abs(L[x])>vl){vl=Math.abs(L[x]);bl=x;}
+  for(let x=mid+lo;x<=mid+hi;x++)if(Math.abs(L[x])>vr){vr=Math.abs(L[x]);br=x;}
+  if(bl<0||br<0||Math.min(vl,vr)<4)return null;
+  return (((bl+br)/2+0.5)/cols-0.5)*band.lonSpan;
+}
+/* 全体の流れ：コース分け → 面ごとに位置合わせ → 高度計で縮尺・離隔を補正 */
+async function registerPier(n,names,getSrc,yaws,alts){
+  const o=readOpts(), t0=performance.now(), round=o.mode==='pier-round';
+  if(!yaws||yaws.some(v=>v==null)) throw new Error('機首方位（XMP）を読めない画像があります。DJI の元画像（_D.JPG）をそのまま選んでください。');
+  if(!alts||alts.filter(v=>v!=null).length<n/2) throw new Error('高度（XMP）を読めない画像が多いため、離隔を補正できません。元画像を選んでください。');
+  // 撮影時刻（ファイル名）が90秒以上空いたら別フライト（電池交換）とみなす。高度の基準が変わるため高さの差は使わない
+  const tsec=names.map(nm=>{const m=/(\d{4})(\d\d)(\d\d)(\d\d)(\d\d)(\d\d)/.exec(nm||'');return m?((+m[4])*3600+(+m[5])*60+(+m[6])):null;});
+  const seg=new Array(n).fill(0); for(let k=1;k<n;k++)seg[k]=seg[k-1]+((tsec[k]!=null&&tsec[k-1]!=null&&tsec[k]-tsec[k-1]>90)?1:0);
+  if(seg[n-1]>0)log(`撮影が ${seg[n-1]+1} 回に分かれています（電池交換など）。高度の基準が変わるため、別々に扱います。`);
+  const sameSeg=(i,j)=>seg[i]===seg[j];
+  const courses=groupCourses(yaws,alts), courseOf=new Array(n);
+  courses.forEach((c,g)=>c.forEach(k=>courseOf[k]=g));
+  log(`コース：${courses.length} 本（${courses.map((c,g)=>`C${g+1}=${c.length}枚`).join('、')}）`);
+  const D0=o.h, faces=[];
+  if(round){
+    const R=o.pd/2; if(!(R>0.2))throw new Error('柱の直径を入力してください。');
+    // コースの周方向の位置（撮影順に機首方位の変化を積み上げる）で、隣り合うコースだけを組み合わせる
+    const ang=[0]; for(let g=1;g<courses.length;g++)ang.push(ang[g-1]+angDiff(yaws[courses[g][0]],yaws[courses[g-1][0]]));
+    const pairOK=(i,j)=>Math.abs(ang[courseOf[i]]-ang[courseOf[j]])<=100;
+    const phis=new Array(n).fill(0), shape=()=>({type:'cyl',R});
+    let loose=true; // 離隔が未確定の間は縮尺の誤差を見込んで広めに探す
+    const pred=(i,j)=>{if(alts[i]==null||alts[j]==null)return null;const dx=R*angDiff(yaws[j],yaws[i])*D2R, dy=alts[i]-alts[j];
+      if(!sameSeg(i,j))return {dx,dy:0,wx:0.5+0.8*Math.abs(dx),wy:4};
+      return {dx,dy,wx:0.5+(loose?0.8:0.35)*Math.abs(dx),wy:0.4+(loose?0.8:0.25)*Math.abs(dy)};};
+    // 1) コースごとに（上下の画像だけで）位置合わせし、高度計からそのコースの離隔を求める
+    //    コースごとに離隔が違うと画像の縮尺がそろわず、隣のコースと結び付かないため
+    let Dk=new Array(n).fill(D0);
+    const Dc=new Array(courses.length).fill(null);
+    for(let g=0;g<courses.length;g++){
+      const list=courses[g]; if(list.length<2)continue;
+      const r1=await pierRegister(list,names,getSrc,phis,Dk,shape,()=>true,`C${g+1}：`,pred);
+      if(!r1)continue; const cal=pierAltCalib(r1.sol,alts,courseOf,Dk); if(cal&&cal.Dt.has(g))Dc[g]=cal.Dt.get(g);
+    }
+    const ok=Dc.filter(v=>v!=null), avg=ok.length?ok.reduce((p,q)=>p+q,0)/ok.length:D0;
+    Dk=Dk.map((d,k)=>Dc[courseOf[k]]!=null?Dc[courseOf[k]]:avg);
+    log(`離隔（コースごとに推定）：${courses.map((c,g)=>`C${g+1} ${Dc[g]!=null?fmt(Dc[g],2)+'m':'—'}`).join('、')}`);
+    loose=false;
+    // 2) 推定した離隔で全体を位置合わせし、全体の縮尺をもう一度高度計で合わせる
+    const reg=await pierRegister([...Array(n).keys()],names,getSrc,phis,Dk,shape,pairOK,'全体：',pred,(i,j)=>alts[i]==null||alts[j]==null||!sameSeg(i,j)?null:{dx:R*angDiff(yaws[j],yaws[i])*D2R,dy:alts[i]-alts[j]});
+    if(!reg) throw new Error('画像同士の位置合わせができませんでした。コースの間隔（30°以内）を確認してください。');
+    const cal=pierAltCalib(reg.sol,alts,courseOf,Dk);
+    const Dt=Dk.slice(); if(cal){cal.Dt.forEach((v,g)=>courses[g].forEach(k=>Dt[k]=v));}
+    if(reg.sol.dropped.length) log(`つながらなかった画像：${reg.sol.dropped.map(i=>names[i]).join(', ')}`);
+    const sol=reg.sol, circ=2*Math.PI*R, txs=sol.cams.map(c=>c.tx), mn=Math.min(...txs), mx=Math.max(...txs);
+    const c1=sol.cams.filter(c=>courseOf[c.i]===0), x1=c1.length?c1.reduce((a,c)=>a+c.tx,0)/c1.length:mn;
+    let xr=null; if(mx-mn>0.5*circ){const gap=Math.max(0,circ-(mx-mn));xr=[mn-gap/2,mn-gap/2+circ];}
+    const marks=c1.length?[{x:x1,label:'左岸側（C1）'}]:[]; if(c1.length)[x1+circ/2,x1-circ/2].forEach(x=>{if(!xr||(x>=xr[0]&&x<=xr[1]))marks.push({x,label:'右岸側'})});
+    faces.push({name:'展開図',type:'cyl',R,sol,gains:reg.gains,phis,Dt,Dk,xr,marks:marks.slice(0,2)});
+  }else{
+    const r=o.pt/2, a=(o.pw-o.pt)/2; if(!(r>0.2&&a>=0))throw new Error('橋脚の幅と厚さを入力してください（幅 ≧ 厚さ）。');
+    const y0=yaws[courses[0][0]], groups={F:[],B:[],L:[],R:[]};
+    courses.forEach((c,g)=>{const d=angDiff(yaws[c[0]],y0);
+      if(Math.abs(d)<35)groups.F.push(g); else if(Math.abs(d)>145)groups.B.push(g); else if(d>=55&&d<=125)groups.L.push(g); else if(d<=-55&&d>=-125)groups.R.push(g);
+      else log(`  C${g+1}（機首 ${fmt(d,0)}°）は面に正対していないため使いません`);});
+    const defs=[['F','前面（C1側）','face'],['R','右端','tip'],['B','背面','face'],['L','左端','tip']];
+    for(const [key,name,type] of defs){
+      const gs=groups[key]; if(!gs.length){log(`${name}：該当するコースがありません`);continue;}
+      const list=gs.flatMap(g=>courses[g]);
+      let sx=0,sy=0;list.forEach(k=>{sx+=Math.sin(yaws[k]*D2R);sy+=Math.cos(yaws[k]*D2R)}); const yf=Math.atan2(sx,sy)/D2R;
+      const phis=new Array(n).fill(0); list.forEach(k=>phis[k]=angDiff(yf,yaws[k])*D2R);
+      const Dk=new Array(n).fill(D0);
+      const predF=(i,j)=>(alts[i]==null||alts[j]==null||!sameSeg(i,j))?null:{dx:0,dy:alts[i]-alts[j],wx:type==='tip'?0.6:2*a+1.0,wy:0.4+(Dk[i]===D0?0.8:0.25)*Math.abs(alts[i]-alts[j])};
+      const shp=()=>type==='tip'?{type:'cyl',R:r}:{type:'plane'};
+      // 1) 列（コース）ごとに離隔を推定してから、2) その離隔で面全体を位置合わせする
+      const Dc=new Map();
+      for(const g of gs){if(courses[g].length<2)continue;
+        const r1=await pierRegister(courses[g],names,getSrc,phis,Dk,shp,()=>true,`${name} C${g+1}：`,predF);
+        if(!r1)continue; const c1=pierAltCalib(r1.sol,alts,courseOf,Dk); if(c1&&c1.Dt.has(g))Dc.set(g,c1.Dt.get(g));}
+      if(Dc.size){const vs=[...Dc.values()].sort((p,q)=>p-q), med=vs[vs.length>>1];
+        // 端の列は曲面部を多く写すため推定が外れやすい。面の中央値から12%以上離れた列は中央値を使う
+        Dc.forEach((v,g)=>{if(Math.abs(v/med-1)>0.12)Dc.set(g,med)});
+        list.forEach(k=>Dk[k]=Dc.has(courseOf[k])?Dc.get(courseOf[k]):med);}
+      let reg=await pierRegister(list,names,getSrc,phis,Dk,shp,()=>true,`${name}：`,predF);
+      let cal=null;
+      if(!reg&&type==='tip'&&list.every(k=>alts[k]!=null)){
+        // 端部は機首を半円の中心に向けて上下に撮っているので、画像が結び付かなくても高度だけで並べられる
+        const done=faces.filter(f=>f.type==='face'), Dg=done.length?done.flatMap(f=>f.sol.cams.map(c=>f.Dk[c.i]*c.s)).reduce((p,q,_,A)=>p+q/A.length,0):D0;
+        reg={sol:{cams:list.map(k=>({i:k,a:1,b:0,s:1,tx:0,ty:alts[k],rms:0})),dropped:[],used:list},gains:null};
+        list.forEach(k=>{Dk[k]=Dg;setThumbStatus(k,'<span class="chip warn">高度で配置</span>')});
+        log(`${name}：画像同士が結び付かないため、機体の高度で並べました（離隔 ${fmt(Dg,2)} m を仮定）`);
+      }else{
+        if(!reg){log(`${name}：位置合わせできませんでした`);continue;}
+        cal=pierAltCalib(reg.sol,alts,courseOf,Dk);
+      }
+      const Dt=Dk.slice(); if(cal){const vs=[...cal.Dt.values()].sort((p,q)=>p-q), med=vs[vs.length>>1]; cal.Dt.forEach((v,g)=>{if(Math.abs(v/med-1)>0.12)cal.Dt.set(g,med)}); list.forEach(k=>Dt[k]=cal.Dt.has(courseOf[k])?cal.Dt.get(courseOf[k]):med);
+        log(`${name}：離隔（画像から推定）${gs.map(g=>`C${g+1} ${fmt(Dt[courses[g][0]],2)}m`).join('、')}`);}
+      if(type==='tip'&&cal){ // 端部は半円の中心を向いて上下に撮るだけなので、つながらなかった画像も高度計で並べる
+        const ref=reg.sol.cams.find(c=>alts[c.i]!=null), mx=reg.sol.cams.reduce((p,c)=>p+c.tx,0)/reg.sol.cams.length;
+        if(ref) list.forEach(k=>{if(alts[k]==null||reg.sol.cams.some(c=>c.i===k))return;
+          reg.sol.cams.push({i:k,a:1,b:0,s:1,tx:mx,ty:ref.ty+(alts[k]-alts[ref.i]),rms:0}); setThumbStatus(k,'<span class="chip warn">高度で配置</span>');});
+      }
+      const txs=reg.sol.cams.map(c=>c.tx); let x0=type==='tip'?txs.reduce((p,q)=>p+q,0)/txs.length:(Math.min(...txs)+Math.max(...txs))/2;
+      if(type==='tip'){ // 機体が半円の中心から横にずれていた分を、柱の輪郭から求める
+        const es=[];
+        for(const c of reg.sol.cams){const src=await getSrc(c.i); const band=getWallBand(src,phis[c.i],1024); src.close&&src.close();
+          const lc=tipCenterLon(band); if(lc!=null)es.push(c.tx+(Dt[c.i]+r)*Math.tan(lc));}
+        if(es.length){es.sort((p,q)=>p-q); const e=es[es.length>>1]; if(Math.abs(e-x0)<r)log(`${name}：機体と半円の中心の横ずれ ${fmt(e-x0,2)} m を補正`); if(Math.abs(e-x0)<r)x0=e;}
+      }
+      const ext=type==='tip'?r:a+r;
+      faces.push({name,type,a,r,x0,sol:reg.sol,gains:reg.gains,phis,Dt,Dk,xr:[x0-ext-0.1,x0+ext+0.1],marks:[]});
+    }
+    if(!faces.length) throw new Error('どの面も合成できませんでした。');
+  }
+  const allD=faces.flatMap(f=>f.sol.cams.map(c=>f.Dt[c.i])).sort((p,q)=>p-q), Dm=allD[allD.length>>1]||D0;
+  log(`位置合わせ完了（${faces.map(f=>`${f.name} ${f.sol.cams.length}枚`).join('・')}）・${fmt((performance.now()-t0)/1000,1)} 秒`);
+  const s0=await getSrc(0); const W0=s0.W; s0.close&&s0.close();
+  S.autoG=Math.max(0.0008,Math.ceil(Dm*(2*WALL_LON*D2R)/Math.min(W0*2*WALL_LON/360,o.maxW)*2000)/2000);
+  S.faces=faces; S.faceSel=0; S.courseOf=courseOf;
+  Object.assign(S,{sol:faces[0].sol,gains:faces[0].gains,o,srcInfo:[{W:W0}],names,getSrc,yaws,hists:null,marks:faces[0].marks});
+  $('#thumb-note').textContent=`${faces.reduce((a,f)=>a+f.sol.cams.length,0)}/${n} 枚を使用`;
+  faceUI();
+}
+function faceUI(){
+  const seg=$('#face-seg'); if(!seg)return;
+  const fs=S.faces||[]; seg.hidden=!(S.o&&isPier(S.o.mode)&&fs.length>1);
+  seg.innerHTML=fs.map((f,i)=>`<button data-face="${i}" aria-pressed="${i===S.faceSel}">${f.name}</button>`).join('');
+  seg.querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{if(busy)return;const i=+b.dataset.face;if(i===S.faceSel)return;
+    S.faceSel=i; const f=S.faces[i]; Object.assign(S,{sol:f.sol,gains:f.gains,marks:f.marks,crop:null,scaleFix:1}); faceUI();
+    task(async()=>{await renderCurrent();});}));
+}
+
 /* ================= オルソ合成：状態 ================= */
 const S={files:[],names:[],yaws:[],getSrc:null,mode:null,sol:null,gains:null,o:null,srcInfo:null,autoG:0.002,
   view:{plan:false,rot:false},crop:null,img:null,scaleFix:1,measure:[],tool:'measure',projectId:null,thumbs:[],exported:null,dirty:false};
@@ -1106,21 +1561,28 @@ const MAXPX=60e6, MAXDIM=16000;
 function info(){return{bridge:$('#i-bridge').value.trim(),span:$('#i-span').value.trim(),date:$('#i-date').value,origin:$('#i-origin').value}}
 function setInfo(v){$('#i-bridge').value=v.bridge||'';$('#i-span').value=v.span||'';$('#i-date').value=v.date||'';$('#i-origin').value=v.origin||'none';}
 function dateFromName(n){const m=/(20\d\d)(\d\d)(\d\d)/.exec(n||'');return m?`${m[1]}-${m[2]}-${m[3]}`:''}
+function faceSuffix(){const f=S.faces&&S.faces.length>1&&S.faces[S.faceSel];return f?'_'+f.name.replace(/[（）()]/g,''):''}
 function baseName(){const v=info();return [v.bridge||'床版下面',v.span,v.date].filter(Boolean).join('_').replace(/[\\/:*?"<>|\s]+/g,'_')}
 ['#i-bridge','#i-span','#i-date','#i-origin'].forEach(id=>$(id).addEventListener('input',()=>{S.dirty=true;drawOverlay();}));
 
 /* 左右の表記：床版は起点側・終点側、橋台（壁面）は上流側・下流側 */
-function sideNames(){const w=(S.o&&S.img?S.o.mode:$('#o-mode').value)==='wall';return w?['上流側','下流側']:['起点側','終点側'];}
-function modeUI(){const w=$('#o-mode').value==='wall';
-  $('#lbl-origin').textContent=w?'上流・下流の表示':'起点・終点の表示';
-  const op=$('#i-origin').options; op[1].textContent=w?'左が上流側':'左が起点側'; op[2].textContent=w?'右が上流側':'右が起点側';
+function curMode(){return S.o&&S.img?S.o.mode:$('#o-mode').value}
+function sideNames(){const m=curMode();return m==='wall'?['上流側','下流側']:isPier(m)?['左岸側','右岸側']:['起点側','終点側'];}
+function modeUI(){const m=$('#o-mode').value, w=m==='wall', p=isPier(m), side=w||p;
+  const nm=w?['上流・下流','上流側']:p?['左岸・右岸','左岸側']:['起点・終点','起点側'];
+  $('#lbl-origin').textContent=nm[0]+'の表示';
+  const op=$('#i-origin').options; op[1].textContent='左が'+nm[1]; op[2].textContent='右が'+nm[1];
   if(typeof drawOverlay==='function'&&S.img)drawOverlay();
-  $('#lbl-h').textContent=w?'離隔 D（壁面まで）':'離隔 h（床版まで）';
-  $('#o-theta-lbl').textContent=w?'使う視野角（正面から）':'使用する天頂角';
-  $('#o-level-row').hidden=w; $('#view-seg').hidden=w; $('#wall-row').hidden=!w;
+  $('#lbl-h').textContent=w?'離隔 D（壁面まで）':p?'離隔 D（表面まで）':(+$('#o-grade').value>0?'離隔 h（画像1の位置）':'離隔 h（床版まで）');
+  $('#grade-row').hidden=m!=='slab';
+  $('#o-theta-lbl').textContent=side?'使う視野角（正面から）':'使用する天頂角';
+  $('#o-level-row').hidden=side; $('#view-seg').hidden=side; $('#wall-row').hidden=!w;
+  $('#pier-row-round').hidden=m!=='pier-round'; $('#pier-row-oval').hidden=m!=='pier-oval';
+  if(typeof faceUI==='function')faceUI();
   try{localStorage.setItem('slabortho-mode',$('#o-mode').value)}catch(e){}
 }
 $('#o-mode').addEventListener('change',modeUI);
+$('#o-grade').addEventListener('input',modeUI);
 try{const m=localStorage.getItem('slabortho-mode');if(m)$('#o-mode').value=m;}catch(e){}
 $('#o-files').addEventListener('change',e=>{
   S.files=[...e.target.files].sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true}));
@@ -1133,9 +1595,9 @@ $('#o-files').addEventListener('change',e=>{
 /* ---- 合成（出力座標系：Wx = x0 + sx·(ox+0.5)·G、Wy = y0 + sy·(oy+0.5)·G） ---- */
 function frameFor(sol,o,crop,gsd,maxpx){
   maxpx=maxpx||MAXPX;
-  const rho=o.h*Math.tan(o.th*D2R);
+  const tth=Math.tan(o.th*D2R);
   let minx=1e9,miny=1e9,maxx=-1e9,maxy=-1e9;
-  sol.cams.forEach(c=>{const r=c.s*rho;minx=Math.min(minx,c.tx-r);maxx=Math.max(maxx,c.tx+r);miny=Math.min(miny,c.ty-r);maxy=Math.max(maxy,c.ty+r)});
+  sol.cams.forEach(c=>{const r=c.s*(c.h0||o.h)*tth;minx=Math.min(minx,c.tx-r);maxx=Math.max(maxx,c.tx+r);miny=Math.min(miny,c.ty-r);maxy=Math.max(maxy,c.ty+r)});
   if(crop){minx=Math.max(minx,crop.x0);maxx=Math.min(maxx,crop.x1);miny=Math.max(miny,crop.y0);maxy=Math.min(maxy,crop.y1);}
   if(!(maxx>minx&&maxy>miny))throw new Error('指定した範囲に画像がありません。範囲をリセットしてください。');
   let G=gsd; const note=[];
@@ -1157,8 +1619,8 @@ async function renderMosaic2(sol,o,getSrc,gains,view,crop,gsd,names){
   const {W,H,G}=F;
   log(`合成 ${W}×${H} px（${fmt(W*G,1)}×${fmt(H*G,1)} m、${fmt(G*1000,2)} mm/px）`);
   const rgb=new Uint8ClampedArray(W*H*3), cov=new Uint8Array(Math.ceil(W*H/8));
-  const cams=sol.cams, nc=cams.length, rho=o.h*Math.tan(o.th*D2R);
-  const cx=cams.map(c=>c.tx),cy=cams.map(c=>c.ty),rr=cams.map(c=>(c.s*rho)**2);
+  const cams=sol.cams, nc=cams.length, tth=Math.tan(o.th*D2R);
+  const cx=cams.map(c=>c.tx),cy=cams.map(c=>c.ty),rr=cams.map(c=>(c.s*(c.h0||o.h)*tth)**2);
   const dab=cams.map(c=>cams.map(d=>Math.hypot(c.tx-d.tx,c.ty-d.ty)));
   const band=Math.max(0.06,0.04*o.h), out=[0,0,0], h=o.h;
   for(let k=0;k<nc;k++){
@@ -1168,7 +1630,8 @@ async function renderMosaic2(sol,o,getSrc,gains,view,crop,gsd,names){
     const y0=Math.max(0,Math.floor(Math.min(a[1],b[1]))),y1=Math.min(H-1,Math.ceil(Math.max(a[1],b[1])));
     if(x1<x0||y1<y0)continue;
     prog(0.05+0.9*k/nc); log(`  ${k+1}/${nc}：${names[c.i]}`); await sleep();
-    const src=await getSrc(c.i); const bnd=getBand(src,Math.min(89,o.th+4),o.maxW,2); src.close&&src.close();
+    const src=await getSrc(c.i); const bnd=getBand(src,Math.min(89,o.th+(c.gx||c.gy?9:4)),o.maxW,2); src.close&&src.close();
+    const hk=c.h0||h, gxk=c.gx||0, gyk=c.gy||0;
     const nb=[];for(let j=0;j<nc;j++)if(dab[k][j]<=Math.sqrt(rr[k])+Math.sqrt(rr[j]))nb.push(j);
     const gain=gains?(gains.get(c.i)||1):1, s2=c.s*c.s;
     for(let oy=y0;oy<=y1;oy++){const Wy=F.y0+F.sy*(oy+0.5)*G;
@@ -1181,7 +1644,8 @@ async function renderMosaic2(sol,o,getSrc,gains,view,crop,gsd,names){
         if(ib>=0){const t=(db-da)/(2*dab[ia][ib]);const wa=Math.round(255*(0.5+Math.min(t,band)/(2*band)));w=ia===k?wa:255-wa;}
         if(w<=0)continue;
         const dx=Wx-c.tx,dy=Wy-c.ty,X=(c.a*dx+c.b*dy)/s2,Y=(c.a*dy-c.b*dx)/s2;
-        sampleBand(bnd,Math.atan(Math.sqrt(X*X+Y*Y)/h),Math.atan2(Y,X),out);
+        const hl=hk+gxk*X+gyk*Y; if(hl<0.05)continue;
+        sampleBand(bnd,Math.atan(Math.sqrt(X*X+Y*Y)/hl),Math.atan2(Y,X),out);
         const p=oy*W+ox,q3=p*3,f=w/255;
         rgb[q3]+=Math.round(Math.min(255,out[0]*gain)*f);rgb[q3+1]+=Math.round(Math.min(255,out[1]*gain)*f);rgb[q3+2]+=Math.round(Math.min(255,out[2]*gain)*f);
         cov[p>>3]|=1<<(p&7);
@@ -1239,8 +1703,10 @@ function drawOverlay(){
   }
   if($('#v-cams').checked) S.sol.cams.forEach(c=>{const [x,y]=camOut(c);
     s+=`<circle cx="${x}" cy="${y}" r="${u*1.4}" fill="#1b6784" stroke="#fff" stroke-width="${u*0.35}"/><text x="${x+u*2}" y="${y-u*1.5}" style="font-size:${u*4}px;fill:#fff;paint-order:stroke;stroke:#000;stroke-width:${u*0.6}px">${c.i+1}</text>`;});
+  (S.marks||[]).forEach(m=>{const x=toOut(img,m.x,0)[0];if(x<0||x>img.W)return;
+    s+=`<line x1="${x}" y1="0" x2="${x}" y2="${img.H}" stroke="#e5484d" stroke-width="${u*0.5}" stroke-dasharray="${u*2} ${u}"/><text x="${x+u}" y="${u*6}" style="font-size:${u*5}px;fill:#fff;paint-order:stroke;stroke:#b3261e;stroke-width:${u*0.9}px">${m.label}</text>`;});
   const o=info().origin;
-  if(o!=='none'){const [A,B]=sideNames(),L=o==='left'?A:B,R=o==='left'?B:A;
+  if(o!=='none'&&!(S.marks&&S.marks.length)){const [A,B]=sideNames(),L=o==='left'?A:B,R=o==='left'?B:A;
     s+=`<text x="${u*2}" y="${img.H/2}" style="font-size:${u*5}px;fill:#fff;paint-order:stroke;stroke:#000;stroke-width:${u*0.8}px">${L}</text>`;
     s+=`<text x="${img.W-u*2}" y="${img.H/2}" text-anchor="end" style="font-size:${u*5}px;fill:#fff;paint-order:stroke;stroke:#000;stroke-width:${u*0.8}px">${R}</text>`;}
   if(S.cropDraft){const r=S.cropDraft;s+=`<rect x="${Math.min(r[0],r[2])}" y="${Math.min(r[1],r[3])}" width="${Math.abs(r[2]-r[0])}" height="${Math.abs(r[3]-r[1])}" fill="rgba(242,193,78,.15)" stroke="#f2c14e" stroke-width="${u*0.5}" stroke-dasharray="${u*2} ${u}"/>`;}
@@ -1397,9 +1863,27 @@ function rotateSol(sol,phi){
 /* ---- 位置合わせ ---- */
 function readOpts(){
   const h=Math.max(0.3,+$('#o-h').value||3), th=Math.max(30,Math.min(75,+$('#o-theta').value||55));
-  return {h,th,maxW:+$('#o-q').value,gain:$('#o-gain').value==='1',mode:$('#o-mode').value,seam:+$('#o-seam').value};
+  const grade=$('#o-mode').value==='slab'?Math.max(0,Math.min(20,+$('#o-grade').value||0))/100*(+$('#o-gdir').value||1):0;
+  return {h,th,grade,maxW:+$('#o-q').value,gain:$('#o-gain').value==='1',mode:$('#o-mode').value,seam:+$('#o-seam').value,pd:+$('#o-pd').value,pw:+$('#o-pw').value,pt:+$('#o-pt').value};
 }
 function currentGsd(){const v=$('#o-gsd').value;return v==='auto'?S.autoG:(+v)/1000}
+/* 縦断勾配：橋軸方向（撮影位置の並びの主方向）に沿って床版下面の高さが変わるとして、各画像の離隔と傾きを求める */
+function slopeGeom(sol,o,ref,dz){
+  const cams=sol.cams, cr=cams.find(c=>c.i===ref)||cams[0];
+  let mx=0,my=0;cams.forEach(c=>{mx+=c.tx;my+=c.ty});mx/=cams.length;my/=cams.length;
+  let sxx=0,syy=0,sxy=0;cams.forEach(c=>{const dx=c.tx-mx,dy=c.ty-my;sxx+=dx*dx;syy+=dy*dy;sxy+=dx*dy});
+  const ang=0.5*Math.atan2(2*sxy,sxx-syy); let ux=Math.cos(ang),uy=Math.sin(ang);
+  let far=cr.i,fd=-1; cams.forEach(c=>{const d=Math.hypot(c.tx-cr.tx,c.ty-cr.ty);if(d>fd){fd=d;far=c.i}});
+  const cf=cams.find(c=>c.i===far); if((cf.tx-cr.tx)*ux+(cf.ty-cr.ty)*uy<0){ux=-ux;uy=-uy;}
+  const gwx=o.grade*ux,gwy=o.grade*uy, cam=new Map(); let hmin=1e9,hmax=-1e9,smin=1e9,smax=-1e9,clamped=false;
+  cams.forEach(c=>{
+    const sAx=(c.tx-cr.tx)*ux+(c.ty-cr.ty)*uy; smin=Math.min(smin,sAx);smax=Math.max(smax,sAx);
+    let h0=o.h+o.grade*sAx-dz(c.i); if(h0<0.3){h0=0.3;clamped=true;}
+    const sc=Math.hypot(c.a,c.b)||1, a=c.a/sc, b=c.b/sc;   // 画像座標→全体座標の回転
+    cam.set(c.i,{h0,gx:a*gwx+b*gwy,gy:-b*gwx+a*gwy,s:sAx}); hmin=Math.min(hmin,h0);hmax=Math.max(hmax,h0);
+  });
+  return {cam,far,hmin,hmax,len:smax-smin,ux,uy,clamped};
+}
 async function register(n,names,getSrc,yaws,truth,alts){
   const o=readOpts(); const t0=performance.now(); const wall=o.mode==='wall';
   if(wall){ // 壁の正面方向：指定した画像（なければ1枚目を自動推定）から、機体の向きの差で各画像に配る
@@ -1425,10 +1909,12 @@ async function register(n,names,getSrc,yaws,truth,alts){
     addThumb(k,names[k],tile,`<span class="chip warn">特徴点 ${f.M}</span>`);
     srcInfo.push({W:src.W,H:src.H});
   }
+  const matchSolve=async(hRef,only,p0,p1)=>{
   const pairs=[]; const np=n*(n-1)/2; let pc=0;
-  const thr=3*(2*o.h*Math.tan(REG_TH*D2R)/REG_N);
+  const thr=3*(2*hRef*Math.tan(REG_TH*D2R)/REG_N);
   for(let i=0;i<n;i++)for(let j=i+1;j<n;j++){
-    pc++; if(pc%2===0){prog(0.4+0.2*pc/np);await sleep();}
+    pc++; if(pc%2===0){prog(p0+(p1-p0)*pc/np);await sleep();}
+    if(only&&!(only.has(i)&&only.has(j)))continue;
     const prior=wall?0:(yaws&&yaws[i]!=null&&yaws[j]!=null)?(yaws[i]-yaws[j])*D2R:null;  // 壁面は重力方向がそろうため回転0
     const mt=matchFeat(feats[i],feats[j]); const r=ransacSim(feats[i],feats[j],mt,thr,prior);
     if(r&&r.inliers.length>=20&&r.inliers.length>=0.18*mt.length) pairs.push({i,j,T:r.T,inliers:r.inliers});
@@ -1444,6 +1930,35 @@ async function register(n,names,getSrc,yaws,truth,alts){
     if(w<0)break;
     log(`  除外したペア：${names[pairs[w].i]} – ${names[pairs[w].j]}（食い違い ${fmt(we*1000,0)} mm）`);
     pairs.splice(w,1);
+  }
+  return {sol,pairs};
+  };
+  let {sol,pairs}=await matchSolve(o.h,null,0.4,o.grade?0.5:0.6);
+  if(!wall&&o.grade){
+    /* 縦断勾配：床版下面を傾いた平面とみなし、各画像の離隔を求めて投影し直す */
+    const ref=sol.used.includes(0)?0:sol.used[0];
+    const hasAlt=alts&&alts[ref]!=null&&sol.used.every(k=>alts[k]!=null);
+    const dz=k=>hasAlt?alts[k]-alts[ref]:0;
+    log(`縦断勾配 ${fmt(Math.abs(o.grade)*100,1)}%（画像1から離れるほど床版が${o.grade>0?'高い':'低い'}）・画像1の離隔 ${fmt(o.h,2)} m${hasAlt?'・機体の高度を考慮':'（高度情報なし：高度一定とみなします）'}`);
+    for(let pass=0;pass<2;pass++){
+      const geo=slopeGeom(sol,o,ref,dz);
+      log(`  ${pass+1}回目：離隔 ${fmt(geo.hmin,2)}〜${fmt(geo.hmax,2)} m（橋軸方向 ${fmt(geo.len,1)} m の範囲）`);
+      if(geo.clamped) log('  注意：離隔が 0.3 m 未満になる画像があります。勾配の向きと値を確認してください。');
+      const used=new Set(sol.used);
+      for(const k of used){
+        prog((o.grade?0.5:0.6)+0.12*pass+0.08*[...used].indexOf(k)/used.size); log(`  投影し直し ${k+1}/${n}：${names[k]}（離隔 ${fmt(geo.cam.get(k).h0,2)} m）`); await sleep();
+        const c=geo.cam.get(k), src=await getSrc(k);
+        const band=getBand(src,Math.min(89,REG_TH*1.25+6),3072,2); src.close&&src.close();
+        const tile=makeRegTile(band,c.h0,c.gx,c.gy); hists[k]=tileOrient(tile,c.h0); feats[k]=detect(tile,1500);
+      }
+      const hm=[...used].reduce((q,k)=>q+geo.cam.get(k).h0,0)/used.size;
+      ({sol,pairs}=await matchSolve(hm,used,0.62+0.12*pass,0.7+0.12*pass));
+    }
+    const geo=slopeGeom(sol,o,ref,dz);
+    sol.cams.forEach(c=>{const g=geo.cam.get(c.i);c.h0=g.h0;c.gx=g.gx;c.gy=g.gy;});
+    const ss=sol.cams.map(c=>c.s); 
+    log(`勾配補正後の離隔：画像1 ${fmt(geo.cam.get(ref).h0,2)} m → 最も遠い ${names[geo.far]} ${fmt(geo.cam.get(geo.far).h0,2)} m（${fmt(geo.len,1)} m 離れた位置）・各画像の縮尺 ${fmt(Math.min(...ss),3)}〜${fmt(Math.max(...ss),3)}`);
+    sol.slope={grade:o.grade,ref,hasAlt};
   }
   const deg=new Map();pairs.forEach(p=>{deg.set(p.i,(deg.get(p.i)||0)+1);deg.set(p.j,(deg.get(p.j)||0)+1)});
   sol.cams.forEach(c=>setThumbStatus(c.i,`<span class="chip ok">接続 ${deg.get(c.i)||0} 枚</span> <span class="num">±${fmt(c.rms*1000,0)}mm</span>`));
@@ -1473,15 +1988,18 @@ async function register(n,names,getSrc,yaws,truth,alts){
 async function renderCurrent(){
   const t0=performance.now();
   S.img=null; S.measure=[]; S.lvPts=[]; S.exported=null; $('#export-ready').hidden=true; setBusy(true); setLevel(0);
-  const img=S.o.mode==='wall'?await renderWall(S.sol,S.o,S.getSrc,S.gains,S.view,S.crop,currentGsd(),S.names)
+  const img=isPier(S.o.mode)?await renderPier(S.faces[S.faceSel],S.o,S.getSrc,S.crop,currentGsd(),S.names)
+           :S.o.mode==='wall'?await renderWall(S.sol,S.o,S.getSrc,S.gains,S.view,S.crop,currentGsd(),S.names)
                             :await renderMosaic2(S.sol,S.o,S.getSrc,S.gains,S.view,S.crop,currentGsd(),S.names);
   S.img=img; prog(1); buildPreview();
   log(`合成完了（${fmt((performance.now()-t0)/1000,1)} 秒）`);
 }
 async function runPipeline(n,names,getSrc,yaws,truth,alts){
-  S.img=null;S.crop=null;S.cropDraft=null;S.scaleFix=1;S.thumbs=[];S.view={plan:$('#o-mode').value==='wall'?false:viewSel()==='down',rot:false};
+  S.img=null;S.crop=null;S.cropDraft=null;S.scaleFix=1;S.thumbs=[];S.view={plan:$('#o-mode').value!=='slab'?false:viewSel()==='down',rot:false};
   $('#inner').hidden=true;$('#viewer-empty').hidden=false;$('#viewer-empty').textContent='処理中…';
-  await register(n,names,getSrc,yaws,truth,alts);
+  S.faces=null; S.marks=null; faceUI();
+  if(isPier($('#o-mode').value)) await registerPier(n,names,getSrc,yaws,alts);
+  else await register(n,names,getSrc,yaws,truth,alts);
   await renderCurrent();
   if(S.mode==='files'){await saveProject(true);}
 }
@@ -1490,7 +2008,7 @@ $('#o-run').addEventListener('click',()=>task(async()=>{
   const files=S.files; S.mode='files'; S.projectId=null;
   const yaws=await Promise.all(files.map(readYaw));
   if(yaws.some(v=>v!=null)) log(`XMP のヨー角：${yaws.map(v=>v==null?'—':fmt(v,1)+'°').join(', ')}`);
-  const alts=$('#o-mode').value==='wall'?await Promise.all(files.map(readAlt)):null;
+  const alts=await Promise.all(files.map(readAlt));
   if(alts&&alts.some(v=>v!=null)) log(`機体の高度：${alts.map(v=>v==null?'—':fmt(v,1)+' m').join(', ')}`);
   await runPipeline(files.length,files.map(f=>f.name),k=>openFile(files[k]),yaws,null,alts);
 }));
@@ -1510,7 +2028,8 @@ $('#o-sample').addEventListener('click',()=>task(async()=>{
 }));
 
 /* ================= 書き出し ================= */
-function viewName(){return S.o&&S.o.mode==='wall'?'壁面正対図':(S.view.plan?'見下げ図':'見上げ図')}
+function viewName(){if(S.o&&isPier(S.o.mode)){const f=S.faces&&S.faces[S.faceSel];return S.o.mode==='pier-round'?'橋脚展開図':`橋脚立面図・${f?f.name:''}`;}
+  return S.o&&S.o.mode==='wall'?'壁面正対図':(S.view.plan?'見下げ図':'見上げ図')}
 function overlayFont(px){return `${Math.round(px)}px "Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif`}
 /* JPEG 用の書き込み（グリッド・縮尺バー・表題・起終点） */
 function drawBurn(ctx,W,H,G,opt){
@@ -1531,9 +2050,15 @@ function drawBurn(ctx,W,H,G,opt){
   for(let i=0;i<4;i++){ctx.fillStyle=i%2?'#222':'#fff';ctx.fillRect(sx+bpx*i/4,sy,bpx/4,fs*0.45);}
   ctx.strokeStyle='#fff';ctx.lineWidth=lw;ctx.strokeRect(sx,sy,bpx,fs*0.45);
   ctx.fillStyle='#fff';ctx.font=overlayFont(fs*0.75);ctx.fillText('0',sx-fs*0.2,sy+fs*1.25);ctx.fillText(bar+' m',sx+bpx-fs*0.6,sy+fs*1.25);
-  if(v.origin!=='none'){const [A,B]=sideNames(),L=v.origin==='left'?A:B,R=v.origin==='left'?B:A;ctx.font=overlayFont(fs*1.1);
+  burnMarks(ctx,W,H,1,fs);
+  if(v.origin!=='none'&&!(S.marks&&S.marks.length)){const [A,B]=sideNames(),L=v.origin==='left'?A:B,R=v.origin==='left'?B:A;ctx.font=overlayFont(fs*1.1);
     const lab=(t,x,al)=>{ctx.textAlign=al;ctx.lineWidth=fs*0.18;ctx.strokeStyle='rgba(0,0,0,.8)';ctx.strokeText(t,x,H/2);ctx.fillStyle='#fff';ctx.fillText(t,x,H/2);ctx.textAlign='left';};
     lab(L,fs*0.8,'left');lab(R,W-fs*0.8,'right');}
+}
+function burnMarks(ctx,W,H,f,fs){
+  (S.marks||[]).forEach(m=>{const x=toOut(S.img,m.x,0)[0]/f;if(x<0||x>W)return;
+    ctx.save();ctx.strokeStyle='#e5484d';ctx.lineWidth=Math.max(2,fs*0.12);ctx.setLineDash([fs*0.6,fs*0.3]);ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();ctx.setLineDash([]);
+    ctx.font=overlayFont(fs*1.1);ctx.lineWidth=fs*0.18;ctx.strokeStyle='rgba(120,0,0,.85)';ctx.strokeText(m.label,x+fs*0.3,fs*1.4);ctx.fillStyle='#fff';ctx.fillText(m.label,x+fs*0.3,fs*1.4);ctx.restore();});
 }
 async function exportJPEG(){
   const img=S.img,{W,H}=img,G=Geff(),opt={grid:$('#x-grid').checked};
@@ -1568,7 +2093,8 @@ async function exportPDF(){
   const w=Math.ceil(img.W/f),h=Math.ceil(img.H/f);
   const cv=document.createElement('canvas');cv.width=w;cv.height=h;const ctx=cv.getContext('2d');
   ctx.putImageData(new ImageData(readRGBA(img,0,h,f),w,h),0,0);
-  if(v.origin!=='none'){const [A,B]=sideNames(),L=v.origin==='left'?A:B,R=v.origin==='left'?B:A,fs=Math.max(14,w/45);ctx.font=overlayFont(fs);
+  burnMarks(ctx,w,h,f,Math.max(14,w/45));
+  if(v.origin!=='none'&&!(S.marks&&S.marks.length)){const [A,B]=sideNames(),L=v.origin==='left'?A:B,R=v.origin==='left'?B:A,fs=Math.max(14,w/45);ctx.font=overlayFont(fs);
     const lab=(t,x,al)=>{ctx.textAlign=al;ctx.lineWidth=fs*0.18;ctx.strokeStyle='rgba(0,0,0,.8)';ctx.strokeText(t,x,h/2);ctx.fillStyle='#fff';ctx.fillText(t,x,h/2);};
     lab(L,fs*0.6,'left');lab(R,w-fs*0.6,'right');ctx.textAlign='left';}
   const imBytes=new Uint8Array(await (await new Promise(r=>cv.toBlob(r,'image/jpeg',0.9))).arrayBuffer());cv.width=cv.height=1;
@@ -1610,13 +2136,13 @@ function readyExport(blob,name){
 }
 $('#x-jpg').addEventListener('click',()=>task(async()=>{
   if(!S.img)return; log('JPEG を作成しています…'); await sleep(); const t0=performance.now();
-  const b=await exportJPEG(); readyExport(b,`${baseName()}_オルソ.jpg`);
+  const b=await exportJPEG(); readyExport(b,`${baseName()}${faceSuffix()}_オルソ.jpg`);
   log(`JPEG 作成完了 ${S.img.W}×${S.img.H} px、${fmt(b.size/1048576,1)} MB（${fmt((performance.now()-t0)/1000,1)} 秒）`);
   if(S.projectId)await saveProject(false);
 }));
 $('#x-pdf').addEventListener('click',()=>task(async()=>{
   if(!S.img)return; log('PDF を作成しています…'); await sleep();
-  const {blob,scale}=await exportPDF(); readyExport(blob,`${baseName()}_オルソ_${$('#x-paper').value}.pdf`);
+  const {blob,scale}=await exportPDF(); readyExport(blob,`${baseName()}${faceSuffix()}_オルソ_${$('#x-paper').value}.pdf`);
   log(`PDF 作成完了（${$('#x-paper').value}、縮尺 1:${scale}、${fmt(blob.size/1048576,1)} MB）`);
   if(S.projectId)await saveProject(false);
 }));
@@ -1656,7 +2182,7 @@ async function saveProject(withImages){
       for(let k=0;k<S.files.length;k++)await DB.put('images',S.files[k],id+'/'+String(k).padStart(3,'0'));
     }
     const rec={id,updated:Date.now(),info:info(),o:S.o,names:S.names,yaws:S.yaws,sol:S.sol,gains:S.gains?[...S.gains]:null,srcInfo:S.srcInfo,autoG:S.autoG,
-      view:S.view,crop:S.crop,scaleFix:S.scaleFix,gsdSel:$('#o-gsd').value,thumbs:S.thumbs,thumb,nImg:S.names.length};
+      view:S.view,crop:S.crop,scaleFix:S.scaleFix,faces:S.faces?S.faces.map(f=>({...f,gains:f.gains?[...f.gains]:null})):null,faceSel:S.faceSel||0,gsdSel:$('#o-gsd').value,thumbs:S.thumbs,thumb,nImg:S.names.length};
     await DB.put('projects',rec);S.dirty=false;
     log(isNew?`案件を保存しました（「保存データ」から開き直せます）`:'案件を上書き保存しました');
     refreshProjects();
@@ -1666,14 +2192,18 @@ $('#p-save').addEventListener('click',()=>task(()=>saveProject(false)));
 async function openProject(id){
   const rec=await DB.get('projects',id); if(!rec)throw new Error('案件が見つかりません');
   showTab('ortho'); logEl.textContent=''; log(`案件を開きます：${rec.info.bridge||'（名称なし）'} ${rec.info.span||''}`);
-  setInfo(rec.info); $('#o-mode').value=rec.o.mode||'slab'; if(rec.o.mode==='wall')$('#o-seam').value=String(rec.o.seam!=null?rec.o.seam:15); modeUI(); $('#o-h').value=rec.o.h; $('#o-theta').value=rec.o.th; $('#o-q').value=String(rec.o.maxW); $('#o-gain').value=rec.o.gain?'1':'0';
+  setInfo(rec.info); if(isPier(rec.o.mode)){$('#o-pd').value=rec.o.pd||'';$('#o-pw').value=rec.o.pw||'';$('#o-pt').value=rec.o.pt||'';}
+  $('#o-mode').value=rec.o.mode||'slab'; if(rec.o.mode==='wall')$('#o-seam').value=String(rec.o.seam!=null?rec.o.seam:15); modeUI(); $('#o-h').value=rec.o.h; $('#o-theta').value=rec.o.th; $('#o-q').value=String(rec.o.maxW); $('#o-gain').value=rec.o.gain?'1':'0';
   $('#o-gsd').value=rec.gsdSel||'auto'; markView(rec.view&&rec.view.plan?'down':'up');
   const blobs=[];for(let k=0;k<rec.nImg;k++)blobs.push(await DB.get('images',id+'/'+String(k).padStart(3,'0')));
   if(blobs.some(b=>!b))throw new Error('元画像が保存されていないため開けません');
   Object.assign(S,{mode:'project',projectId:id,files:[],names:rec.names,yaws:rec.yaws,sol:rec.sol,gains:rec.gains?new Map(rec.gains):null,o:rec.o,srcInfo:rec.srcInfo,autoG:rec.autoG,
-    view:rec.view||{plan:false,rot:false},crop:rec.crop,scaleFix:rec.scaleFix||1,thumbs:rec.thumbs||[],getSrc:k=>openFile(blobs[k])});
+    view:rec.view||{plan:false,rot:false},crop:rec.crop,scaleFix:rec.scaleFix||1,
+    faces:rec.faces?rec.faces.map(f=>({...f,gains:f.gains?new Map(f.gains):null})):null,faceSel:rec.faceSel||0,thumbs:rec.thumbs||[],getSrc:k=>openFile(blobs[k])});
   $('#thumbs').innerHTML='';(rec.names||[]).forEach((n,k)=>{const used=rec.sol.cams.find(c=>c.i===k);showThumb(k,n,S.thumbs[k]||'',used?'<span class="chip ok">使用</span>':'<span class="chip bad">除外</span>');});
   $('#thumb-note').textContent=`${rec.sol.cams.length}/${rec.nImg} 枚を使用`;
+  if(S.faces){const f=S.faces[S.faceSel];Object.assign(S,{sol:f.sol,gains:f.gains,marks:f.marks});}else S.marks=null;
+  faceUI();
   await renderCurrent();
 }
 async function refreshProjects(){
