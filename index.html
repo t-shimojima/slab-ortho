@@ -153,6 +153,33 @@ input[type=text],input[type=date]{font:inherit;font-size:15px;width:100%;padding
 .proj .pn{font-weight:700;font-size:16px}
 .proj .acts{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;align-items:center}
 .muted{color:var(--muted);font-weight:400;font-size:13px}
+/* 360°ビューアー */
+.pano{position:fixed;inset:0;z-index:70;background:#000;color:#e6eaec;display:flex;flex-direction:column;font-size:14px;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+.pano[hidden]{display:none}
+.pano .pbar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:6px 10px;background:#1b2023}
+.pano .pbar.top{padding-top:max(6px,env(safe-area-inset-top));border-bottom:1px solid #323b40}
+.pano .pbar.bot{padding-bottom:max(6px,env(safe-area-inset-bottom));border-top:1px solid #323b40}
+.pano .btn{background:#262e32;color:#e6eaec;border-color:#3b464b;min-height:38px}
+.pano .btn.primary{background:#5fb2d0;color:#0d1a20;border-color:#5fb2d0}
+.pano select{width:auto;min-height:38px;padding:4px 8px;background:#262e32;color:#e6eaec;border-color:#3b464b;font-size:14px}
+.pano label{display:inline-flex;gap:4px;align-items:center;font-size:13px;color:#c9d1d5}
+.pano .pname{font-family:var(--mono);font-size:13px;color:#c9d1d5;margin-right:auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1 1 200px}
+.pano .pstage{position:relative;flex:1 1 auto;min-height:0;overflow:hidden}
+#pano-gl{display:block;width:100%;height:100%;touch-action:none;cursor:grab}
+#pano-frame{position:absolute;pointer-events:none;border:1px solid rgba(255,255,255,.9);box-shadow:0 0 0 9999px rgba(0,0,0,.45)}
+#pano-frame[hidden]{display:none}
+.pano .pmsg{position:absolute;left:50%;top:12px;transform:translateX(-50%);background:rgba(20,24,26,.88);border:1px solid #3b464b;border-radius:8px;padding:6px 12px;font-size:13px;pointer-events:none;max-width:90%}
+.pano .pmsg[hidden]{display:none}
+#pano-hq{top:auto;bottom:10px;left:auto;right:10px;transform:none}
+#pano-note{position:absolute;left:10px;bottom:10px;font-size:12px;color:#f0bd6a;background:rgba(20,24,26,.8);border-radius:6px;padding:3px 8px;pointer-events:none;max-width:70%}
+#pano-note:empty{display:none}
+#pano-fov,#pano-out{font-family:var(--mono);font-size:12px;color:#9aa6ad}
+#pano-save{position:absolute;inset:0;z-index:5;background:rgba(8,10,12,.94);display:flex;align-items:center;justify-content:center;padding:16px}
+#pano-save[hidden]{display:none}
+#pano-save .box{max-width:96%;max-height:96%;display:flex;flex-direction:column;gap:10px;align-items:center;text-align:center}
+#pano-save img{max-width:100%;max-height:62vh;border:1px solid #3b464b;border-radius:6px;-webkit-touch-callout:default;-webkit-user-select:auto;user-select:auto}
+#pano-sfn{font-family:var(--mono);font-size:12px;color:#9aa6ad;word-break:break-all}
+#inner{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 .modal{position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.72);display:flex;align-items:center;justify-content:center;padding:12px}
 .modal .card{background:var(--surface);color:var(--ink);border-radius:12px;padding:14px;width:min(1400px,100%);max-height:100%;overflow:auto;display:grid;gap:10px}
 .modal canvas{width:100%;height:auto;display:block;border-radius:6px;touch-action:manipulation;cursor:crosshair;background:#000}
@@ -167,7 +194,7 @@ input[type=text],input[type=date]{font:inherit;font-size:15px;width:100%;padding
 <header class="top">
   <div class="brand">
     <h1>床版下面オルソ</h1>
-    <p>DJI Avata 360 の 360° 静止画から、床版下面の平面オルソ画像を端末内で合成します（v1.8）</p>
+    <p>DJI Avata 360 の 360° 静止画から、床版下面の平面オルソ画像を端末内で合成します（v1.9）</p>
     <div class="offline" id="offline"><i></i><span>オフライン対応を確認中…</span></div>
   </div>
   <nav class="tabs" role="tablist">
@@ -367,6 +394,7 @@ input[type=text],input[type=date]{font:inherit;font-size:15px;width:100%;padding
         </div>
         <div class="viewer" id="viewer"><div class="empty" id="viewer-empty">画像を選んで「合成を実行」を押すか、「サンプルで試す」で動作を確認できます。保存した案件は「保存データ」から開けます。</div>
           <div class="guide" id="guide" hidden></div><div class="inner" id="inner" hidden><canvas id="pv"></canvas><svg id="overlay"></svg></div></div>
+        <p class="hint" id="pano-hint">撮影位置のマークをタップ、またはひび割れなど気になる箇所を<b>長押し</b>すると、元の360°画像で確認・切り出しできます。</p>
         <div class="toolbar" style="margin-top:10px">
           <span class="seg"><button data-tool="measure" aria-pressed="true">距離を測る</button><button data-tool="crop" aria-pressed="false">範囲を指定</button><button data-tool="level" aria-pressed="false">傾きを補正</button></span>
           <span id="tool-measure" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
@@ -466,6 +494,16 @@ input[type=text],input[type=date]{font:inherit;font-size:15px;width:100%;padding
     </ol>
   </div>
   <div class="box" style="margin-top:20px">
+    <h3>元の360°画像で確認・切り出す</h3>
+    <ol class="steps">
+      <li><div>合成結果の撮影位置のマーク（番号付きの点）をタップすると、その画像が開きます。床版は真上、壁・橋脚は正面を向いた状態で表示します。</div></li>
+      <li><div>ひび割れなどが気になる箇所を<b>長押し</b>すると、その地点を最も正面から写している画像を選び、その地点を画面中央にして開きます。オルソ上には赤い丸で位置を示します。</div></li>
+      <li><div>1本指で向きを変え、2本指で拡大します。「前の画像／次の画像」は、同じ地点を向いたまま隣の画像に切り替えます。指を止めると、見ている範囲を元の解像度で描き直します。</div></li>
+      <li><div>縦横比（4:3・16:9 など）と大きさを選んで「この範囲を切り出す」。白枠の中が JPEG になります。「位置情報を書き込む」をオンにすると、橋梁名・元画像・オルソ上の位置・目安の縮尺を画像下部に入れます（調書用はオフ）。</div></li>
+      <li><div>床版の写真は見上げの向き（実際の見え方）です。見下げ図と左右をそろえたいときは「左右反転」をオンにします。</div></li>
+    </ol>
+  </div>
+  <div class="box" style="margin-top:20px">
     <h3>橋台・壁面を撮るとき（橋台モード）</h3>
     <ol class="steps">
       <li><div>「オルソ合成」の撮影対象で「橋台・壁面（横向き）」を選び、離隔 D（カメラから壁面まで）を入力します。</div></li>
@@ -506,6 +544,43 @@ input[type=text],input[type=date]{font:inherit;font-size:15px;width:100%;padding
     <canvas id="wd-cv"></canvas>
     <div class="row"><span id="wd-msg" class="muted" style="margin-right:auto"></span>
       <button class="btn small" id="wd-clear">やり直す</button><button class="btn small" id="wd-auto">自動推定に戻す</button><button class="btn small" id="wd-cancel">キャンセル</button><button class="btn primary small" id="wd-ok">この向きで決定</button></div>
+  </div>
+</div>
+<div class="pano" id="pano" hidden>
+  <div class="pbar top">
+    <button class="btn small" id="pano-prev">◀ 前の画像</button>
+    <span class="pname" id="pano-name"></span>
+    <button class="btn small" id="pano-next">次の画像 ▶</button>
+    <button class="btn small" id="pano-reset">向きを戻す</button>
+    <button class="btn small" id="pano-close">閉じる</button>
+  </div>
+  <div class="pstage">
+    <canvas id="pano-gl"></canvas>
+    <div id="pano-frame" hidden></div>
+    <div class="pmsg" id="pano-busy" hidden></div>
+    <div class="pmsg" id="pano-hq" hidden>高精細化中…</div>
+    <div id="pano-note"></div>
+    <div id="pano-save" hidden><div class="box">
+      <div>切り出しました。画像を<b>長押し</b>して「"写真"に追加」、または下のボタンから保存できます。</div>
+      <img id="pano-simg" alt="切り出した画像">
+      <div id="pano-sfn"></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">
+        <button class="btn primary" id="pano-sshare" hidden>共有・保存…</button>
+        <a class="btn" id="pano-sdl" style="text-decoration:none;display:inline-flex;align-items:center">「ファイル」に保存</a>
+        <button class="btn" id="pano-sclose">閉じる</button></div>
+    </div></div>
+  </div>
+  <div class="pbar bot">
+    <button class="btn primary" id="pano-cap">この範囲を切り出す</button>
+    <label>縦横比 <select id="pano-aspect">
+      <option value="1.333333" selected>4 : 3（横）</option><option value="1.777778">16 : 9（横）</option><option value="1.5">3 : 2（横）</option>
+      <option value="1">1 : 1</option><option value="0.75">3 : 4（縦）</option><option value="0.5625">9 : 16（縦）</option><option value="auto">表示のまま</option></select></label>
+    <label>大きさ <select id="pano-size"><option value="1920">長辺 1920 px</option><option value="2560">長辺 2560 px</option><option value="3840" selected>長辺 3840 px</option><option value="0">画面のまま</option></select></label>
+    <span id="pano-out"></span>
+    <label title="橋梁名・元画像・オルソ上の位置・目安の縮尺を画像の下に書き込みます"><input type="checkbox" id="pano-stamp"> 位置情報を書き込む</label>
+    <label title="見下げ図と同じ左右の向きで表示・保存します"><input type="checkbox" id="pano-mir"> 左右反転</label>
+    <span style="margin-left:auto;display:inline-flex;gap:6px;align-items:center"><span id="pano-fov"></span>
+    <button class="btn small" id="pano-zout" aria-label="縮小">－</button><button class="btn small" id="pano-zin" aria-label="拡大">＋</button></span>
   </div>
 </div>
 <script>
@@ -1794,6 +1869,8 @@ function drawOverlay(){
   }
   if($('#v-cams').checked) S.sol.cams.forEach(c=>{const [x,y]=camOut(c);
     s+=`<circle cx="${x}" cy="${y}" r="${u*1.4}" fill="#1b6784" stroke="#fff" stroke-width="${u*0.35}"/><text x="${x+u*2}" y="${y-u*1.5}" style="font-size:${u*4}px;fill:#fff;paint-order:stroke;stroke:#000;stroke-width:${u*0.6}px">${c.i+1}</text>`;});
+  if(S.pick&&S.pick.face===(S.faceSel||0)){const [x,y]=toOut(img,S.pick.x,S.pick.y);
+    s+=`<circle cx="${x}" cy="${y}" r="${u*3}" fill="none" stroke="#e5484d" stroke-width="${u*0.7}"/><circle cx="${x}" cy="${y}" r="${u*3}" fill="none" stroke="#fff" stroke-width="${u*0.2}"/>`;}
   (S.marks||[]).forEach(m=>{const x=toOut(img,m.x,0)[0];if(x<0||x>img.W)return;
     s+=`<line x1="${x}" y1="0" x2="${x}" y2="${img.H}" stroke="#e5484d" stroke-width="${u*0.5}" stroke-dasharray="${u*2} ${u}"/><text x="${x+u}" y="${u*6}" style="font-size:${u*5}px;fill:#fff;paint-order:stroke;stroke:#b3261e;stroke-width:${u*0.9}px">${m.label}</text>`;});
   const o=info().origin;
@@ -2121,7 +2198,7 @@ async function runPipeline(n,names,getSrc,yaws,truth,alts){
 }
 $('#o-run').addEventListener('click',()=>task(async()=>{
   if(!S.files.length)return; logEl.textContent='';
-  const files=S.files; S.mode='files'; S.projectId=null;
+  const files=S.files; S.mode='files'; S.projectId=null; S.blobs=null; S.pick=null;
   const yaws=await Promise.all(files.map(readYaw));
   if(yaws.some(v=>v!=null)) log(`XMP のヨー角：${yaws.map(v=>v==null?'—':fmt(v,1)+'°').join(', ')}`);
   const alts=await Promise.all(files.map(readAlt));
@@ -2129,7 +2206,7 @@ $('#o-run').addEventListener('click',()=>task(async()=>{
   await runPipeline(files.length,files.map(f=>f.name),k=>openFile(files[k]),yaws,null,alts);
 }));
 $('#o-sample').addEventListener('click',()=>task(async()=>{
-  logEl.textContent=''; S.files=[]; S.ctimes=null; $('#o-files').value=''; S.mode='sample'; S.projectId=null;
+  logEl.textContent=''; S.files=[]; S.ctimes=null; S.blobs=null; S.pick=null; $('#o-files').value=''; S.mode='sample'; S.projectId=null;
   $('#o-mode').value='slab'; modeUI();  // サンプルは床版の模擬データ
   log('サンプル：12 m × 7.5 m の模擬床版を h = 3.0 m から 2コース×4枚 撮影した 360° 画像を生成します');
   $('#o-h').value='3.0'; if(!$('#i-bridge').value){setInfo({bridge:'サンプル橋',span:'第1径間',date:new Date().toISOString().slice(0,10),origin:'left'});}
@@ -2315,7 +2392,7 @@ async function openProject(id){
   if(blobs.some(b=>!b))throw new Error('元画像が保存されていないため開けません');
   Object.assign(S,{mode:'project',projectId:id,files:[],names:rec.names,yaws:rec.yaws,sol:rec.sol,gains:rec.gains?new Map(rec.gains):null,o:rec.o,srcInfo:rec.srcInfo,autoG:rec.autoG,
     view:rec.view||{plan:false,rot:false},crop:rec.crop,scaleFix:rec.scaleFix||1,
-    faces:rec.faces?rec.faces.map(f=>({...f,gains:f.gains?new Map(f.gains):null})):null,faceSel:rec.faceSel||0,thumbs:rec.thumbs||[],getSrc:k=>openFile(blobs[k])});
+    faces:rec.faces?rec.faces.map(f=>({...f,gains:f.gains?new Map(f.gains):null})):null,faceSel:rec.faceSel||0,thumbs:rec.thumbs||[],blobs,pick:null,getSrc:k=>openFile(blobs[k])});
   $('#thumbs').innerHTML='';(rec.names||[]).forEach((n,k)=>{const used=rec.sol.cams.find(c=>c.i===k);showThumb(k,n,S.thumbs[k]||'',used?'<span class="chip ok">使用</span>':'<span class="chip bad">除外</span>');});
   $('#thumb-note').textContent=`${rec.sol.cams.length}/${rec.nImg} 枚を使用`;
   if(S.faces){const f=S.faces[S.faceSel];Object.assign(S,{sol:f.sol,gains:f.gains,marks:f.marks});}else S.marks=null;
@@ -2409,6 +2486,380 @@ $('#wd-ok').addEventListener('click',()=>{
 $('#o-seam').addEventListener('change',()=>{ if(WD.img)wdDraw();
   if(S.sol&&S.o&&S.o.mode==='wall'&&!busy){S.o.seam=+$('#o-seam').value;task(async()=>{await renderCurrent();if(S.projectId)await saveProject(false);});}
 });
+
+/* ================= 360°ビューアー（撮影位置のタップ／オルソの長押し） =================
+   - 撮影位置のマークをタップ：その画像を開き、床版（真上）や面の正面を向いて表示
+   - オルソ上を長押し：その地点を最も正面から写している画像を選び、その地点を中央に表示
+   - 見回し用の縮小画像（全体）＋ 今見ている範囲だけを元の解像度から作り直した高精細画像の2段構え
+     （120MP の元画像は iPad のブラウザがそのまま GPU に載せられる大きさを超えるため） */
+const PANO={j:-1,src:null,R:[1,0,0],U:[0,1,0],F:[0,0,-1],fov:70,mir:false,trackball:true,target:null,init:null,
+  tok:0,dtTok:0,dtTimer:0,dOn:0,dR:null,dU:null,dF:null,dTan:1,ovW:0,ovH:0,need:false,mirDetected:false};
+let pgl=null; const PG={};
+const PANO_VS=`#version 300 es
+in vec2 aPos; out vec2 vNdc; void main(){vNdc=aPos;gl_Position=vec4(aPos,0.0,1.0);}`;
+const PANO_FS=`#version 300 es
+precision highp float;
+in vec2 vNdc; out vec4 outColor;
+uniform sampler2D uOv; uniform sampler2D uDt;
+uniform vec3 uR,uU,uF; uniform float uAsp,uTan,uMir,uLod;
+uniform vec3 dR,dU,dF; uniform float dTan,dOn;
+const float PI=3.141592653589793;
+void main(){
+  vec2 n=vNdc; n.x*=uMir;
+  vec3 d=normalize(uR*(n.x*uAsp*uTan)+uU*(n.y*uTan)+uF);
+  if(dOn>0.5){float z=dot(d,dF);
+    if(z>0.0){float x=dot(d,dR)/z/dTan, y=dot(d,dU)/z/dTan;
+      if(abs(x)<0.998&&abs(y)<0.998){outColor=vec4(texture(uDt,vec2(x*0.5+0.5,0.5-y*0.5)).rgb,1.0);return;}}}
+  float u=atan(d.x,-d.z)/(2.0*PI)+0.5, v=acos(clamp(d.y,-1.0,1.0))/PI;
+  outColor=vec4(textureLod(uOv,vec2(u,v),uLod).rgb,1.0);
+}`;
+const v3={dot:(a,b)=>a[0]*b[0]+a[1]*b[1]+a[2]*b[2],
+  cross:(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]],
+  sub:(a,b)=>[a[0]-b[0],a[1]-b[1],a[2]-b[2]], add:(a,b)=>[a[0]+b[0],a[1]+b[1],a[2]+b[2]], mul:(a,s)=>[a[0]*s,a[1]*s,a[2]*s],
+  norm:a=>{const l=Math.hypot(a[0],a[1],a[2])||1;return [a[0]/l,a[1]/l,a[2]/l]}};
+/* 正距円筒の (u,v)（0〜1、v=0 が天頂）⇔ 方向ベクトル（y が上、正面 -z） */
+const uvDir=(u,v)=>{const lon=(u-0.5)*TAU,p=v*Math.PI;return [Math.sin(p)*Math.sin(lon),Math.cos(p),-Math.sin(p)*Math.cos(lon)]};
+function panoInitGL(){
+  if(pgl)return true;
+  const cv=$('#pano-gl');
+  pgl=cv.getContext('webgl2',{antialias:false,alpha:false,depth:false,stencil:false,premultipliedAlpha:false});
+  if(!pgl)return false;
+  const g=pgl, sh=(t,s)=>{const o=g.createShader(t);g.shaderSource(o,s);g.compileShader(o);if(!g.getShaderParameter(o,g.COMPILE_STATUS))throw new Error(g.getShaderInfoLog(o));return o};
+  const p=g.createProgram(); g.attachShader(p,sh(g.VERTEX_SHADER,PANO_VS)); g.attachShader(p,sh(g.FRAGMENT_SHADER,PANO_FS));
+  g.bindAttribLocation(p,0,'aPos'); g.linkProgram(p); if(!g.getProgramParameter(p,g.LINK_STATUS))throw new Error(g.getProgramInfoLog(p));
+  g.useProgram(p); PG.u={};
+  ['uOv','uDt','uR','uU','uF','uAsp','uTan','uMir','uLod','dR','dU','dF','dTan','dOn'].forEach(n=>PG.u[n]=g.getUniformLocation(p,n));
+  g.uniform1i(PG.u.uOv,0); g.uniform1i(PG.u.uDt,1);
+  const vao=g.createVertexArray(); g.bindVertexArray(vao); const b=g.createBuffer(); g.bindBuffer(g.ARRAY_BUFFER,b);
+  g.bufferData(g.ARRAY_BUFFER,new Float32Array([-1,-1,3,-1,-1,3]),g.STATIC_DRAW); g.enableVertexAttribArray(0); g.vertexAttribPointer(0,2,g.FLOAT,false,0,0);
+  PG.max=g.getParameter(g.MAX_TEXTURE_SIZE); PG.maxRB=g.getParameter(g.MAX_RENDERBUFFER_SIZE);
+  const mk=(unit,wrapS,mip)=>{const t=g.createTexture();g.activeTexture(g.TEXTURE0+unit);g.bindTexture(g.TEXTURE_2D,t);
+    g.texParameteri(g.TEXTURE_2D,g.TEXTURE_WRAP_S,wrapS);g.texParameteri(g.TEXTURE_2D,g.TEXTURE_WRAP_T,g.CLAMP_TO_EDGE);
+    g.texParameteri(g.TEXTURE_2D,g.TEXTURE_MIN_FILTER,mip?g.LINEAR_MIPMAP_LINEAR:g.LINEAR);g.texParameteri(g.TEXTURE_2D,g.TEXTURE_MAG_FILTER,g.LINEAR);
+    g.texImage2D(g.TEXTURE_2D,0,g.RGBA,1,1,0,g.RGBA,g.UNSIGNED_BYTE,new Uint8Array([0,0,0,255]));return t};
+  PG.ov=mk(0,g.REPEAT,true); PG.dt=mk(1,g.CLAMP_TO_EDGE,false);
+  g.pixelStorei(g.UNPACK_FLIP_Y_WEBGL,false);
+  return true;
+}
+function panoDraw(w,h,asp,tan,mir){
+  const g=pgl,u=PG.u; g.viewport(0,0,w,h);
+  g.uniform3fv(u.uR,PANO.R);g.uniform3fv(u.uU,PANO.U);g.uniform3fv(u.uF,PANO.F);
+  g.uniform1f(u.uAsp,asp);g.uniform1f(u.uTan,tan);g.uniform1f(u.uMir,mir?-1:1);
+  const pxPerRad=h/(2*tan), ovPx=PANO.ovW/TAU; g.uniform1f(u.uLod,Math.max(0,Math.log2(ovPx/pxPerRad)));
+  g.uniform1f(u.dOn,PANO.dOn); if(PANO.dOn){g.uniform3fv(u.dR,PANO.dR);g.uniform3fv(u.dU,PANO.dU);g.uniform3fv(u.dF,PANO.dF);g.uniform1f(u.dTan,PANO.dTan);}
+  g.drawArrays(g.TRIANGLES,0,3);
+}
+const panoTanV=()=>Math.tan(PANO.fov*D2R/2);
+function panoResize(){const cv=$('#pano-gl'),dpr=Math.min(window.devicePixelRatio||1,2);
+  const w=Math.max(1,Math.round(cv.clientWidth*dpr)),h=Math.max(1,Math.round(cv.clientHeight*dpr)); if(cv.width!==w||cv.height!==h){cv.width=w;cv.height=h;}}
+function panoReq(detail){PANO.need=true; requestAnimationFrame(panoFrame); if(detail!==false){clearTimeout(PANO.dtTimer); PANO.dtTok++; PANO.dtTimer=setTimeout(()=>panoDetail(false).catch(e=>console.error(e)),260);} }
+function panoFrame(){
+  if(!PANO.need||$('#pano').hidden||!pgl||!PANO.ovW)return; PANO.need=false; panoResize();
+  const cv=$('#pano-gl'); pgl.bindFramebuffer(pgl.FRAMEBUFFER,null); panoDraw(cv.width,cv.height,cv.width/cv.height,panoTanV(),PANO.mir);
+  panoGuide(); panoHud();
+}
+
+/* ---- 各画像から見たオルソ上の点 (Wx,Wy) の方向（正距円筒の u,v）と、写りの良さ sc（小さいほど正面） ---- */
+function panoGeo(){
+  const o=S.o, cams=S.sol.cams;
+  if(isPier(o.mode)){
+    const face=S.faces[S.faceSel], seam=3*D2R, pref=15*D2R;
+    const inv=cams.map(c=>({a:c.a/c.s,b:c.b/c.s,tx:c.tx,ty:c.ty,Dt:(face.Dk?face.Dk[c.i]:face.Dt[c.i])*c.s,phi:face.phis[c.i]}));
+    return (j,Wx,Wy)=>{const q=inv[j],dx=Wx-q.tx,dy=Wy-q.ty,X=q.a*dx+q.b*dy,Y=q.a*dy-q.b*dx; let xo,hd,cosi;
+      if(face.type==='cyl'){const R=face.R,t=X/R; if(Math.abs(t)>1.45)return null; xo=R*Math.sin(t); hd=q.Dt+R*(1-Math.cos(t));
+        cosi=(-xo*Math.sin(t)+hd*Math.cos(t))/Math.sqrt(xo*xo+hd*hd+Y*Y);}
+      else{const dep=faceDepth(face,Wx); if(!dep)return null; xo=X; hd=q.Dt+dep.d; const ny=Math.sqrt(Math.max(0,1-dep.nx*dep.nx));
+        cosi=(-xo*dep.nx+hd*ny)/Math.sqrt(xo*xo+hd*hd+Y*Y);}
+      if(cosi<0.08)return null;
+      const lat=Math.atan2(Y,Math.hypot(hd,xo)), lon=Math.atan2(xo,hd), al=Math.abs(lat), dist=Math.sqrt(xo*xo+hd*hd+Y*Y);
+      const sc=Math.acos(Math.min(1,cosi))/D2R+(al<seam?40:al<pref?30*(1-(al-seam)/(pref-seam)):0)+6*dist;
+      return {u:(q.phi+lon)/TAU+0.5,v:0.5-lat/Math.PI,sc,dist};};
+  }
+  if(o.mode==='wall'){
+    const D=o.h, seam=(o.seam!=null?o.seam:15)*D2R, pref=WALL_SEAM_PREF*D2R, maxA=Math.min(o.th,60)*D2R;
+    return (j,Wx,Wy)=>{const c=cams[j],s2=c.s*c.s,dx=Wx-c.tx,dy=Wy-c.ty,X=(c.a*dx+c.b*dy)/s2,Y=(c.a*dy-c.b*dx)/s2;
+      const lon=Math.atan2(X,D), lat=Math.atan2(Y,Math.hypot(D,X)), r=Math.sqrt(D*D+X*X+Y*Y), ang=Math.acos(D/r), al=Math.abs(lat);
+      const sc=ang/D2R+(al<seam?40:al<pref?30*(1-(al-seam)/(pref-seam)):0)+(ang>maxA?100:0);
+      return {u:(o.phis[c.i]+lon)/TAU+0.5,v:0.5-lat/Math.PI,sc,dist:r*c.s};};
+  }
+  const tth=Math.tan(o.th*D2R);
+  return (j,Wx,Wy)=>{const c=cams[j],s2=c.s*c.s,dx=Wx-c.tx,dy=Wy-c.ty,X=(c.a*dx+c.b*dy)/s2,Y=(c.a*dy-c.b*dx)/s2;
+    const hl=(c.h0||o.h)+(c.gx||0)*X+(c.gy||0)*Y; if(hl<0.05)return null;
+    const rho=Math.hypot(X,Y), th=Math.atan(rho/hl), inside=dx*dx+dy*dy<=(c.s*(c.h0||o.h)*tth)**2;
+    return {u:Math.atan2(Y,X)/TAU+0.5,v:th/Math.PI,sc:th/D2R+(inside?0:60),dist:Math.hypot(rho,hl)*c.s};};
+}
+/* 画像 j の視線方向 d が当たるオルソ上の点（ニュートン法） */
+function panoRayWorld(geo,j,d,P0){
+  let P=[P0[0],P0[1]]; const t0=Math.abs(d[1])<0.9?[0,1,0]:[1,0,0], e1=v3.norm(v3.cross(d,t0)), e2=v3.cross(d,e1);
+  for(let it=0;it<30;it++){
+    const g=geo(PANO.j===j?j:j,P[0],P[1]); if(!g)return null; const f=uvDir(g.u,g.v), r1=v3.dot(f,e1), r2=v3.dot(f,e2);
+    if(Math.hypot(r1,r2)<2e-6&&v3.dot(f,d)>0)return {x:P[0],y:P[1],dist:g.dist};
+    const h=Math.max(1e-3,g.dist*1e-3), ga=geo(j,P[0]+h,P[1]), gb=geo(j,P[0],P[1]+h); if(!ga||!gb)return null;
+    const fa=uvDir(ga.u,ga.v), fb=uvDir(gb.u,gb.v);
+    const a=(v3.dot(fa,e1)-r1)/h, b=(v3.dot(fb,e1)-r1)/h, c=(v3.dot(fa,e2)-r2)/h, e=(v3.dot(fb,e2)-r2)/h, det=a*e-b*c;
+    if(Math.abs(det)<1e-12)return null;
+    let sx=(-r1*e+b*r2)/det, sy=(-a*r2+c*r1)/det; const L=Math.hypot(sx,sy), lim=Math.max(0.3,g.dist*0.6); if(L>lim){sx*=lim/L;sy*=lim/L;}
+    P[0]+=sx; P[1]+=sy;
+  }
+  return null;
+}
+/* 画像 j を、オルソ上の点 P を画面中央にして表示する向きにする（画面の上＝オルソの上） */
+function panoAim(j,P){
+  const geo=panoGeo(), g=geo(j,P.x,P.y), im=S.img, dl=0.05;
+  if(!g){PANO.F=[0,0,-1];PANO.U=[0,1,0];PANO.R=[1,0,0];return;}
+  const f=uvDir(g.u,g.v), g2=geo(j,P.x,P.y-im.sy*dl), g3=geo(j,P.x+im.sx*dl,P.y);
+  let up=g2?v3.sub(uvDir(g2.u,g2.v),f):[0,1,0]; up=v3.sub(up,v3.mul(f,v3.dot(f,up)));
+  if(Math.hypot(...up)<1e-9){up=[0,1,0];up=v3.sub(up,v3.mul(f,v3.dot(f,up)));}
+  if(Math.hypot(...up)<1e-9)up=[0,0,-1];
+  PANO.F=f; PANO.U=v3.norm(up); PANO.R=v3.cross(PANO.F,PANO.U);
+  PANO.mirDetected=g3?v3.dot(v3.sub(uvDir(g3.u,g3.v),f),PANO.R)<0:false;
+  PANO.init={F:PANO.F,U:PANO.U,R:PANO.R,fov:PANO.fov};
+}
+function panoCenterWorld(){
+  if(PANO.j<0||!S.sol)return null; const c=S.sol.cams[PANO.j], P0=PANO.target?[PANO.target.x,PANO.target.y]:[c.tx,c.ty];
+  return panoRayWorld(panoGeo(),PANO.j,PANO.F,P0);
+}
+
+/* ---- 画像の読み込み：見回し用の縮小版をGPUへ ---- */
+const panoFile=i=>(S.files&&S.files[i])||(S.blobs&&S.blobs[i])||null;
+async function panoLoad(j,P){
+  const tok=++PANO.tok, c=S.sol.cams[j]; PANO.dOn=0; PANO.dtTok++;
+  $('#pano-busy').textContent='画像を読み込んでいます…'; $('#pano-busy').hidden=false; panoTitle(j,null); await sleep();
+  if(PANO.src){PANO.src.close&&PANO.src.close();PANO.src=null;}
+  let src; try{src=await S.getSrc(c.i);}catch(e){$('#pano-busy').textContent='画像を開けませんでした：'+(e.message||e);return;}
+  if(tok!==PANO.tok){src.close&&src.close();return;}
+  PANO.src=src; PANO.j=j; PANO.target=P;
+  const g=pgl, ow=Math.min(PG.max>=16384?8192:4096,PG.max,Math.max(1024,src.W)), oh=Math.round(ow/2);
+  g.activeTexture(g.TEXTURE0); g.bindTexture(g.TEXTURE_2D,PG.ov);
+  if(PANO.ovW!==ow){g.texImage2D(g.TEXTURE_2D,0,g.RGBA,ow,oh,0,g.RGBA,g.UNSIGNED_BYTE,null);}
+  const cv=document.createElement('canvas'), ctx=cv.getContext('2d'), rows=Math.max(1,Math.floor(8e6/ow));
+  for(let y=0;y<oh;y+=rows){const h=Math.min(rows,oh-y); cv.width=ow; cv.height=h; ctx.imageSmoothingEnabled=true; ctx.imageSmoothingQuality='high';
+    ctx.fillStyle='#000'; ctx.fillRect(0,0,ow,h); ctx.drawImage(src.el,0,y*src.H/oh,src.W,h*src.H/oh,0,0,ow,h);
+    g.texSubImage2D(g.TEXTURE_2D,0,0,y,g.RGBA,g.UNSIGNED_BYTE,cv); if(tok!==PANO.tok)return;}
+  cv.width=cv.height=1; g.generateMipmap(g.TEXTURE_2D); PANO.ovW=ow; PANO.ovH=oh;
+  panoAim(j,P); $('#pano-busy').hidden=true;
+  const f=panoFile(c.i); let t=(S.ctimes&&S.files&&S.files.length&&S.ctimes[c.i])||null;
+  if(t==null&&f){try{t=await readShotTime(f);}catch(e){}}
+  PANO.time=t; panoTitle(j,t); panoReq();
+  S.pick={x:P.x,y:P.y,j,face:S.faceSel||0}; drawOverlay();
+}
+function panoTitle(j,t){const c=S.sol.cams[j], list=panoList(), pos=list.indexOf(j);
+  $('#pano-name').textContent=`${pos+1}/${list.length}　${S.names[c.i]}${t!=null?'　'+fmtShot(t):''}`;
+  $('#pano-prev').disabled=pos<=0; $('#pano-next').disabled=pos>=list.length-1;}
+const fmtShot=t=>{const d=new Date(t);return `${d.getUTCFullYear()}/${String(d.getUTCMonth()+1).padStart(2,'0')}/${String(d.getUTCDate()).padStart(2,'0')} ${hhmmss(t)}`};
+const panoList=()=>S.sol.cams.map((c,j)=>j).sort((a,b)=>S.sol.cams[a].i-S.sol.cams[b].i);
+
+/* ---- 高精細化：今の視野を囲む正方形の透視画像を、元画像の該当範囲から作る ---- */
+async function panoDetail(capture){
+  const src=PANO.src; if(!src||!pgl)return; const tok=PANO.dtTok;
+  const cv=$('#pano-gl'); let tanV,asp,pxRad;
+  if(capture){tanV=capture.tan;asp=capture.A;pxRad=capture.H/(2*capture.tan);}
+  else{panoResize();tanV=panoTanV();asp=cv.width/cv.height;pxRad=cv.height/(2*tanV);}
+  const native=src.W/TAU;
+  if(!capture&&pxRad<=PANO.ovW/TAU*1.05){if(PANO.dOn){PANO.dOn=0;panoReq(false);}return;}
+  const tf=Math.max(tanV,tanV*asp)*(capture?1.04:1.3); if(tf>3)return;
+  const N=Math.max(256,Math.min(4096,PG.max,Math.ceil(2*tf*Math.min(native,pxRad))));
+  const R=PANO.R.slice(),U=PANO.U.slice(),F=PANO.F.slice(), mir=PANO.mir;
+  // 範囲：正方形の縁の方向から、元画像の経度・天頂角の範囲を求める
+  const lonC=Math.atan2(F[0],-F[2]); let pMin=Math.PI,pMax=0,lMin=1e9,lMax=-1e9,sMax=0;
+  const dirAt=(x,y)=>v3.norm(v3.add(v3.add(v3.mul(R,x*tf),v3.mul(U,y*tf)),F));
+  const wrapPi=a=>((a+Math.PI)%TAU+TAU)%TAU-Math.PI;
+  for(let k=0;k<=64;k++){const s=-1+2*k/64;
+    for(const [x,y] of [[s,-1],[s,1],[-1,s],[1,s],[s*0.5,0],[0,s*0.5]]){const d=dirAt(x,y),p=Math.acos(Math.max(-1,Math.min(1,d[1]))),l=wrapPi(Math.atan2(d[0],-d[2])-lonC);
+      pMin=Math.min(pMin,p);pMax=Math.max(pMax,p);lMin=Math.min(lMin,l);lMax=Math.max(lMax,l);sMax=Math.max(sMax,Math.sin(p));}}
+  const inFace=d=>{const z=v3.dot(d,F);if(z<=0)return false;return Math.abs(v3.dot(d,R)/z)<=tf&&Math.abs(v3.dot(d,U)/z)<=tf};
+  let full=false; if(inFace([0,1,0])){full=true;pMin=0;} if(inFace([0,-1,0])){full=true;pMax=Math.PI;}
+  if(full||lMax-lMin>Math.PI*1.6){full=true;lMin=-Math.PI;lMax=Math.PI;}
+  if(pMin<=Math.PI/2&&pMax>=Math.PI/2)sMax=1;
+  const m=2/src.H*Math.PI; pMin=Math.max(0,pMin-m); pMax=Math.min(Math.PI,pMax+m); if(!full){lMin-=m;lMax+=m;}
+  const lSpan=lMax-lMin, pSpan=pMax-pMin, lon0=full?-Math.PI:lonC+lMin;
+  let rw=Math.ceil(lSpan*Math.min(src.W/TAU,pxRad*1.1*Math.max(0.05,sMax))), rh=Math.ceil(pSpan*Math.min(src.H/Math.PI,pxRad*1.1));
+  const cap=24e6; if(rw*rh>cap){const f=Math.sqrt(cap/(rw*rh));rw=Math.floor(rw*f);rh=Math.floor(rh*f);}
+  rw=Math.max(8,rw); rh=Math.max(8,rh);
+  if(!capture){$('#pano-hq').hidden=false;}
+  await sleep(); if(tok!==PANO.dtTok&&!capture){$('#pano-hq').hidden=true;return;}
+  // 元画像の該当範囲を画素配列に（キャンバスの面積上限を避けて縦の短冊に分けて描く）
+  const data=new Uint8ClampedArray(rw*rh*4), c0=((lon0/TAU+0.5)%1+1)%1*src.W, r0=pMin/Math.PI*src.H, rs=pSpan/Math.PI*src.H, sc=rw/(lSpan/TAU*src.W);
+  const cvs=document.createElement('canvas'), ctx=cvs.getContext('2d',{willReadFrequently:true}), stripW=Math.max(64,Math.floor(15e6/rh));
+  for(let x0=0;x0<rw;x0+=stripW){const sw=Math.min(stripW,rw-x0); cvs.width=sw; cvs.height=rh; ctx.imageSmoothingEnabled=true; ctx.imageSmoothingQuality='high';
+    let sx=(c0+x0/sc)%src.W, sLen=sw/sc, dx=0;
+    while(sLen>0.01){const take=Math.min(sLen,src.W-sx), dw=take*sc; ctx.drawImage(src.el,sx,r0,take,rs,dx,0,dw,rh); dx+=dw; sLen-=take; sx=0;}
+    const d=ctx.getImageData(0,0,sw,rh).data; for(let y=0;y<rh;y++)data.set(d.subarray(y*sw*4,(y+1)*sw*4),(y*rw+x0)*4);
+    if(!capture&&tok!==PANO.dtTok){$('#pano-hq').hidden=true;return;} await sleep();}
+  cvs.width=cvs.height=1;
+  // 正方形の透視画像へ並べ直す
+  const out=new Uint8Array(N*N*4), kx=rw/lSpan, ky=rh/pSpan;
+  for(let jy=0;jy<N;jy++){
+    if(jy%96===0){await sleep(); if(!capture&&tok!==PANO.dtTok){$('#pano-hq').hidden=true;return;}}
+    const y=(1-(jy+0.5)*2/N)*tf;
+    for(let ix=0;ix<N;ix++){const x=((ix+0.5)*2/N-1)*tf;
+      const dx=R[0]*x+U[0]*y+F[0], dy=R[1]*x+U[1]*y+F[1], dz=R[2]*x+U[2]*y+F[2], L=Math.sqrt(dx*dx+dy*dy+dz*dz);
+      const p=Math.acos(Math.max(-1,Math.min(1,dy/L))); let l=Math.atan2(dx,-dz)-lon0; l=((l%TAU)+TAU)%TAU; if(!full&&l>Math.PI+lSpan/2)l-=TAU;
+      let fx=l*kx-0.5, fy=(p-pMin)*ky-0.5; let x0=Math.floor(fx),y0=Math.floor(fy); const tx=fx-x0,ty=fy-y0;
+      let x1=x0+1,y1=y0+1;
+      if(full){x0=((x0%rw)+rw)%rw;x1=((x1%rw)+rw)%rw;}else{x0=x0<0?0:x0>=rw?rw-1:x0;x1=x1<0?0:x1>=rw?rw-1:x1;}
+      y0=y0<0?0:y0>=rh?rh-1:y0; y1=y1<0?0:y1>=rh?rh-1:y1;
+      const a=(y0*rw+x0)*4,b=(y0*rw+x1)*4,c=(y1*rw+x0)*4,e=(y1*rw+x1)*4, w0=(1-tx)*(1-ty),w1=tx*(1-ty),w2=(1-tx)*ty,w3=tx*ty, q=(jy*N+ix)*4;
+      out[q]=data[a]*w0+data[b]*w1+data[c]*w2+data[e]*w3; out[q+1]=data[a+1]*w0+data[b+1]*w1+data[c+1]*w2+data[e+1]*w3;
+      out[q+2]=data[a+2]*w0+data[b+2]*w1+data[c+2]*w2+data[e+2]*w3; out[q+3]=255;}}
+  if(!capture&&tok!==PANO.dtTok){$('#pano-hq').hidden=true;return;}
+  const g=pgl; g.activeTexture(g.TEXTURE1); g.bindTexture(g.TEXTURE_2D,PG.dt); g.pixelStorei(g.UNPACK_ALIGNMENT,1);
+  g.texImage2D(g.TEXTURE_2D,0,g.RGBA,N,N,0,g.RGBA,g.UNSIGNED_BYTE,out); g.activeTexture(g.TEXTURE0);
+  Object.assign(PANO,{dOn:1,dR:R,dU:U,dF:F,dTan:tf}); $('#pano-hq').hidden=true; PANO.need=true; panoFrame();
+}
+
+/* ---- 操作：1本指で向き、2本指ピンチで拡大。床版は真上付近を見るので画面基準で回す ---- */
+function panoRot(axis,ang){const c=Math.cos(ang),s=Math.sin(ang),[x,y,z]=axis;
+  const rot=v=>{const d=v3.dot(axis,v),cr=v3.cross(axis,v);return [v[0]*c+cr[0]*s+x*d*(1-c),v[1]*c+cr[1]*s+y*d*(1-c),v[2]*c+cr[2]*s+z*d*(1-c)]};
+  PANO.F=v3.norm(rot(PANO.F)); PANO.U=v3.norm(rot(PANO.U)); PANO.R=v3.cross(PANO.F,PANO.U); PANO.U=v3.cross(PANO.R,PANO.F);}
+function panoTurn(dx,dy){
+  const k=(PANO.fov*D2R)/Math.max(1,$('#pano-gl').clientHeight), m=PANO.mir?-1:1;
+  if(PANO.trackball) panoRot(PANO.U,dx*k*m); else panoRot([0,1,0],dx*k*m);
+  const F0=PANO.F,U0=PANO.U; panoRot(PANO.R,dy*k);
+  if(!PANO.trackball&&Math.abs(PANO.F[1])>0.995){PANO.F=F0;PANO.U=U0;PANO.R=v3.cross(F0,U0);}
+  panoReq();
+}
+function panoSetFov(f){PANO.fov=Math.max(8,Math.min(110,f)); $('#pano-fov').textContent=`画角 ${Math.round(PANO.fov)}°`; panoReq();}
+(function(){
+  const cv=$('#pano-gl'), pts=new Map(); let pd=0,pf=0;
+  cv.addEventListener('pointerdown',e=>{try{cv.setPointerCapture(e.pointerId)}catch(_){} pts.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    if(pts.size===2){const a=[...pts.values()];pd=Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y);pf=PANO.fov;}});
+  cv.addEventListener('pointermove',e=>{const p=pts.get(e.pointerId);if(!p)return;const dx=e.clientX-p.x,dy=e.clientY-p.y;p.x=e.clientX;p.y=e.clientY;
+    if(pts.size>=2){const a=[...pts.values()],d=Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y);if(pd>8&&d>8)panoSetFov(pf*pd/d);return;}
+    panoTurn(dx,dy);});
+  const lift=e=>{pts.delete(e.pointerId);if(pts.size<2)pd=0;};
+  cv.addEventListener('pointerup',lift); cv.addEventListener('pointercancel',lift);
+  cv.addEventListener('wheel',e=>{e.preventDefault();panoSetFov(PANO.fov*(e.deltaY>0?1.08:1/1.08));},{passive:false});
+  ['gesturestart','gesturechange'].forEach(t=>$('#pano').addEventListener(t,e=>e.preventDefault()));
+})();
+
+/* ---- 切り出し枠と出力サイズ ---- */
+function panoCapGeom(){
+  const cv=$('#pano-gl'), cw=Math.max(1,cv.clientWidth), ch=Math.max(1,cv.clientHeight), va=cw/ch, sel=$('#pano-aspect').value, A=sel==='auto'?va:parseFloat(sel);
+  let gw,gh; if(A>=va){gw=cw;gh=cw/A;}else{gh=ch;gw=ch*A;}
+  const tan=panoTanV()*(gh/ch); let long=+$('#pano-size').value,W,H;
+  if(!long){const dpr=cv.width/cw;W=Math.round(gw*dpr);H=Math.round(gh*dpr);}else if(A>=1){W=long;H=Math.round(long/A);}else{H=long;W=Math.round(long*A);}
+  const lim=PG.maxRB||4096; if(W>lim||H>lim){const s=lim/Math.max(W,H);W=Math.floor(W*s);H=Math.floor(H*s);}
+  return {A,gw,gh,cw,ch,tan,W:Math.max(2,W&~1),H:Math.max(2,H&~1)};
+}
+function panoGuide(){const el=$('#pano-frame'),g=panoCapGeom(); $('#pano-out').textContent=`${g.W}×${g.H} px`;
+  if($('#pano-aspect').value==='auto'){el.hidden=true;return;} el.hidden=false;
+  Object.assign(el.style,{left:Math.round((g.cw-g.gw)/2)+'px',top:Math.round((g.ch-g.gh)/2)+'px',width:Math.round(g.gw)+'px',height:Math.round(g.gh)+'px'});}
+function panoHud(){
+  let s=`${Math.round(PANO.fov)}°`; const n=$('#pano-note');
+  n.textContent=PANO.mirDetected&&!PANO.mir&&S.view&&S.view.plan?'写真のままの向き（見上げ）です。オルソ（見下げ図）とは左右が逆に見えます。':'';
+  $('#pano-fov').textContent='画角 '+s;
+}
+
+/* ---- 切り出し保存 ---- */
+async function panoCapture(){
+  if(!PANO.src||busyPano)return; busyPano=true; const btn=$('#pano-cap'); btn.disabled=true;
+  try{
+    const g=panoCapGeom(); $('#pano-busy').textContent='元の解像度で切り出しています…'; $('#pano-busy').hidden=false; await sleep();
+    PANO.dtTok++; await panoDetail({tan:g.tan,A:g.A,H:g.H});
+    const gl=pgl, W=g.W, H=g.H, rt=gl.createTexture(); gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D,rt);
+    gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,W,H,0,gl.RGBA,gl.UNSIGNED_BYTE,null);
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);
+    const fb=gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER,fb); gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,rt,0);
+    gl.activeTexture(gl.TEXTURE0); panoDraw(W,H,g.A,g.tan,PANO.mir);
+    const px=new Uint8Array(W*H*4); gl.readPixels(0,0,W,H,gl.RGBA,gl.UNSIGNED_BYTE,px);
+    gl.bindFramebuffer(gl.FRAMEBUFFER,null); gl.deleteFramebuffer(fb); gl.deleteTexture(rt);
+    const out=document.createElement('canvas'); out.width=W; out.height=H; const ctx=out.getContext('2d'), img=ctx.createImageData(W,H), row=W*4;
+    for(let y=0;y<H;y++)img.data.set(px.subarray((H-1-y)*row,(H-y)*row),y*row);
+    ctx.putImageData(img,0,0);
+    const c=S.sol.cams[PANO.j], hit=panoCenterWorld(), v=info();
+    if($('#pano-stamp').checked){
+      const L=[]; L.push([v.bridge,v.span].filter(Boolean).join('　')+(v.bridge||v.span?'　':'')+viewName());
+      L.push(`元画像 ${S.names[c.i]}${PANO.time!=null?'（撮影 '+fmtShot(PANO.time)+'）':''}`);
+      if(hit){const o=toOut(S.img,hit.x,hit.y), G=Geff(); if(o[0]>=-S.img.W*0.2&&o[0]<=S.img.W*1.2&&o[1]>=-S.img.H*0.2&&o[1]<=S.img.H*1.2)
+          L.push(`オルソ上の位置　図の左上から 横 ${fmt((o[0]+0.5)*G,2)} m・縦 ${fmt((o[1]+0.5)*G,2)} m`);
+        L.push(`目安の縮尺　約 ${fmt(hit.dist*S.scaleFix*2*g.tan/H*1000,2)} mm/px（画像中央・正対した場合）`);}
+      const fs=Math.max(14,Math.round(Math.min(W,H)/38)), pad=Math.round(fs*0.6), bh=L.length*fs*1.45+pad*2;
+      ctx.fillStyle='rgba(0,0,0,.62)'; ctx.fillRect(0,H-bh,W,bh); ctx.fillStyle='#fff'; ctx.font=overlayFont(fs); ctx.textBaseline='top';
+      L.forEach((t,k)=>ctx.fillText(t,pad,H-bh+pad+k*fs*1.45,W-pad*2));
+    }
+    const blob=await new Promise(r=>out.toBlob(r,'image/jpeg',0.95)); out.width=out.height=1;
+    if(!blob)throw new Error('画像を作れませんでした');
+    const san=s=>String(s||'').replace(/[\\/:*?"<>|\s]/g,'_');
+    const base=S.names[c.i].replace(/\.[^.]+$/,''), seq=(PANO.seq=(PANO.seq||0)+1);
+    const fname=[san(v.bridge),san(v.span),base,'切出'+String(seq).padStart(2,'0')].filter(Boolean).join('_')+'.jpg';
+    panoDeliver(blob,fname,W,H);
+  }catch(e){console.error(e);$('#pano-busy').textContent='切り出しに失敗しました：'+(e.message||e);setTimeout(()=>$('#pano-busy').hidden=true,4000);busyPano=false;btn.disabled=false;return;}
+  $('#pano-busy').hidden=true; busyPano=false; btn.disabled=false; panoReq(false);
+}
+let busyPano=false, panoUrl=null, panoBlob=null;
+function panoDeliver(blob,fname,W,H){
+  if(panoUrl)URL.revokeObjectURL(panoUrl); panoUrl=URL.createObjectURL(blob); panoBlob={blob,fname};
+  $('#pano-simg').src=panoUrl; $('#pano-sfn').textContent=`${fname}（${W}×${H} px・${fmt(blob.size/1048576,1)} MB）`;
+  const a=$('#pano-sdl'); a.href=panoUrl; a.setAttribute('download',fname);
+  $('#pano-sshare').hidden=!(navigator.canShare&&navigator.canShare({files:[new File([blob],fname,{type:'image/jpeg'})]}));
+  $('#pano-save').hidden=false;
+}
+$('#pano-sshare').addEventListener('click',async()=>{if(!panoBlob)return;
+  try{await navigator.share({files:[new File([panoBlob.blob],panoBlob.fname,{type:'image/jpeg'})]});}catch(e){}});
+$('#pano-sclose').addEventListener('click',()=>{$('#pano-save').hidden=true;$('#pano-simg').removeAttribute('src');});
+
+/* ---- 開く・閉じる・前後の画像 ---- */
+async function panoOpen(j,P){
+  if(busy||!S.sol||!S.getSrc||!S.img)return;
+  $('#pano').hidden=false; document.body.style.overflow='hidden';
+  try{if(!panoInitGL())throw new Error('この端末では WebGL2 が使えません');}catch(e){$('#pano-busy').hidden=false;$('#pano-busy').textContent='360°ビューアーを起動できませんでした：'+(e.message||e);return;}
+  PANO.trackball=!(S.o.mode==='wall'||isPier(S.o.mode)); PANO.fov=70; PANO.mir=$('#pano-mir').checked;
+  await panoLoad(j,P);
+}
+function panoClose(){
+  $('#pano').hidden=true; document.body.style.overflow=''; PANO.tok++; PANO.dtTok++;
+  if(PANO.src){PANO.src.close&&PANO.src.close();PANO.src=null;}
+  if(pgl){const g=pgl,z=new Uint8Array([0,0,0,255]);g.activeTexture(g.TEXTURE0);g.bindTexture(g.TEXTURE_2D,PG.ov);g.texImage2D(g.TEXTURE_2D,0,g.RGBA,1,1,0,g.RGBA,g.UNSIGNED_BYTE,z);
+    g.activeTexture(g.TEXTURE1);g.bindTexture(g.TEXTURE_2D,PG.dt);g.texImage2D(g.TEXTURE_2D,0,g.RGBA,1,1,0,g.RGBA,g.UNSIGNED_BYTE,z);g.activeTexture(g.TEXTURE0);}
+  PANO.ovW=0; PANO.dOn=0; $('#pano-save').hidden=true;
+}
+async function panoStep(dir){
+  const list=panoList(), pos=list.indexOf(PANO.j), nj=list[pos+dir]; if(nj==null)return;
+  const hit=panoCenterWorld(); const P=hit?{x:hit.x,y:hit.y}:(PANO.target||{x:S.sol.cams[nj].tx,y:S.sol.cams[nj].ty});
+  const fov=PANO.fov; await panoLoad(nj,P); PANO.fov=fov; panoSetFov(fov);
+}
+$('#pano-close').addEventListener('click',panoClose);
+$('#pano-prev').addEventListener('click',()=>panoStep(-1));
+$('#pano-next').addEventListener('click',()=>panoStep(1));
+$('#pano-reset').addEventListener('click',()=>{const i=PANO.init;if(!i)return;Object.assign(PANO,{F:i.F,U:i.U,R:i.R});panoSetFov(70);});
+$('#pano-zin').addEventListener('click',()=>panoSetFov(PANO.fov/1.25));
+$('#pano-zout').addEventListener('click',()=>panoSetFov(PANO.fov*1.25));
+$('#pano-cap').addEventListener('click',panoCapture);
+$('#pano-mir').addEventListener('change',e=>{PANO.mir=e.target.checked;panoPrefSave();panoReq();});
+['#pano-aspect','#pano-size','#pano-stamp'].forEach(id=>$(id).addEventListener('change',()=>{panoPrefSave();panoReq(false);}));
+window.addEventListener('resize',()=>{if(!$('#pano').hidden)panoReq();});
+window.addEventListener('keydown',e=>{if($('#pano').hidden)return; if(e.key==='Escape'){if(!$('#pano-save').hidden)$('#pano-save').hidden=true;else panoClose();}});
+function panoPrefSave(){try{localStorage.setItem('slabortho-pano',JSON.stringify({a:$('#pano-aspect').value,s:$('#pano-size').value,st:$('#pano-stamp').checked,m:$('#pano-mir').checked}));}catch(e){}}
+try{const p=JSON.parse(localStorage.getItem('slabortho-pano')||'null'); if(p){$('#pano-aspect').value=p.a||'1.333333';$('#pano-size').value=p.s||'3840';$('#pano-stamp').checked=!!p.st;$('#pano-mir').checked=!!p.m;}}catch(e){}
+
+/* ---- オルソ側：撮影位置マークのタップ、長押しで最適な画像 ---- */
+function panoPickAt(p){ // p：出力画素座標
+  const [Wx,Wy]=toWorld(S.img,p[0]-0.5,p[1]-0.5), geo=panoGeo(); let best=-1,bs=1e9;
+  S.sol.cams.forEach((c,j)=>{const g=geo(j,Wx,Wy);if(g&&g.sc<bs){bs=g.sc;best=j;}});
+  return best<0?null:{j:best,P:{x:Wx,y:Wy}};
+}
+function panoMarkAt(p){
+  if(!$('#v-cams').checked)return -1; const inner=$('#inner'), u=Math.max(S.img.W,S.img.H)/300, thr=Math.max(u*2.2,18*S.img.W/Math.max(1,inner.offsetWidth));
+  let best=-1,bd=thr; S.sol.cams.forEach((c,j)=>{const [x,y]=camOut(c),d=Math.hypot(x-p[0],y-p[1]);if(d<bd){bd=d;best=j;}}); return best;
+}
+let panoLP=null, panoLPfired=0;
+$('#inner').addEventListener('pointerdown',e=>{
+  if(!S.img||!S.sol||S.tool==='crop'||busy)return; clearTimeout(panoLP&&panoLP.t);
+  const x=e.clientX,y=e.clientY; panoLP={x,y,id:e.pointerId,t:setTimeout(()=>{
+    panoLPfired=Date.now(); const r=panoPickAt(evPt({clientX:x,clientY:y})); panoLP=null;
+    if(r)panoOpen(r.j,r.P); },550)};
+});
+const panoLPcancel=e=>{if(panoLP&&(e.type!=='pointermove'||Math.hypot(e.clientX-panoLP.x,e.clientY-panoLP.y)>10)){clearTimeout(panoLP.t);panoLP=null;}};
+['pointermove','pointerup','pointercancel'].forEach(t=>$('#inner').addEventListener(t,panoLPcancel));
+$('#inner').addEventListener('contextmenu',e=>e.preventDefault());
+$('#viewer').addEventListener('click',e=>{
+  if(!S.img||!S.sol||!$('#inner').contains(e.target))return;
+  if(Date.now()-panoLPfired<800){e.stopPropagation();e.preventDefault();return;}
+  if(S.tool==='crop'||busy)return;
+  const j=panoMarkAt(evPt(e)); if(j<0)return;
+  e.stopPropagation(); e.preventDefault(); const c=S.sol.cams[j]; panoOpen(j,{x:c.tx,y:c.ty});
+},true);
 
 /* オフライン対応（Service Worker） */
 (function(){
