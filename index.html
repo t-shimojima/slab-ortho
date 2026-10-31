@@ -196,7 +196,7 @@ input[type=text],input[type=date]{font:inherit;font-size:15px;width:100%;padding
 <header class="top">
   <div class="brand">
     <h1>床版下面オルソ</h1>
-    <p>DJI Avata 360 の 360° 静止画から、床版下面の平面オルソ画像を端末内で合成します（v1.9.1）</p>
+    <p>DJI Avata 360 の 360° 静止画から、床版下面の平面オルソ画像を端末内で合成します（v1.10）</p>
     <div class="offline" id="offline"><i></i><span>オフライン対応を確認中…</span></div>
   </div>
   <nav class="tabs" role="tablist">
@@ -791,6 +791,11 @@ async function openFile(file){
 }
 /* DJI の XMP から機体ヨー角を読む（360°画像は機体固定の向きで保存されるため回転の初期値に使う） */
 async function readYaw(file){
+  try{const t=await file.slice(0,400000).text();
+    const m=t.match(/GimbalYawDegree="([-+\d.]+)"/)||t.match(/FlightYawDegree="([-+\d.]+)"/);return m?parseFloat(m[1]):null;}catch(e){return null}
+}
+/* 機首方位（機体の向き）。360°画像の向き（GimbalYaw）は機首に追従しない設定で撮られることがあるため別に読む */
+async function readNose(file){
   try{const t=await file.slice(0,400000).text();
     const m=t.match(/FlightYawDegree="([-+\d.]+)"/)||t.match(/GimbalYawDegree="([-+\d.]+)"/);return m?parseFloat(m[1]):null;}catch(e){return null}
 }
@@ -1542,18 +1547,25 @@ async function registerPier(n,names,getSrc,yaws,alts){
   const seg=new Array(n).fill(0); for(let k=1;k<n;k++)seg[k]=seg[k-1]+((tsec[k]!=null&&tsec[k-1]!=null&&tsec[k]-tsec[k-1]>90)?1:0);
   if(seg[n-1]>0)log(`撮影が ${seg[n-1]+1} 回に分かれています（電池交換など）。高度の基準が変わるため、別々に扱います。`);
   const sameSeg=(i,j)=>seg[i]===seg[j];
-  const courses=groupCourses(yaws,alts), courseOf=new Array(n);
+  // 機首方位（コース・面の判定、柱の周りの位置）と、360°画像の向き（画像どうしの回転）を分けて扱う
+  const noses=(S.noses&&S.noses.length===n&&S.noses.every(v=>v!=null))?S.noses:yaws;
+  const dNY=noses.map((v,k)=>angDiff(v,yaws[k])), mNY=dNY.slice().sort((a,b)=>a-b)[n>>1];
+  const locked=dNY.some(v=>Math.abs(angDiff(v,mNY))>5);
+  const panoW=yaws.map(y=>y+mNY);   // 画像の正面（中央）の向きを、機首方位と同じ基準で表したもの
+  const courses=groupCourses(noses,alts), courseOf=new Array(n);
   courses.forEach((c,g)=>c.forEach(k=>courseOf[k]=g));
   log(`コース：${courses.length} 本（${courses.map((c,g)=>`C${g+1}=${c.length}枚`).join('、')}）`);
   const D0=o.h, faces=[];
   if(round){
     const R=o.pd/2; if(!(R>0.2))throw new Error('柱の直径を入力してください。');
     // コースの周方向の位置（撮影順に機首方位の変化を積み上げる）で、隣り合うコースだけを組み合わせる
-    const ang=[0]; for(let g=1;g<courses.length;g++)ang.push(ang[g-1]+angDiff(yaws[courses[g][0]],yaws[courses[g-1][0]]));
+    const ang=[0]; for(let g=1;g<courses.length;g++)ang.push(ang[g-1]+angDiff(noses[courses[g][0]],noses[courses[g-1][0]]));
     const pairOK=(i,j)=>Math.abs(ang[courseOf[i]]-ang[courseOf[j]])<=100;
-    const phis=new Array(n).fill(0), shape=()=>({type:'cyl',R});
+    // 機首を柱の中心に向けて撮る前提。画像の向きが機首に追従しない場合は、画像内の機首の方向を中心とする
+    const phis=noses.map((v,k)=>angDiff(v,panoW[k])*D2R), shape=()=>({type:'cyl',R});
+    if(locked)log('注意：360°画像の向きが機首に追従していないため、各画像の機首の方向を柱の中心として扱います。');
     let loose=true; // 離隔が未確定の間は縮尺の誤差を見込んで広めに探す
-    const pred=(i,j)=>{if(alts[i]==null||alts[j]==null)return null;const dx=R*angDiff(yaws[j],yaws[i])*D2R, dy=alts[i]-alts[j];
+    const pred=(i,j)=>{if(alts[i]==null||alts[j]==null)return null;const dx=R*angDiff(noses[j],noses[i])*D2R, dy=alts[i]-alts[j];
       if(!sameSeg(i,j))return {dx,dy:0,wx:0.5+0.8*Math.abs(dx),wy:4};
       return {dx,dy,wx:0.5+(loose?0.8:0.35)*Math.abs(dx),wy:0.4+(loose?0.8:0.25)*Math.abs(dy)};};
     // 1) コースごとに（上下の画像だけで）位置合わせし、高度計からそのコースの離隔を求める
@@ -1570,7 +1582,7 @@ async function registerPier(n,names,getSrc,yaws,alts){
     log(`離隔（コースごとに推定）：${courses.map((c,g)=>`C${g+1} ${Dc[g]!=null?fmt(Dc[g],2)+'m':'—'}`).join('、')}`);
     loose=false;
     // 2) 推定した離隔で全体を位置合わせし、全体の縮尺をもう一度高度計で合わせる
-    const reg=await pierRegister([...Array(n).keys()],names,getSrc,phis,Dk,shape,pairOK,'全体：',pred,(i,j)=>alts[i]==null||alts[j]==null||!sameSeg(i,j)?null:{dx:R*angDiff(yaws[j],yaws[i])*D2R,dy:alts[i]-alts[j]});
+    const reg=await pierRegister([...Array(n).keys()],names,getSrc,phis,Dk,shape,pairOK,'全体：',pred,(i,j)=>alts[i]==null||alts[j]==null||!sameSeg(i,j)?null:{dx:R*angDiff(noses[j],noses[i])*D2R,dy:alts[i]-alts[j]});
     if(!reg) throw new Error('画像同士の位置合わせができませんでした。コースの間隔（30°以内）を確認してください。');
     const cal=pierAltCalib(reg.sol,alts,courseOf,Dk);
     const Dt=Dk.slice(); if(cal){cal.Dt.forEach((v,g)=>courses[g].forEach(k=>Dt[k]=v));}
@@ -1585,8 +1597,8 @@ async function registerPier(n,names,getSrc,yaws,alts){
     const r=rect?0:o.pt/2, a=rect?o.pw/2:(o.pw-o.pt)/2;
     if(rect){if(!(o.pw>0.3&&o.pt>0.3))throw new Error('橋脚の幅と厚さを入力してください。');}
     else if(!(r>0.2&&a>=0))throw new Error('橋脚の幅と厚さを入力してください（幅 ≧ 厚さ）。');
-    const y0=yaws[courses[0][0]], groups={F:[],B:[],L:[],R:[]};
-    courses.forEach((c,g)=>{const d=angDiff(yaws[c[0]],y0);
+    const y0=noses[courses[0][0]], groups={F:[],B:[],L:[],R:[]};
+    courses.forEach((c,g)=>{const d=angDiff(noses[c[0]],y0);
       if(Math.abs(d)<35)groups.F.push(g); else if(Math.abs(d)>145)groups.B.push(g); else if(d>=55&&d<=125)groups.L.push(g); else if(d<=-55&&d>=-125)groups.R.push(g);
       else log(`  C${g+1}（機首 ${fmt(d,0)}°）は面に正対していないため使いません`);});
     const defs=rect?[['F','前面（C1側）','face'],['R','右側面','side'],['B','背面','face'],['L','左側面','side']]
@@ -1595,8 +1607,17 @@ async function registerPier(n,names,getSrc,yaws,alts){
       const ha=type==='side'?o.pt/2:a;   // 面の幅の半分（矩形の側面は厚さ）
       const gs=groups[key]; if(!gs.length){log(`${name}：該当するコースがありません`);continue;}
       const list=gs.flatMap(g=>courses[g]);
-      let sx=0,sy=0;list.forEach(k=>{sx+=Math.sin(yaws[k]*D2R);sy+=Math.cos(yaws[k]*D2R)}); const yf=Math.atan2(sx,sy)/D2R;
-      const phis=new Array(n).fill(0); list.forEach(k=>phis[k]=angDiff(yf,yaws[k])*D2R);
+      let sx=0,sy=0;list.forEach(k=>{sx+=Math.sin(noses[k]*D2R);sy+=Math.cos(noses[k]*D2R)}); const yf=Math.atan2(sx,sy)/D2R;
+      const phis=new Array(n).fill(0); list.forEach(k=>phis[k]=angDiff(yf,panoW[k])*D2R);
+      if(type!=='tip'){ // 面の正面の向きを、機首の向きではなく画像（目地・縁などの水平・鉛直な線）から求める
+        const pick=[...new Set([0,0.25,0.5,0.75,1].map(t=>list[Math.round(t*(list.length-1))]))], cs=[];
+        for(const k of pick){const src=await getSrc(k); const e=estimateWallPhi(src,phis[k],40,2); src.close&&src.close(); cs.push(angDiff(e/D2R,phis[k]/D2R));}
+        cs.sort((p,q)=>p-q); const md=cs[cs.length>>1], near=cs.filter(v=>Math.abs(v-md)<=(locked?4:2.5)).length;
+        // 画像の向きが機首に追従している通常の撮影では、推定がよくそろったときだけ補正する（周囲の景色による誤推定を避ける）
+        const okE=locked?near*2>cs.length:near>=Math.max(2,cs.length-1);
+        if(okE&&Math.abs(md)<=38){ if(Math.abs(md)>=1){list.forEach(k=>phis[k]+=md*D2R); log(`${name}：面の正面の向きを画像から補正しました（機首の向きから ${fmt(md,1)}°）`);} }
+        else if(locked)log(`${name}：面の正面の向きを画像から決められないため、機首の向きを正面とします（推定 ${cs.map(v=>fmt(v,0)+'°').join('・')}）`);
+      }
       const Dk=new Array(n).fill(D0);
       const predF=(i,j)=>(alts[i]==null||alts[j]==null||!sameSeg(i,j))?null:{dx:0,dy:alts[i]-alts[j],wx:type==='tip'?0.6:2*ha+1.0,wy:0.4+(Dk[i]===D0?0.8:0.25)*Math.abs(alts[i]-alts[j])};
       const shp=()=>type==='tip'?{type:'cyl',R:r}:{type:'plane'};
@@ -2202,14 +2223,17 @@ async function runPipeline(n,names,getSrc,yaws,truth,alts){
 $('#o-run').addEventListener('click',()=>task(async()=>{
   if(!S.files.length)return; logEl.textContent='';
   const files=S.files; S.mode='files'; S.projectId=null; S.blobs=null; S.pick=null;
-  const yaws=await Promise.all(files.map(readYaw));
-  if(yaws.some(v=>v!=null)) log(`XMP のヨー角：${yaws.map(v=>v==null?'—':fmt(v,1)+'°').join(', ')}`);
+  const yaws=await Promise.all(files.map(readYaw)), noses=await Promise.all(files.map(readNose)); S.noses=noses;
+  if(yaws.some(v=>v!=null)) log(`360°画像の向き（XMP）：${yaws.map(v=>v==null?'—':fmt(v,1)+'°').join(', ')}`);
+  { const d=yaws.map((y,k)=>y!=null&&noses[k]!=null?angDiff(noses[k],y):null).filter(v=>v!=null);
+    if(d.length>1){const m=d.slice().sort((a,b)=>a-b)[d.length>>1], sp=Math.max(...d.map(v=>Math.abs(angDiff(v,m))));
+      if(sp>5)log(`注意：360°画像の向きが機首の向きに追従していません（機首との差 ${fmt(Math.min(...d),0)}〜${fmt(Math.max(...d),0)}°）。画像の向きの記録値で計算します。`);}}
   const alts=await Promise.all(files.map(readAlt));
   if(alts&&alts.some(v=>v!=null)) log(`機体の高度：${alts.map(v=>v==null?'—':fmt(v,1)+' m').join(', ')}`);
   await runPipeline(files.length,files.map(f=>f.name),k=>openFile(files[k]),yaws,null,alts);
 }));
 $('#o-sample').addEventListener('click',()=>task(async()=>{
-  logEl.textContent=''; S.files=[]; S.ctimes=null; S.blobs=null; S.pick=null; $('#o-files').value=''; S.mode='sample'; S.projectId=null;
+  logEl.textContent=''; S.files=[]; S.ctimes=null; S.blobs=null; S.pick=null; S.noses=null; $('#o-files').value=''; S.mode='sample'; S.projectId=null;
   $('#o-mode').value='slab'; modeUI();  // サンプルは床版の模擬データ
   log('サンプル：12 m × 7.5 m の模擬床版を h = 3.0 m から 2コース×4枚 撮影した 360° 画像を生成します');
   $('#o-h').value='3.0'; if(!$('#i-bridge').value){setInfo({bridge:'サンプル橋',span:'第1径間',date:new Date().toISOString().slice(0,10),origin:'left'});}
