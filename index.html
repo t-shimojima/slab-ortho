@@ -154,7 +154,7 @@ input[type=text],input[type=date]{font:inherit;font-size:15px;width:100%;padding
 .proj .acts{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;align-items:center}
 .muted{color:var(--muted);font-weight:400;font-size:13px}
 /* 360°ビューアー */
-.pano{position:fixed;inset:0;z-index:70;background:#000;color:#e6eaec;display:flex;flex-direction:column;font-size:14px;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+.pano{position:fixed;left:0;top:0;width:100vw;height:100vh;height:100dvh;z-index:70;transform-origin:0 0;overflow:hidden;background:#000;color:#e6eaec;display:flex;flex-direction:column;font-size:14px;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 .pano[hidden]{display:none}
 .pano .pbar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:6px 10px;background:#1b2023}
 .pano .pbar.top{padding-top:max(6px,env(safe-area-inset-top));border-bottom:1px solid #323b40}
@@ -164,8 +164,10 @@ input[type=text],input[type=date]{font:inherit;font-size:15px;width:100%;padding
 .pano select{width:auto;min-height:38px;padding:4px 8px;background:#262e32;color:#e6eaec;border-color:#3b464b;font-size:14px}
 .pano label{display:inline-flex;gap:4px;align-items:center;font-size:13px;color:#c9d1d5}
 .pano .pname{font-family:var(--mono);font-size:13px;color:#c9d1d5;margin-right:auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1 1 200px}
-.pano .pstage{position:relative;flex:1 1 auto;min-height:0;overflow:hidden}
-#pano-gl{display:block;width:100%;height:100%;touch-action:none;cursor:grab}
+.pano .pstage{position:relative;flex:1 1 0;min-height:0;overflow:hidden}
+.pano .pbar{flex:0 0 auto}
+#pano-x{position:absolute;right:10px;top:10px;z-index:4;width:48px;height:48px;border-radius:24px;border:1px solid rgba(255,255,255,.5);background:rgba(20,24,26,.75);color:#fff;font-size:22px;line-height:1;cursor:pointer}
+#pano-gl{position:absolute;left:0;top:0;display:block;width:100%;height:100%;touch-action:none;cursor:grab}
 #pano-frame{position:absolute;pointer-events:none;border:1px solid rgba(255,255,255,.9);box-shadow:0 0 0 9999px rgba(0,0,0,.45)}
 #pano-frame[hidden]{display:none}
 .pano .pmsg{position:absolute;left:50%;top:12px;transform:translateX(-50%);background:rgba(20,24,26,.88);border:1px solid #3b464b;border-radius:8px;padding:6px 12px;font-size:13px;pointer-events:none;max-width:90%}
@@ -194,7 +196,7 @@ input[type=text],input[type=date]{font:inherit;font-size:15px;width:100%;padding
 <header class="top">
   <div class="brand">
     <h1>床版下面オルソ</h1>
-    <p>DJI Avata 360 の 360° 静止画から、床版下面の平面オルソ画像を端末内で合成します（v1.9）</p>
+    <p>DJI Avata 360 の 360° 静止画から、床版下面の平面オルソ画像を端末内で合成します（v1.9.1）</p>
     <div class="offline" id="offline"><i></i><span>オフライン対応を確認中…</span></div>
   </div>
   <nav class="tabs" role="tablist">
@@ -556,6 +558,7 @@ input[type=text],input[type=date]{font:inherit;font-size:15px;width:100%;padding
   </div>
   <div class="pstage">
     <canvas id="pano-gl"></canvas>
+    <button id="pano-x" aria-label="閉じる" title="閉じる">✕</button>
     <div id="pano-frame" hidden></div>
     <div class="pmsg" id="pano-busy" hidden></div>
     <div class="pmsg" id="pano-hq" hidden>高精細化中…</div>
@@ -2713,7 +2716,7 @@ function panoRot(axis,ang){const c=Math.cos(ang),s=Math.sin(ang),[x,y,z]=axis;
   const rot=v=>{const d=v3.dot(axis,v),cr=v3.cross(axis,v);return [v[0]*c+cr[0]*s+x*d*(1-c),v[1]*c+cr[1]*s+y*d*(1-c),v[2]*c+cr[2]*s+z*d*(1-c)]};
   PANO.F=v3.norm(rot(PANO.F)); PANO.U=v3.norm(rot(PANO.U)); PANO.R=v3.cross(PANO.F,PANO.U); PANO.U=v3.cross(PANO.R,PANO.F);}
 function panoTurn(dx,dy){
-  const k=(PANO.fov*D2R)/Math.max(1,$('#pano-gl').clientHeight), m=PANO.mir?-1:1;
+  const k=(PANO.fov*D2R)/Math.max(1,$('#pano-gl').clientHeight)*panoScale(), m=PANO.mir?-1:1;
   if(PANO.trackball) panoRot(PANO.U,dx*k*m); else panoRot([0,1,0],dx*k*m);
   const F0=PANO.F,U0=PANO.U; panoRot(PANO.R,dy*k);
   if(!PANO.trackball&&Math.abs(PANO.F[1])>0.995){PANO.F=F0;PANO.U=U0;PANO.R=v3.cross(F0,U0);}
@@ -2800,14 +2803,30 @@ $('#pano-sshare').addEventListener('click',async()=>{if(!panoBlob)return;
 $('#pano-sclose').addEventListener('click',()=>{$('#pano-save').hidden=true;$('#pano-simg').removeAttribute('src');});
 
 /* ---- 開く・閉じる・前後の画像 ---- */
+/* ページを指で拡大した状態で開くと、画面いっぱいの表示がページ全体の大きさで作られ、
+   ボタンが画面の外に出てしまう。見えている範囲（visualViewport）にぴったり重ねる */
+const panoScale=()=>(window.visualViewport&&window.visualViewport.scale)||1;
+function panoFit(){
+  const el=$('#pano'), vv=window.visualViewport; if(el.hidden)return;
+  if(!vv){Object.assign(el.style,{left:'0px',top:'0px',width:innerWidth+'px',height:innerHeight+'px',transform:''});return;}
+  const s=vv.scale||1;
+  Object.assign(el.style,{left:vv.offsetLeft+'px',top:vv.offsetTop+'px',width:(vv.width*s)+'px',height:(vv.height*s)+'px',transform:Math.abs(s-1)>1e-3?`scale(${1/s})`:''});
+  if(PANO.ovW)panoReq(false);
+}
+if(window.visualViewport){visualViewport.addEventListener('resize',panoFit);visualViewport.addEventListener('scroll',panoFit);}
+window.addEventListener('orientationchange',()=>setTimeout(panoFit,300));
+/* iPad の「戻る」操作（ブラウザの戻る・スワイプ）でも閉じられるよう履歴を1つ積む */
+window.addEventListener('popstate',()=>{if(!$('#pano').hidden)panoClose(true);});
 async function panoOpen(j,P){
   if(busy||!S.sol||!S.getSrc||!S.img)return;
-  $('#pano').hidden=false; document.body.style.overflow='hidden';
+  $('#pano').hidden=false; document.body.style.overflow='hidden'; panoFit();
+  try{if(!(history.state&&history.state.pano))history.pushState({pano:1},'');}catch(e){}
   try{if(!panoInitGL())throw new Error('この端末では WebGL2 が使えません');}catch(e){$('#pano-busy').hidden=false;$('#pano-busy').textContent='360°ビューアーを起動できませんでした：'+(e.message||e);return;}
   PANO.trackball=!(S.o.mode==='wall'||isPier(S.o.mode)); PANO.fov=70; PANO.mir=$('#pano-mir').checked;
   await panoLoad(j,P);
 }
-function panoClose(){
+function panoClose(fromPop){
+  if(fromPop!==true){try{if(history.state&&history.state.pano){history.back();return;}}catch(e){}}
   $('#pano').hidden=true; document.body.style.overflow=''; PANO.tok++; PANO.dtTok++;
   if(PANO.src){PANO.src.close&&PANO.src.close();PANO.src=null;}
   if(pgl){const g=pgl,z=new Uint8Array([0,0,0,255]);g.activeTexture(g.TEXTURE0);g.bindTexture(g.TEXTURE_2D,PG.ov);g.texImage2D(g.TEXTURE_2D,0,g.RGBA,1,1,0,g.RGBA,g.UNSIGNED_BYTE,z);
@@ -2819,7 +2838,8 @@ async function panoStep(dir){
   const hit=panoCenterWorld(); const P=hit?{x:hit.x,y:hit.y}:(PANO.target||{x:S.sol.cams[nj].tx,y:S.sol.cams[nj].ty});
   const fov=PANO.fov; await panoLoad(nj,P); PANO.fov=fov; panoSetFov(fov);
 }
-$('#pano-close').addEventListener('click',panoClose);
+$('#pano-close').addEventListener('click',()=>panoClose());
+$('#pano-x').addEventListener('click',()=>panoClose());
 $('#pano-prev').addEventListener('click',()=>panoStep(-1));
 $('#pano-next').addEventListener('click',()=>panoStep(1));
 $('#pano-reset').addEventListener('click',()=>{const i=PANO.init;if(!i)return;Object.assign(PANO,{F:i.F,U:i.U,R:i.R});panoSetFov(70);});

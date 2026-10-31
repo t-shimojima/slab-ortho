@@ -1,6 +1,6 @@
 /* 床版オルソ v1.8 — オフライン用キャッシュ
    画面（index.html）はネット優先：つながるときは常に最新版を取り直し、圏外ではキャッシュで動く */
-const CACHE='slabortho-v1.9';
+const CACHE='slabortho-v1.9.1';
 const FILES=['./','index.html','manifest.webmanifest','icon-180.png','icon-192.png','icon-512.png'];
 self.addEventListener('install',e=>{
   e.waitUntil(caches.open(CACHE).then(c=>Promise.all(FILES.map(f=>c.add(new Request(f,{cache:'reload'})).catch(()=>{})))).then(()=>self.skipWaiting()));
