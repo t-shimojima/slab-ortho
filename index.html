@@ -196,7 +196,7 @@ input[type=text],input[type=date]{font:inherit;font-size:15px;width:100%;padding
 <header class="top">
   <div class="brand">
     <h1>床版下面オルソ</h1>
-    <p>DJI Avata 360 の 360° 静止画から、床版下面の平面オルソ画像を端末内で合成します（v1.11）</p>
+    <p>DJI Avata 360 の 360° 静止画から、床版下面の平面オルソ画像を端末内で合成します（v1.12）</p>
     <div class="offline" id="offline"><i></i><span>オフライン対応を確認中…</span></div>
   </div>
   <nav class="tabs" role="tablist">
@@ -1345,7 +1345,10 @@ function groupCourses(yaws,alts){
   yaws.forEach((y,k)=>{const last=cs[cs.length-1], p=last?last[last.length-1]:-1;
     // 機首方位が変わった、または同じ高さのまま横へ移動した（＝次の列）ら新しいコース
     const sameH=alts&&alts[k]!=null&&alts[p]!=null&&Math.abs(alts[k]-alts[p])<0.3&&last.length>=2;
-    if(last&&Math.abs(angDiff(y,yaws[p]))<8&&!sameH)last.push(k); else cs.push([k]);});
+    // 上下の向きが反転した（下りながら撮った後に上りながら撮る）＝横へ移動した次の列
+    const pp=last&&last.length>=2?last[last.length-2]:-1;
+    const rev=alts&&pp>=0&&[k,p,pp].every(i=>alts[i]!=null)&&Math.abs(alts[p]-alts[pp])>0.3&&Math.abs(alts[k]-alts[p])>0.3&&Math.sign(alts[p]-alts[pp])!==Math.sign(alts[k]-alts[p]);
+    if(last&&Math.abs(angDiff(y,yaws[p]))<8&&!sameH&&!rev)last.push(k); else cs.push([k]);});
   return cs;
 }
 /* 形状に合わせた位置合わせ用タイル。shape: {type:'plane'} / {type:'cyl',R}（局所座標 X は面上の距離） */
@@ -1507,6 +1510,8 @@ async function renderPier(face,o,getSrc,crop,gsd,names){
       const p=oy*W+ox; IA[p]=ia; IB[p]=ib; WA[p]=ib<0?255:Math.round(255*(0.5+0.5*Math.min(1,(sb-sa)/6)));
     }}
   const rgb=new Uint8ClampedArray(W*H*3), cov=new Uint8Array(Math.ceil(W*H/8)), out=[0,0,0];
+  // 2 帯域の合成：細部（ひび割れ・目地）は最良の1枚から、広い範囲の明るさは見えている全画像の重み付き平均から取る
+  const gs=8, Wl=Math.ceil(W/gs), Hl=Math.ceil(H/gs), aS=new Float32Array(Wl*Hl*3), aW=new Float32Array(Wl*Hl);
   for(let k=0;k<nc;k++){
     const c=cams[k]; prog(0.2+0.75*k/nc); log(`  ${k+1}/${nc}：${names[c.i]}`); await sleep();
     const src=await getSrc(c.i); const bnd=getWallBand(src,face.phis[c.i],o.maxW); src.close&&src.close();
@@ -1521,8 +1526,57 @@ async function renderPier(face,o,getSrc,crop,gsd,names){
         rgb[q3]+=Math.round(Math.min(255,out[0]*gain)*f);rgb[q3+1]+=Math.round(Math.min(255,out[1]*gain)*f);rgb[q3+2]+=Math.round(Math.min(255,out[2]*gain)*f);
         cov[p>>3]|=1<<(p&7);
       }}
+    if(o.gain!==false)for(let ly=0;ly<Hl;ly++){const oy=Math.min(H-1,ly*gs+(gs>>1)), Wy=F.y0+F.sy*(oy+0.5)*G;
+      for(let lx=0;lx<Wl;lx++){const ox=Math.min(W-1,lx*gs+(gs>>1)), dep=depCol[ox]; if(!dep)continue;
+        const g=geo(k,F.x0+F.sx*(ox+0.5)*G,Wy,dep); if(!g)continue;
+        const al=Math.abs(g.lat), sc=g.inc/D2R+(al<pref?30*(1-(al-seam)/(pref-seam)):0)+6*g.dist, w=Math.exp(-sc/40);
+        sampleWall(bnd,g.lon,g.lat,out); const q=ly*Wl+lx; aS[q*3]+=w*out[0]*gain;aS[q*3+1]+=w*out[1]*gain;aS[q*3+2]+=w*out[2]*gain;aW[q]+=w;}}
+  }
+  if(o.gain!==false){
+    // 合成結果の低域（ブロック平均）と全画像平均の低域の比を、なめらかにして掛ける
+    const cS=new Float32Array(Wl*Hl*3), cN=new Float32Array(Wl*Hl);
+    for(let oy=0;oy<H;oy++)for(let ox=0;ox<W;ox++){const p=oy*W+ox; if(!((cov[p>>3]>>(p&7))&1))continue; const q=Math.floor(oy/gs)*Wl+Math.floor(ox/gs), r=p*3;
+      cS[q*3]+=rgb[r];cS[q*3+1]+=rgb[r+1];cS[q*3+2]+=rgb[r+2];cN[q]++;}
+    const sig=Math.max(2,0.12/(G*gs)), blur=(A,ch,Wt)=>{ // 重み付きガウスぼかし（縦横に分けて）
+      const rad=Math.ceil(sig*2.5), ker=[];for(let i=-rad;i<=rad;i++)ker.push(Math.exp(-i*i/(2*sig*sig)));
+      const t=new Float32Array(A.length), tw=new Float32Array(Wl*Hl), o2=new Float32Array(A.length), ow=new Float32Array(Wl*Hl);
+      for(let y=0;y<Hl;y++)for(let x=0;x<Wl;x++){let w2=0;const acc=[0,0,0];for(let i=-rad;i<=rad;i++){const xx=x+i;if(xx<0||xx>=Wl)continue;const q=y*Wl+xx,kk=ker[i+rad];w2+=kk*Wt[q];for(let c=0;c<3;c++)acc[c]+=kk*A[q*3+c];}
+        const q=y*Wl+x;tw[q]=w2;for(let c=0;c<3;c++)t[q*3+c]=acc[c];}
+      for(let y=0;y<Hl;y++)for(let x=0;x<Wl;x++){let w2=0;const acc=[0,0,0];for(let i=-rad;i<=rad;i++){const yy=y+i;if(yy<0||yy>=Hl)continue;const q=yy*Wl+x,kk=ker[i+rad];w2+=kk*tw[q];for(let c=0;c<3;c++)acc[c]+=kk*t[q*3+c];}
+        const q=y*Wl+x;ow[q]=w2;for(let c=0;c<3;c++)o2[q*3+c]=w2>1e-6?acc[c]/w2:0;}
+      return {v:o2,w:ow};};
+    const bA=blur(aS.map((v,i)=>v),0,aW.map(v=>1)), bC=blur(cS,0,cN.map(v=>1));
+    // aS・cS は合計値なので、重みの合計で割って平均にする
+    const nA=blur(new Float32Array(Wl*Hl*3).map((_,i)=>aW[Math.floor(i/3)]),0,aW.map(v=>1)), nC=blur(new Float32Array(Wl*Hl*3).map((_,i)=>cN[Math.floor(i/3)]),0,cN.map(v=>1));
+    const R=new Float32Array(Wl*Hl*3);
+    for(let q=0;q<Wl*Hl;q++)for(let c=0;c<3;c++){const a2=nA.v[q*3+c]>1e-6?bA.v[q*3+c]/nA.v[q*3+c]:0, c2=nC.v[q*3+c]>1e-6?bC.v[q*3+c]/nC.v[q*3+c]:0;
+      R[q*3+c]=(a2>5&&c2>5)?Math.max(0.6,Math.min(1.6,a2/c2)):1;}
+    for(let oy=0;oy<H;oy++){if(oy%512===0)await sleep(); const fy=Math.max(0,Math.min(Hl-1.001,(oy+0.5)/gs-0.5)), y0=Math.floor(fy), ty=fy-y0;
+      for(let ox=0;ox<W;ox++){const p=oy*W+ox; if(!((cov[p>>3]>>(p&7))&1))continue; const fx=Math.max(0,Math.min(Wl-1.001,(ox+0.5)/gs-0.5)), x0=Math.floor(fx), tx=fx-x0, r=p*3;
+        const q00=(y0*Wl+x0)*3,q01=q00+3,q10=q00+Wl*3,q11=q10+3;
+        for(let c=0;c<3;c++){const m=(R[q00+c]*(1-tx)+R[q01+c]*tx)*(1-ty)+(R[q10+c]*(1-tx)+R[q11+c]*tx)*ty; rgb[r+c]=rgb[r+c]*m;}}}
+    log(`  明るさのむらをならしました（周囲 ${fmt(sig*G*gs,2)} m の範囲で全画像の平均に合わせる）`);
   }
   return {...F,rgb,cov};
+}
+/* 継ぎ目の明るさ合わせ：担当画像が切り替わる境目の両側の明るさの比から、画像ごとの明るさ係数を求めて掛ける
+   （高度で並べた画像は重なりの特徴点がなく露出補正が効かないため、合成後の画像そのものから求める） */
+function levelSeams(rgb,cov,IA,IB,WA,W,H,nc){
+  const d=Math.max(6,Math.round(Math.min(W,H)/400)), S=new Map();
+  const lum=p=>{const q=p*3;return 0.299*rgb[q]+0.587*rgb[q+1]+0.114*rgb[q+2];};
+  const on=p=>(cov[p>>3]>>(p&7))&1;
+  const add=(p,q)=>{const a=IA[p],b=IA[q]; if(a<0||b<0||a===b||!on(p)||!on(q))return; const la=lum(p),lb=lum(q); if(la<20||lb<20||la>250||lb>250)return;
+    const key=a<b?a*256+b:b*256+a, v=a<b?Math.log(la/lb):Math.log(lb/la); let e=S.get(key); if(!e){e={s:0,n:0};S.set(key,e);} e.s+=v; e.n++;};
+  for(let y=0;y<H;y+=2)for(let x=0;x+d<W;x+=2){const p=y*W+x; add(p,p+d); if(y+d<H)add(p,p+d*W);}
+  const pairs=[...S].filter(([k,e])=>e.n>=30).map(([k,e])=>({a:Math.floor(k/256),b:k%256,v:e.s/e.n,w:Math.sqrt(e.n)}));
+  if(!pairs.length)return;
+  log(`  継ぎ目の明るさを合わせました（${pairs.length} か所）`);
+  const lg=new Float64Array(nc), lam=0.05*pairs.reduce((p,q)=>p+q.w,0)/nc;
+  for(let it=0;it<200;it++)for(let k=0;k<nc;k++){let num=0,den=lam;
+    for(const e of pairs){if(e.a===k){num+=e.w*(lg[e.b]-e.v);den+=e.w;}else if(e.b===k){num+=e.w*(lg[e.a]+e.v);den+=e.w;}}
+    lg[k]=Math.max(-0.5,Math.min(0.5,num/den));}
+  for(let p=0;p<W*H;p++){if(!on(p)||IA[p]<0)continue; const f=WA[p]/255, l=IB[p]>=0?f*lg[IA[p]]+(1-f)*lg[IB[p]]:lg[IA[p]], g=Math.exp(l), q=p*3;
+    rgb[q]=rgb[q]*g;rgb[q+1]=rgb[q+1]*g;rgb[q+2]=rgb[q+2]*g;}
 }
 
 /* 端部の正面画像から柱の左右の輪郭（上下に長く続く縦の境目）を探し、半円の中心の向き（ラジアン）を返す */
@@ -1582,6 +1636,23 @@ function rectEdgeCenter(band,D,ha){
   for(const l of left)for(const rr of right){const w=rr.x-l.x, err=Math.abs(w-2*ha)/(2*ha); if(err>0.12)continue;
     const sc=err*4-Math.log(Math.min(l.v,rr.v)); if(!best||sc<best.sc)best={sc,c:(l.x+rr.x)/2,w};}
   return best;
+}
+/* 明るい面の左縁（左が暗く右が明るい）と右縁を、カメラ正面からの横の距離（m）で返す。見つからない側は null */
+function rectEdges(band,D){
+  const cols=band.w, out=[0,0,0], lats=[]; for(let la=-8;la>=-45;la-=1.5)lats.push(la*D2R); for(let la=8;la<=30;la+=1.5)lats.push(la*D2R);
+  const lum=lats.map(la=>{const row=new Float32Array(cols);for(let x=0;x<cols;x++){sampleWall(band,((x+0.5)/cols-0.5)*band.lonSpan,la,out);row[x]=0.299*out[0]+0.587*out[1]+0.114*out[2];}return row;});
+  const d=Math.max(2,Math.round(cols/300)), L=new Float32Array(cols);
+  for(let x=d;x<cols-d;x++){let sg=0;for(const row of lum)sg+=Math.max(-60,Math.min(60,row[x+d]-row[x-d]));L[x]=sg/lum.length;}
+  const lonOf=x=>((x+0.5)/cols-0.5)*band.lonSpan; let l=null,r=null;
+  for(let x=d;x<cols-d;x++){const lo=lonOf(x); if(Math.abs(lo)>72*D2R||Math.abs(lo)<3*D2R)continue;
+    if(lo<0&&L[x]>=12&&(!l||L[x]>l.v))l={x:D*Math.tan(lo),v:L[x]};
+    if(lo>0&&-L[x]>=12&&(!r||-L[x]>r.v))r={x:D*Math.tan(lo),v:-L[x]};}
+  return {l,r};
+}
+/* 面の左右の縁（縦の境目）の見かけの幅と、入力した面の幅から離隔を求める（画像同士が結び付かず高度計で離隔を較正できないとき用） */
+function rectEdgeDist(band,ha){
+  const e=[];[1.5,2,2.5,3,3.5,4,5].forEach(D=>{const r=rectEdgeCenter(band,D,ha);if(r)e.push({D:D*2*ha/r.w,sc:r.sc});});
+  if(!e.length)return null; e.sort((p,q)=>p.sc-q.sc); return e[0].D;
 }
 /* 全体の流れ：コース分け → 面ごとに位置合わせ → 高度計で縮尺・離隔を補正 */
 async function registerPier(n,names,getSrc,yaws,alts){
@@ -1669,6 +1740,8 @@ async function registerPier(n,names,getSrc,yaws,alts){
         else if(locked)log(`${name}：面の正面の向きを画像から決められないため、機首の向きを正面とします（推定 ${cs.map(v=>fmt(v,0)+'°').join('・')}）`);
       }
       const Dk=new Array(n).fill(D0);
+      const edgeDist=async ks=>{const ds=[];for(const k of ks.filter((_,q)=>q%Math.max(1,Math.floor(ks.length/6))===0)){const src=await getSrc(k);const band=getWallBand(src,phis[k],1024);src.close&&src.close();
+          const d=rectEdgeDist(band,ha); if(d&&d>0.8&&d<8)ds.push(d);} if(ds.length<2)return null; ds.sort((p,q)=>p-q); return ds[ds.length>>1];};
       // 離隔が未確定の間は、高さの差の 0.45〜2 倍の範囲だけを探す（遠くの背景・桁はずれが小さく、取り違えの原因になる）
       const predF=(i,j)=>{if(alts[i]==null||alts[j]==null||!sameSeg(i,j))return null; const dz=alts[i]-alts[j], wx=type==='tip'?0.6:2*ha+1.0;
         return Dk[i]===D0?{dx:0,dy:1.25*dz,wx,wy:0.15+0.8*Math.abs(dz)}:{dx:0,dy:dz,wx,wy:0.4+0.25*Math.abs(dz)};};
@@ -1684,15 +1757,29 @@ async function registerPier(n,names,getSrc,yaws,alts){
         list.forEach(k=>Dk[k]=Dc.has(courseOf[k])?Dc.get(courseOf[k]):med);}
       let reg=await pierRegister(list,names,getSrc,phis,Dk,shp,()=>true,`${name}：`,predF);
       let cal=null;
-      if(!reg&&(type==='tip'||type==='side')&&list.every(k=>alts[k]!=null)){
+      if(!reg&&list.length>=2&&list.every(k=>alts[k]!=null)){
         // 端部は機首を半円の中心に向けて上下に撮っているので、画像が結び付かなくても高度だけで並べられる
-        const done=faces.filter(f=>f.type==='face'), Dg=done.length?done.flatMap(f=>f.sol.cams.map(c=>f.Dk[c.i]*c.s)).reduce((p,q,_,A)=>p+q/A.length,0):D0;
+        const done=faces.filter(f=>f.type==='face'); let Dg=done.length?done.flatMap(f=>f.sol.cams.map(c=>f.Dk[c.i]*c.s)).reduce((p,q,_,A)=>p+q/A.length,0):D0;
+        if(type!=='tip'){const De=await edgeDist(list);if(De)Dg=De;}
         reg={sol:{cams:list.map(k=>({i:k,a:1,b:0,s:1,tx:0,ty:alts[k],rms:0})),dropped:[],used:list},gains:null};
         list.forEach(k=>{Dk[k]=Dg;setThumbStatus(k,'<span class="chip warn">高度で配置</span>')});
         log(`${name}：画像同士が結び付かないため、機体の高度で並べました（離隔 ${fmt(Dg,2)} m を仮定）`);
       }else{
         if(!reg){log(`${name}：位置合わせできませんでした`);continue;}
         cal=pierAltCalib(reg.sol,alts,courseOf,Dk);
+        if(cal&&type!=='tip'&&[...cal.Dt.values()].some(v=>v<0.55*D0||v>1.8*D0)){
+          // 模様の繰り返し（セパ穴など）による取り違えで、ありえない離隔になった：結び付きを捨て、高度で並べ直す
+          log(`${name}：画像から求めた離隔（${[...cal.Dt.values()].map(v=>fmt(v,2)+' m').join('・')}）が入力値と大きく違うため、取り違えとみなして高度で並べ直します`);
+          const c0=reg.sol.cams.find(c=>alts[c.i]!=null)||reg.sol.cams[0];
+          reg.sol.cams=[{i:c0.i,a:1,b:0,s:1,tx:0,ty:0,rms:0}]; cal=null;
+        }
+        if(!cal&&type!=='tip'&&list.filter(k=>alts[k]!=null).length>=2){
+          // 結び付いた画像が少なく高度計で離隔を較正できない（模様の少ない面）：柱の縁の幅から離隔を求め、残りの画像は高度で並べる
+          const De=await edgeDist(list), Dn=De||D0, K=D0/Dn;
+          reg.sol.cams.forEach(c=>{c.a/=K;c.b/=K;c.tx/=K;c.ty/=K;c.s/=K;c.rms/=K;});
+          cal={K,Dt:new Map(gs.map(g=>[g,Dn]))};
+          log(`${name}：画像同士がほとんど結び付かないため、${De?`柱の縁の幅から求めた離隔 ${fmt(Dn,2)} m`:`入力した離隔 ${fmt(Dn,2)} m`}と機体の高度で並べます`);
+        }
       }
       const Dt=Dk.slice(); if(cal){const vs=[...cal.Dt.values()].sort((p,q)=>p-q), med=vs[vs.length>>1]; cal.Dt.forEach((v,g)=>{if(Math.abs(v/med-1)>0.12)cal.Dt.set(g,med)}); list.forEach(k=>Dt[k]=cal.Dt.has(courseOf[k])?cal.Dt.get(courseOf[k]):med);
         log(`${name}：離隔（画像から推定）${gs.map(g=>`C${g+1} ${fmt(Dt[courses[g][0]],2)}m`).join('、')}`);}
@@ -1701,11 +1788,25 @@ async function registerPier(n,names,getSrc,yaws,alts){
         const mxT=reg.sol.cams.reduce((p,c)=>p+c.tx,0)/reg.sol.cams.length, xw=Math.min(ha*0.9,1.2*(Dt[list[0]]||D0));
         const tileOf=async(k,D)=>{if(tiles.has(k))return tiles.get(k);const src=await getSrc(k);const band=getWallBand(src,phis[k],2048);src.close&&src.close();
           const t=faceTileHP(band,D,xw,Math.min(3,D*1.4),0.01);tiles.set(k,t);return t;};
-        let added=0,refined=0;
+        let added=0,refined=0,edgeSeed=0,edgeRef=null;
         while(todo.length){
           let best=null;
           for(const k of todo)for(const c of placed.values()){if(alts[c.i]==null||!sameSeg(k,c.i))continue; if(type==='face'&&courseOf[c.i]!==courseOf[k])continue;
             const d=Math.abs(alts[k]-alts[c.i]); if(!best||d<best.d)best={k,c,d};}
+          if(!best&&rect&&type==='face'){ // 結び付いた画像が1枚もない列：柱の左右の縁の位置から横の位置を決めて、列の最初の1枚を置く
+            if(!edgeRef){edgeRef={L:[],R:[]};for(const c of placed.values()){const src=await getSrc(c.i);const band=getWallBand(src,phis[c.i],1024);src.close&&src.close();
+              const e=rectEdges(band,Dt[c.i]); if(e.l)edgeRef.L.push(c.tx+e.l.x); if(e.r)edgeRef.R.push(c.tx+e.r.x);}
+              const med=a=>{a.sort((p,q)=>p-q);return a.length?a[a.length>>1]:null;}; edgeRef.XL=med(edgeRef.L); edgeRef.XR=med(edgeRef.R);}
+            const left=[...new Set(todo.map(k=>courseOf[k]))]; let seeded=false;
+            for(const g of left){const ks=todo.filter(k=>courseOf[k]===g), txs=[];
+              for(const k of ks){const src=await getSrc(k);const band=getWallBand(src,phis[k],1024);src.close&&src.close(); const e=rectEdges(band,Dt[k]);
+                if(e.l&&edgeRef.XL!=null)txs.push(edgeRef.XL-e.l.x); else if(e.r&&edgeRef.XR!=null)txs.push(edgeRef.XR-e.r.x);}
+              if(txs.length<Math.max(1,ks.length*0.4))continue; txs.sort((p,q)=>p-q); const tx=txs[txs.length>>1];
+              const k=ks[0]; let ref=null; for(const c of placed.values())if(alts[c.i]!=null&&sameSeg(k,c.i)&&(!ref||Math.abs(alts[c.i]-alts[k])<Math.abs(alts[ref.i]-alts[k])))ref=c;
+              if(!ref)continue; const sK=Dt[k]/Dk[k], cam={i:k,a:sK,b:0,s:sK,tx,ty:ref.ty+(alts[k]-alts[ref.i]),rms:0};
+              reg.sol.cams.push(cam); placed.set(k,cam); todo.splice(todo.indexOf(k),1); added++; edgeSeed++; seeded=true; setThumbStatus(k,'<span class="chip warn">縁と高度で配置</span>'); break;}
+            if(seeded)continue;
+          }
           if(!best)break; todo.splice(todo.indexOf(best.k),1);
           const {k,c}=best, sK=Dt[k]/Dk[k], Dj=Dk[c.i]*c.s;
           let tx=type==='tip'?mxT:c.tx, ty=c.ty+(alts[k]-alts[c.i]);
@@ -1716,6 +1817,7 @@ async function registerPier(n,names,getSrc,yaws,alts){
           setThumbStatus(k,'<span class="chip warn">高度で配置</span>');
         }
         if(added)log(`${name}：重なりで結び付かない ${added} 枚を、機体の高度で並べました${refined?`（うち ${refined} 枚は目地などの模様で上下を微調整）`:''}`);
+        if(edgeSeed)log(`${name}：結び付かない列 ${edgeSeed} 本は、柱の縁の位置から横の位置を決めました`);
       }
       const txs=reg.sol.cams.map(c=>c.tx); let x0=type==='tip'?txs.reduce((p,q)=>p+q,0)/txs.length:(Math.min(...txs)+Math.max(...txs))/2;
       if(type==='tip'){ // 機体が半円の中心から横にずれていた分を、柱の輪郭から求める
