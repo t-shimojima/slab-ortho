@@ -189,6 +189,35 @@ input[type=text],input[type=date]{font:inherit;font-size:15px;width:100%;padding
 .btn.danger{background:var(--bad);border-color:var(--bad);color:#fff}
 #projects{display:grid;gap:10px}
 @media (max-width:600px){.proj{grid-template-columns:1fr}}
+
+/* ---- 説明（i マーク） ---- */
+.field{position:relative}
+.ib{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;flex:0 0 22px;border-radius:50%;border:1.5px solid var(--accent);background:var(--surface);color:var(--accent);font:italic 700 13px/1 Georgia,"Times New Roman",serif;padding:0;margin:0 0 0 6px;cursor:pointer;vertical-align:middle;position:relative}
+.ib::after{content:"";position:absolute;inset:-9px}
+.ib:active,.ib[aria-expanded="true"]{background:var(--accent);color:var(--accent-ink)}
+.field>.ib{position:absolute;top:-3px;right:0;margin:0}
+.pano .ib{background:#263036;border-color:#8fc6dc;color:#8fc6dc}
+#help-pop{position:fixed;z-index:1000;max-width:min(340px,calc(100vw - 24px));background:var(--surface);color:var(--ink);border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;box-shadow:0 8px 28px rgba(0,0,0,.22);padding:10px 34px 10px 12px;font-size:13.5px;line-height:1.6}
+#help-t{display:block;font-size:13px;color:var(--accent);margin-bottom:3px}
+#help-b b{color:var(--ink)}
+#help-pop .x{position:absolute;top:4px;right:4px;width:28px;height:28px;border:0;background:none;color:var(--muted);font-size:18px;cursor:pointer}
+/* ---- 処理中の表示 ---- */
+.progress{height:8px}
+#prog-label{font-size:12px;color:var(--muted);min-height:1.4em;margin:2px 0 4px;font-variant-numeric:tabular-nums}
+#busy-pill{position:fixed;left:50%;bottom:max(14px,env(safe-area-inset-bottom));transform:translateX(-50%);z-index:900;display:flex;align-items:center;gap:10px;max-width:calc(100vw - 24px);background:var(--ink);color:var(--surface);border-radius:999px;padding:8px 16px;font-size:13px;box-shadow:0 6px 20px rgba(0,0,0,.25);font-variant-numeric:tabular-nums}
+#busy-pill .t{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:56vw}
+.spin{width:16px;height:16px;flex:0 0 16px;border-radius:50%;border:2.5px solid currentColor;border-right-color:transparent;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+#load-ov{position:fixed;inset:0;z-index:950;background:rgba(10,16,20,.45);display:flex;align-items:center;justify-content:center;padding:16px}
+#load-ov .card{background:var(--surface);color:var(--ink);border-radius:14px;padding:18px 20px;width:min(420px,100%);box-shadow:0 12px 40px rgba(0,0,0,.3)}
+#load-ov h4{margin:0 0 6px;font-size:16px;display:flex;align-items:center;gap:10px}
+#load-ov .bar{height:10px;border-radius:5px;background:var(--surface2);overflow:hidden;margin:12px 0 6px;position:relative}
+#load-ov .bar i{position:absolute;top:0;bottom:0;left:0;background:var(--accent);border-radius:5px}
+#load-ov .bar.ind i{width:35%;animation:ind 1.3s ease-in-out infinite}
+@keyframes ind{0%{left:-35%}100%{left:100%}}
+#load-ov p{margin:4px 0;font-size:13px;color:var(--muted);line-height:1.6}
+#load-ov .num{font-size:13px;color:var(--ink)}
+@media (prefers-reduced-motion:reduce){.spin,#load-ov .bar.ind i{animation:none}}
 </style>
 </head>
 <body>
@@ -196,7 +225,7 @@ input[type=text],input[type=date]{font:inherit;font-size:15px;width:100%;padding
 <header class="top">
   <div class="brand">
     <h1>床版下面オルソ</h1>
-    <p>DJI Avata 360 の 360° 静止画から、床版下面の平面オルソ画像を端末内で合成します（v1.12）</p>
+    <p>DJI Avata 360 の 360° 静止画から、床版下面の平面オルソ画像を端末内で合成します（v1.13）</p>
     <div class="offline" id="offline"><i></i><span>オフライン対応を確認中…</span></div>
   </div>
   <nav class="tabs" role="tablist">
@@ -346,7 +375,7 @@ input[type=text],input[type=date]{font:inherit;font-size:15px;width:100%;padding
       <div class="pair" id="pier-row-round" hidden><div class="field"><label for="o-pd">柱の直径</label><div class="row"><input type="number" id="o-pd" min="0.5" max="15" step="0.1" value="5.0"><span class="unit">m</span></div></div><div class="field"></div></div>
       <div class="pair" id="pier-row-oval" hidden><div class="field"><label for="o-pw">幅（長手方向）</label><div class="row"><input type="number" id="o-pw" min="1" max="20" step="0.1" value="7.0"><span class="unit">m</span></div></div><div class="field"><label for="o-pt">厚さ</label><div class="row"><input type="number" id="o-pt" min="0.5" max="8" step="0.1" value="2.5"><span class="unit">m</span></div></div></div>
       <div class="field">
-        <label for="o-files">360° 画像（2〜20枚程度）</label>
+        <label for="o-files">360° 画像（複数まとめて選べます）</label>
         <input type="file" id="o-files" accept="image/jpeg,image/*" multiple style="font-size:14px;max-width:100%">
         <p class="hint">SDカードリーダーから「ファイル」経由で選ぶと、元の解像度のまま読み込めます。</p>
       </div>
@@ -378,7 +407,7 @@ input[type=text],input[type=date]{font:inherit;font-size:15px;width:100%;padding
         <button class="btn" id="o-sample" data-busy="">サンプルで試す</button>
       </div>
       <div>
-        <div class="progress"><div id="prog"></div></div>
+        <div id="prog-label"></div><div class="progress"><div id="prog"></div></div>
         <pre id="log"></pre>
       </div>
     </div>
@@ -586,6 +615,15 @@ input[type=text],input[type=date]{font:inherit;font-size:15px;width:100%;padding
     <button class="btn small" id="pano-zout" aria-label="縮小">－</button><button class="btn small" id="pano-zin" aria-label="拡大">＋</button></span>
   </div>
 </div>
+<div id="help-pop" role="dialog" hidden><button class="x" aria-label="閉じる">×</button><b id="help-t"></b><div id="help-b"></div></div>
+<div id="busy-pill" hidden><span class="spin"></span><span class="t" id="busy-t">処理中</span><span id="busy-n"></span></div>
+<div id="load-ov" hidden><div class="card" role="dialog" aria-live="polite">
+  <h4><span class="spin" style="color:var(--accent)"></span><span id="ld-title">画像を取り込んでいます</span></h4>
+  <div class="bar ind" id="ld-bar"><i></i></div>
+  <div class="num" id="ld-num">経過 0:00</div>
+  <p id="ld-msg">選択画面で画像を選び、「開く」を押してください。選んだ後、iPad が画像をアプリに取り込みます。120MP の画像は 1 枚 1 秒ほどかかります（75 枚で約 1 分）。この間、画面は止まって見えますが処理中です。</p>
+  <div style="text-align:right;margin-top:8px"><button class="btn small" id="ld-close">閉じる（選ぶのをやめた場合）</button></div>
+</div></div>
 <script>
 "use strict";
 const $=s=>document.querySelector(s);
@@ -1862,13 +1900,21 @@ const S={files:[],names:[],yaws:[],getSrc:null,mode:null,sol:null,gains:null,o:n
   view:{plan:false,rot:false},crop:null,img:null,scaleFix:1,measure:[],tool:'measure',projectId:null,thumbs:[],exported:null,dirty:false};
 let busy=false;
 const logEl=$('#log');
-function log(s){logEl.textContent+=s+'\n';logEl.scrollTop=1e9}
-function prog(f){$('#prog').style.width=(Math.max(0,Math.min(1,f))*100)+'%'}
+const BZ={t0:0,f:0,stage:'',timer:null};
+const mmss=sec=>`${Math.floor(sec/60)}:${String(Math.floor(sec%60)).padStart(2,'0')}`;
+function busyRender(){ if(!busy)return; const el=(performance.now()-BZ.t0)/1000, pc=BZ.f>0?` ${Math.round(BZ.f*100)}%`:'';
+  $('#busy-t').textContent=BZ.stage||'処理中'; $('#busy-n').textContent=`${pc}・${mmss(el)}`;
+  $('#prog-label').textContent=`処理中${pc}・経過 ${mmss(el)}${BZ.stage?'　'+BZ.stage:''}`;
+  if(el>0.6)$('#busy-pill').hidden=false; }
+function log(s){logEl.textContent+=s+'\n';logEl.scrollTop=1e9; if(busy){const l=String(s).trim().split('\n').pop(); if(l){BZ.stage=l.length>48?l.slice(0,47)+'…':l; busyRender();}}}
+function prog(f){f=Math.max(0,Math.min(1,f)); $('#prog').style.width=(f*100)+'%'; BZ.f=f; busyRender();}
 function setBusy(b){busy=b;document.querySelectorAll('[data-busy]').forEach(e=>e.disabled=b||(e.dataset.busy==='need-img'&&!S.img)||(e.dataset.busy==='need-files'&&!S.files.length));}
 async function task(fn){
   if(busy)return; setBusy(true);
+  BZ.t0=performance.now(); BZ.f=0; BZ.stage=''; clearInterval(BZ.timer); BZ.timer=setInterval(busyRender,500);
   try{await fn();}catch(err){console.error(err);log('エラー：'+(err&&err.message||err));}
-  finally{setBusy(false);}
+  finally{setBusy(false); clearInterval(BZ.timer); $('#busy-pill').hidden=true;
+    const el=(performance.now()-BZ.t0)/1000; $('#prog-label').textContent=el>1?`完了（${mmss(el)}）`:'';}
 }
 const MAXPX=60e6, MAXDIM=16000;
 
@@ -1934,10 +1980,25 @@ async function readShotTime(file){
 }
 const seqNo=n=>{const m=/_(\d{4})(?:_[A-Z])?\.[A-Za-z]+$/.exec(n||'')||/(\d+)(?=\.[A-Za-z]+$)/.exec(n||'');return m?+m[1]:Infinity;};
 const hhmmss=t=>{const d=new Date(t);return `${String(d.getUTCHours()).padStart(2,'0')}:${String(d.getUTCMinutes()).padStart(2,'0')}:${String(d.getUTCSeconds()).padStart(2,'0')}`;};
+/* 画像の取り込み中の表示：選択画面を閉じてから change が届くまで（iPad がファイルをコピーする間）は何も合図がないため、
+   選択画面を開いた時点から表示し、change・cancel・「閉じる」で消す */
+const LD={on:false,t0:0,timer:null};
+function ldShow(){ LD.on=true; LD.t0=performance.now(); $('#ld-title').textContent='画像を取り込んでいます'; $('#ld-bar').classList.add('ind'); $('#ld-bar i').style.width='';
+  $('#ld-close').hidden=false; $('#ld-num').textContent='経過 0:00'; $('#load-ov').hidden=false;
+  clearInterval(LD.timer); LD.timer=setInterval(()=>{ if(LD.on&&!LD.count)$('#ld-num').textContent=`経過 ${mmss((performance.now()-LD.t0)/1000)}`; },500); }
+function ldCount(k,n){ LD.count=true; $('#ld-bar').classList.remove('ind'); $('#ld-bar i').style.width=(100*k/Math.max(1,n))+'%'; $('#ld-close').hidden=true;
+  $('#ld-title').textContent='撮影時刻を読んでいます'; $('#ld-num').textContent=`${k} / ${n} 枚・経過 ${mmss((performance.now()-LD.t0)/1000)}`; }
+function ldHide(){ LD.on=false; LD.count=false; clearInterval(LD.timer); $('#load-ov').hidden=true; }
+$('#o-files').addEventListener('click',()=>{ if(!busy)ldShow(); });
+$('#o-files').addEventListener('cancel',ldHide);
+$('#ld-close').addEventListener('click',ldHide);
 $('#o-files').addEventListener('change',e=>task(async()=>{
   const picked=[...e.target.files];
-  logEl.textContent=''; log(`${picked.length} 枚の撮影時刻を読んでいます…`); await sleep();
-  const tm=await Promise.all(picked.map(readShotTime));
+  if(!picked.length){ldHide();return;}
+  if(!LD.on)ldShow(); ldCount(0,picked.length);
+  logEl.textContent=''; log(`${picked.length} 枚を取り込みました。撮影時刻を読んでいます…`); await sleep();
+  let nd=0; const tm=await Promise.all(picked.map(f=>readShotTime(f).then(t=>{nd++; if(nd%5===0||nd===picked.length)ldCount(nd,picked.length); return t;})));
+  ldHide();
   const idx=picked.map((f,k)=>k), byName=(a,b)=>picked[a].name.localeCompare(picked[b].name,undefined,{numeric:true});
   const withT=idx.filter(k=>tm[k]!=null).sort((a,b)=>(tm[a]-tm[b])||(seqNo(picked[a].name)-seqNo(picked[b].name))||byName(a,b));
   const noT=idx.filter(k=>tm[k]==null).sort(byName);
@@ -3095,6 +3156,94 @@ $('#viewer').addEventListener('click',e=>{
   const j=panoMarkAt(evPt(e)); if(j<0)return;
   e.stopPropagation(); e.preventDefault(); const c=S.sol.cams[j]; panoOpen(j,{x:c.tx,y:c.ty});
 },true);
+
+
+/* ================= 説明（i マーク） =================
+   sel：説明を付ける要素。at：'field'＝項目の右上、'after'＝要素の直後（チェックボックスは囲む label の直後） */
+const HELP=[
+ // オルソ合成：案件情報
+ {sel:'#i-bridge',at:'field',t:'橋梁名',b:'図の表題と、書き出すファイルの名前に入ります。空欄でも合成できます。'},
+ {sel:'#i-span',at:'field',t:'径間番号',b:'表題とファイル名に入ります。橋脚や橋台なら「P1 起点側」「A1 前面」のように、どの面かを書いておくと後で区別しやすくなります。'},
+ {sel:'#i-date',at:'field',t:'撮影日',b:'画像の撮影時刻から自動で入ります。表題に入ります。'},
+ {sel:'#i-origin',at:'field',t:'起点・終点の表示',b:()=>{const m=curMode();const w=m==='wall'?'上流側・下流側':isPier(m)?'左岸側・右岸側':'起点側・終点側';return `図の左右のどちらが${w}かを、図の端に書き込みます。分からないときは「表示しない」のままで構いません。`;}},
+ // 撮影対象と寸法
+ {sel:'#o-mode',at:'field',t:'撮影対象',b:'写したものと撮り方に合わせて選びます。<br>・<b>床版下面</b>：真上を向いて、桁の下を飛びながら撮った床版の裏面<br>・<b>橋台・壁面</b>：平らな壁に沿って横に飛んで撮った面<br>・<b>円柱・小判型・矩形橋脚</b>：柱の面に向かって、高さを変えながら撮った面<br>選び間違えると合成に失敗します（例：橋脚を「橋台・壁面」で合成すると、背景を写してしまいます）。'},
+ {sel:'#o-pd',at:'field',t:'柱の直径',b:'図面の直径を入れます。展開図の横幅（周の長さ）と縮尺の基準になります。'},
+ {sel:'#o-pw',at:'field',t:'幅（長手方向）',b:'柱の長い方向の外寸を、図面の値で入れます。1つの面だけを合成するときは、その面の横幅を入れます。'},
+ {sel:'#o-pt',at:'field',t:'厚さ',b:'柱の短い方向の外寸（図面の値）です。小判型では両端の半円の直径です。'},
+ {sel:'#o-files',at:'field',t:'360° 画像',b:'ドローンの 360°静止画（DJI_…_D.JPG）を選びます。何枚でも同時に選べ、撮影時刻の順に自動で並びます。<br>「ブラウズ」→「<b>ファイルを選択</b>」から選んでください（「写真ライブラリ」からだと縮小されることがあります）。選んだ後の取り込みには、120MP の画像 1 枚につき 1 秒ほどかかります。'},
+ {sel:'#o-h',at:'field',t:'離隔',b:()=>{const m=curMode(); return m==='wall'?'カメラから壁面までの水平距離です（レーザー距離計の値）。高さの違う画像があれば、画像から自動で補正します。':isPier(m)?'カメラから柱の表面までの水平距離です。高さを変えて撮った画像から自動で補正するため、目安（例：2.0〜2.5 m）で構いません。':'カメラから床版下面までの距離です（桁下の高さ − 飛行高度。レーザー距離計の値）。<b>縮尺に直接効く</b>ので、なるべく正確に入れてください。';}},
+ {sel:'#o-theta',at:'field',t:()=>isSide()?'使う視野角':'使用する天頂角',b:()=>isSide()?'1枚の画像のうち、正面から何度までを使うかです。大きいほど1枚で広く写せますが、端は斜めから見るため粗くなります。標準のままで構いません。':'1枚の画像のうち、真上から何度までを使うかです。大きいほど1枚で広く写せますが、端はゆがみ・粗さが増えます。標準は 55°。重なりが足りないときに少し大きくします。'},
+ {sel:'#o-grade',at:'field',t:'縦断勾配',b:'床版の縦断勾配（%）です。0% なら、離隔が一定として合成します。勾配のある橋で、高さを変えずに飛んだときに入れます。'},
+ {sel:'#o-gdir',at:'field',t:'勾配の向き',b:'画像1（最初の画像）から離れるにつれて、床版が高くなるか低くなるかを選びます。'},
+ {sel:'#o-q',at:'field',t:'読込画質',b:'画像を計算に使うときの細かさです。「標準」で十分な精度が出ます。「高」はより細かくなりますが、メモリーを多く使い、枚数が多いと iPad で落ちることがあります。'},
+ {sel:'#o-gain',at:'field',t:'露出補正',b:'画像ごとの明るさの違いをそろえます。通常は「する」のままにします。'},
+ {sel:'#wd-open',at:'field',t:'壁の正面方向',b:'壁がどの方向にあるかを、ふつうは画像から自動で求めます。うまくいかないとき（背景が写る・傾く）は「画像で指定…」を押し、画像の上で壁の正面をタップして指定します。'},
+ {sel:'#o-seam',at:'field',t:'水平線付近の除外',b:'360°カメラは上下2つのレンズの画像をつないでいて、つなぎ目（水平線付近）は画質が落ちます。その範囲を合成に使わないようにします。大きくすると画質優先、小さくすると広い範囲を使えます。'},
+ {sel:'#o-level',at:'field',t:'自動水平補正',b:'床版の縁や目地など、画像の中のまっすぐな線を探して、図の傾きを自動で直します。'},
+ {sel:'#o-run',at:'after',t:'合成を実行',b:'選んだ画像で位置合わせと合成を行います。120MP の画像 20 枚で数十秒〜数分かかります。進み具合は画面下に表示されます。'},
+ {sel:'#o-sample',at:'after',t:'サンプルで試す',b:'画像を用意しなくても、アプリの動きを試せます。'},
+ // 合成結果
+ {sel:'#view-seg',at:'after',t:'見下げ図・見上げ図',b:'<b>見上げ図</b>：下から見上げたままの向き（写真と同じ）。<br><b>見下げ図</b>：上から床版を透かして見た向き。図面や損傷図と同じ向きで、点検調書では通常こちらを使います。'},
+ {sel:'#v-rot',at:'after',t:'180°回転',b:'図を上下左右に回します。起点側を左にしたいときなどに使います。'},
+ {sel:'#v-grid',at:'after',t:'1m グリッド',b:'1 m ごとの方眼を重ねて表示します（書き出しに入れるかは、書き出しの欄で選びます）。'},
+ {sel:'#v-cams',at:'after',t:'撮影位置',b:'画像を撮った位置を番号付きの点で表示します。点をタップすると、その位置の 360°画像が開きます。'},
+ {sel:'#v-zoom',at:'after',t:'表示の倍率',b:'画面上の表示の大きさです。2本指でも拡大できます。書き出す画像には影響しません。'},
+ {sel:'[data-tool="measure"]',at:'seg',t:'距離を測る・範囲を指定・傾きを補正',b:'<b>距離を測る</b>：2点をタップすると実寸を表示します。既知の寸法（目地の間隔・柱の幅など）を測って「実寸」に入れると、縮尺を補正できます。<br><b>範囲を指定</b>：必要な部分だけを囲んで、その範囲を細かく合成し直します。<br><b>傾きを補正</b>：まっすぐな線に沿って2点をタップし、図の向きを直します。'},
+ {sel:'#m-true',at:'after',t:'実寸',b:'測った2点の間の本当の長さ（m）を入れて「縮尺を補正」を押すと、図全体の縮尺を直します。'},
+ // 書き出し
+ {sel:'#o-gsd',at:'after',t:'画素寸法',b:'書き出す画像の1画素が何 mm にあたるかです。小さいほど細かくなりますが、ファイルが大きくなります。「自動」は元画像の細かさに合わせます。大きな面では画素数の上限に合わせて自動で粗くなるので、細部は「範囲を指定」で絞ってください。'},
+ {sel:'#x-grid',at:'after',t:'1m グリッドを入れる',b:'書き出す JPEG・PDF に 1 m の方眼を書き込みます。'},
+ {sel:'#x-jpg',at:'after',t:'JPEG を作成',b:'合成した図を、そのままの細かさの画像で書き出します。損傷の書き込みや CAD の下絵に使えます。'},
+ {sel:'#x-pdf',at:'after',t:'PDF を作成',b:'表題欄と縮尺を付けて、A3 または A4 の図面として書き出します。印刷や調書の添付に使います。'},
+ {sel:'#p-save',at:'after',t:'案件を上書き保存',b:'合成結果と設定を iPad の中に保存します。「保存データ」タブから開き直せます。'},
+ // 撮影計画
+ {sel:'#p-theta',at:'field',t:'使用する範囲（天頂角 θ）',b:'1枚の画像のうち、真上から何度までをオルソに使うかです。大きくすると1枚で広く写り枚数は減りますが、端の画像は粗くなります。標準は 45°。'},
+ {sel:'#p-fw',at:'field',t:'ラップ率',b:'隣り合う写真をどれだけ重ねるかです。「進行」は飛ぶ方向、「横」はコースの間。重なりが多いほど合成は安定しますが、枚数が増えます。白く平滑な面など模様の少ない面は 80/70 にしてください。'},
+ {sel:'#p-src',at:'field',t:'撮影データ',b:'静止画で撮るか、動画から切り出すかを選びます。撮影間隔の計算が変わります。'},
+ {sel:'#p-len',at:'field',t:'対象範囲',b:'撮影する床版の範囲（橋軸方向の長さと幅員）です。必要な枚数とコース数の計算に使います。'},
+ {sel:'#p-speed',at:'field',t:'飛行速度',b:'動画から切り出す場合の、飛ぶ速さです。速すぎるとブレます。'},
+ {sel:'#p-grade',at:'field',t:'床版の縦断勾配',b:'勾配があると、同じ高さで飛ぶと離隔が変わります。進むごとの高度の調整量を計算します。'},
+ {sel:'#d-h',at:'after',t:'離隔',b:'床版までの距離を変えると、撮影間隔・コース間隔・画素寸法がどう変わるかを確認できます。'},
+ {sel:'#pp-shape',at:'field',t:'断面形状',b:'橋脚の断面の形を選びます。列（コース）の位置と機首の向きの計算が変わります。'},
+ {sel:'#pp-d',at:'field',t:'直径',b:'円柱の直径（図面の値）です。'},
+ {sel:'#pp-w',at:'field',t:'幅（長手方向）',b:'柱の長い方向の外寸（図面の値）です。'},
+ {sel:'#pp-t',at:'field',t:'厚さ',b:'柱の短い方向の外寸（図面の値）です。'},
+ {sel:'#pp-h',at:'field',t:'高さ',b:'水面（地面）から梁の下までの高さです。何段撮ればよいかの計算に使います。'},
+ {sel:'#pp-D',at:'field',t:'離隔（表面から）',b:'柱の表面からカメラまでの距離です。2〜2.5 m が標準です。近いほど細かく写りますが、枚数が増えます。'},
+ // 360°画像
+ {sel:'#pano-aspect',at:'after',t:'縦横比',b:'切り出す写真の縦横比です。調書の写真欄に合わせて選びます。'},
+ {sel:'#pano-size',at:'after',t:'大きさ',b:'切り出す写真の長辺の画素数です。「画面のまま」は表示している大きさで保存します。'},
+ {sel:'#pano-stamp',at:'after',t:'位置情報を書き込む',b:'橋梁名、元の画像名、オルソ図上の位置、目安の縮尺を、写真の下に書き込みます。'},
+ {sel:'#pano-mir',at:'after',t:'左右反転',b:'見下げ図と同じ左右の向きで表示・保存します。見上げた写真と図の左右が逆になって分かりにくいときに使います。'},
+];
+function isSide(){const m=curMode(); return m==='wall'||isPier(m);}
+const helpVal=v=>typeof v==='function'?v():v;
+(function initHelp(){
+  const pop=$('#help-pop'); let cur=null;
+  const close=()=>{pop.hidden=true; if(cur)cur.setAttribute('aria-expanded','false'); cur=null;};
+  const open=(btn,h)=>{
+    if(cur===btn){close();return;} close(); cur=btn; btn.setAttribute('aria-expanded','true');
+    $('#help-t').textContent=helpVal(h.t); $('#help-b').innerHTML=helpVal(h.b); pop.hidden=false;
+    const r=btn.getBoundingClientRect(), pw=pop.offsetWidth, ph=pop.offsetHeight, vw=innerWidth, vh=innerHeight;
+    let x=Math.min(Math.max(12,r.left+r.width/2-pw/2),vw-pw-12), y=r.bottom+8; if(y+ph>vh-12)y=Math.max(12,r.top-ph-8);
+    pop.style.left=x+'px'; pop.style.top=y+'px';
+  };
+  HELP.forEach(h=>{
+    const el=document.querySelector(h.sel); if(!el)return;
+    const b=document.createElement('button'); b.type='button'; b.className='ib'; b.textContent='i';
+    b.setAttribute('aria-label',helpVal(h.t)+'の説明'); b.setAttribute('aria-expanded','false');
+    b.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();open(b,h);});
+    if(h.at==='field'){const f=el.closest('.field'); if(f&&!f.querySelector(':scope>.ib'))f.appendChild(b); else el.insertAdjacentElement('afterend',b);}
+    else if(h.at==='seg'){el.closest('.seg').insertAdjacentElement('afterend',b);}
+    else{const lab=el.closest('label'); (lab||el).insertAdjacentElement('afterend',b);}
+  });
+  pop.querySelector('.x').addEventListener('click',close);
+  document.addEventListener('pointerdown',e=>{if(!pop.hidden&&!pop.contains(e.target)&&!e.target.classList.contains('ib'))close();},true);
+  document.addEventListener('keydown',e=>{if(e.key==='Escape')close();});
+  document.querySelectorAll('[role="tab"]').forEach(t=>t.addEventListener('click',close));
+  addEventListener('scroll',e=>{if(e.target&&e.target.id==='log')return; close();},true); addEventListener('resize',close);
+})();
 
 /* オフライン対応（Service Worker） */
 (function(){
