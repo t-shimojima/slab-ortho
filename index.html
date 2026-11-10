@@ -170,6 +170,8 @@ input[type=text],input[type=date]{font:inherit;font-size:15px;width:100%;padding
 #pano-gl{position:absolute;left:0;top:0;display:block;width:100%;height:100%;touch-action:none;cursor:grab}
 #pano-frame{position:absolute;pointer-events:none;border:1px solid rgba(255,255,255,.9);box-shadow:0 0 0 9999px rgba(0,0,0,.45)}
 #pano-frame[hidden]{display:none}
+.pano .pmsg.act{pointer-events:auto;top:40%;padding:12px 16px;font-size:14px;line-height:1.6;text-align:center}
+.pano .pmsg.act button{margin-top:8px}
 .pano .pmsg{position:absolute;left:50%;top:12px;transform:translateX(-50%);background:rgba(20,24,26,.88);border:1px solid #3b464b;border-radius:8px;padding:6px 12px;font-size:13px;pointer-events:none;max-width:90%}
 .pano .pmsg[hidden]{display:none}
 #pano-hq{top:auto;bottom:10px;left:auto;right:10px;transform:none}
@@ -225,7 +227,7 @@ input[type=text],input[type=date]{font:inherit;font-size:15px;width:100%;padding
 <header class="top">
   <div class="brand">
     <h1>床版下面オルソ</h1>
-    <p>DJI Avata 360 の 360° 静止画から、床版下面の平面オルソ画像を端末内で合成します（v1.13）</p>
+    <p>DJI Avata 360 の 360° 静止画から、床版下面の平面オルソ画像を端末内で合成します（v1.15）</p>
     <div class="offline" id="offline"><i></i><span>オフライン対応を確認中…</span></div>
   </div>
   <nav class="tabs" role="tablist">
@@ -2796,11 +2798,24 @@ const v3={dot:(a,b)=>a[0]*b[0]+a[1]*b[1]+a[2]*b[2],
   norm:a=>{const l=Math.hypot(a[0],a[1],a[2])||1;return [a[0]/l,a[1]/l,a[2]/l]}};
 /* 正距円筒の (u,v)（0〜1、v=0 が天頂）⇔ 方向ベクトル（y が上、正面 -z） */
 const uvDir=(u,v)=>{const lon=(u-0.5)*TAU,p=v*Math.PI;return [Math.sin(p)*Math.sin(lon),Math.cos(p),-Math.sin(p)*Math.cos(lon)]};
+/* 表示の失敗時のメッセージ（「もう一度表示」ボタン付き） */
+function panoFail(msg,retry){
+  const b=$('#pano-busy'); b.hidden=false; b.classList.toggle('act',!!retry);
+  b.innerHTML=msg.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/\n/g,'<br>')+(retry?'<br><button class="btn small" id="pano-retry">もう一度表示する</button>':'');
+  if(retry)$('#pano-retry').addEventListener('click',()=>{b.classList.remove('act'); if(panoInitGL()&&PANO.jWant!=null)panoLoad(PANO.jWant,PANO.target);});
+}
 function panoInitGL(){
-  if(pgl)return true;
+  if(pgl&&!pgl.isContextLost())return true;
+  if(pgl){ // iPad のメモリー不足やアプリの切り替えで表示用の領域（WebGL）が失われた：画面（canvas）を作り直す
+    const old=$('#pano-gl'), nc=document.createElement('canvas'); nc.id='pano-gl'; old.replaceWith(nc); panoBindCanvas(nc);
+    pgl=null; PANO.ovW=0; PANO.dOn=0;
+  }
   const cv=$('#pano-gl');
   pgl=cv.getContext('webgl2',{antialias:false,alpha:false,depth:false,stencil:false,premultipliedAlpha:false});
   if(!pgl)return false;
+  cv.addEventListener('webglcontextlost',e=>{e.preventDefault(); PANO.ovW=0; PANO.dOn=0;
+    if(!$('#pano').hidden)panoFail('表示用のメモリーが不足したため、画像の表示が止まりました。\n（合成に使った画像が多い・大きいときや、ほかのアプリに切り替えたときに起きます）',true);});
+  cv.addEventListener('webglcontextrestored',()=>{pgl=null; if(!$('#pano').hidden&&PANO.jWant!=null&&panoInitGL())panoLoad(PANO.jWant,PANO.target);});
   const g=pgl, sh=(t,s)=>{const o=g.createShader(t);g.shaderSource(o,s);g.compileShader(o);if(!g.getShaderParameter(o,g.COMPILE_STATUS))throw new Error(g.getShaderInfoLog(o));return o};
   const p=g.createProgram(); g.attachShader(p,sh(g.VERTEX_SHADER,PANO_VS)); g.attachShader(p,sh(g.FRAGMENT_SHADER,PANO_FS));
   g.bindAttribLocation(p,0,'aPos'); g.linkProgram(p); if(!g.getProgramParameter(p,g.LINK_STATUS))throw new Error(g.getProgramInfoLog(p));
@@ -2903,17 +2918,39 @@ async function panoLoad(j,P){
   const tok=++PANO.tok, c=S.sol.cams[j]; PANO.dOn=0; PANO.dtTok++;
   $('#pano-busy').textContent='画像を読み込んでいます…'; $('#pano-busy').hidden=false; panoTitle(j,null); await sleep();
   if(PANO.src){PANO.src.close&&PANO.src.close();PANO.src=null;}
-  let src; try{src=await S.getSrc(c.i);}catch(e){$('#pano-busy').textContent='画像を開けませんでした：'+(e.message||e);return;}
+  PANO.jWant=j; PANO.target=P;
+  let src; try{src=await S.getSrc(c.i);}catch(e){panoFail('元の 360°画像を読み込めませんでした：'+(e.message||e)+'\n（画像ファイルが移動・削除された、または iPad の空き容量・メモリーが不足している可能性があります。「360° 画像」で選び直してください）',true);return;}
   if(tok!==PANO.tok){src.close&&src.close();return;}
-  PANO.src=src; PANO.j=j; PANO.target=P;
-  const g=pgl, ow=Math.min(PG.max>=16384?8192:4096,PG.max,Math.max(1024,src.W)), oh=Math.round(ow/2);
-  g.activeTexture(g.TEXTURE0); g.bindTexture(g.TEXTURE_2D,PG.ov);
-  if(PANO.ovW!==ow){g.texImage2D(g.TEXTURE_2D,0,g.RGBA,ow,oh,0,g.RGBA,g.UNSIGNED_BYTE,null);}
-  const cv=document.createElement('canvas'), ctx=cv.getContext('2d'), rows=Math.max(1,Math.floor(8e6/ow));
-  for(let y=0;y<oh;y+=rows){const h=Math.min(rows,oh-y); cv.width=ow; cv.height=h; ctx.imageSmoothingEnabled=true; ctx.imageSmoothingQuality='high';
-    ctx.fillStyle='#000'; ctx.fillRect(0,0,ow,h); ctx.drawImage(src.el,0,y*src.H/oh,src.W,h*src.H/oh,0,0,ow,h);
-    g.texSubImage2D(g.TEXTURE_2D,0,0,y,g.RGBA,g.UNSIGNED_BYTE,cv); if(tok!==PANO.tok)return;}
-  cv.width=cv.height=1; g.generateMipmap(g.TEXTURE_2D); PANO.ovW=ow; PANO.ovH=oh;
+  if(!pgl||pgl.isContextLost()){ if(!panoInitGL()){src.close&&src.close();panoFail('360°ビューアーを起動できませんでした（WebGL）',true);return;} }
+  PANO.src=src; PANO.j=j;
+  // 全体表示用の画像は 4096×2048 まで（拡大したときは元画像から高精細に作り直すため、これで足りる）。メモリーが足りなければ小さくして再挑戦
+  const g=pgl; let ow=Math.min(4096,PG.max,Math.max(1024,src.W)), ok=false;
+  for(;ow>=1024&&!ok;ow=ow>>1){
+    const oh=ow>>1; g.activeTexture(g.TEXTURE0); g.bindTexture(g.TEXTURE_2D,PG.ov); while(g.getError()){}
+    g.texImage2D(g.TEXTURE_2D,0,g.RGBA,ow,oh,0,g.RGBA,g.UNSIGNED_BYTE,null);
+    if(g.getError()||g.isContextLost())continue;
+    // 元画像を縮小して画素配列にし、配列として WebGL に渡す（iPad では、巨大な画像を GPU 側のキャンバス経由で渡すと
+    // 失敗しても黒いまま終わることがあるため、CPU 側のキャンバスで読み出す）。全面が黒なら別の読み込み方で作り直す
+    let lum=0, nS=0;
+    const put=(cvx,ctx,y,h)=>{const d=ctx.getImageData(0,0,ow,h).data; g.texSubImage2D(g.TEXTURE_2D,0,0,y,ow,h,g.RGBA,g.UNSIGNED_BYTE,new Uint8Array(d.buffer,d.byteOffset,d.byteLength));
+      for(let q=0;q<d.length;q+=4*997){lum+=d[q]+d[q+1]+d[q+2];nS++;}};
+    const drawFrom=async(el,EW,EH)=>{const cv=document.createElement('canvas'), ctx=cv.getContext('2d',{willReadFrequently:true}), rows=Math.max(1,Math.floor(4e6/ow));
+      for(let y=0;y<oh;y+=rows){const h=Math.min(rows,oh-y); cv.width=ow; cv.height=h; ctx.imageSmoothingEnabled=true; ctx.imageSmoothingQuality='high';
+        ctx.fillStyle='#000'; ctx.fillRect(0,0,ow,h); ctx.drawImage(el,0,y*EH/oh,EW,h*EH/oh,0,0,ow,h); put(cv,ctx,y,h);
+        if(tok!==PANO.tok){cv.width=cv.height=1;return false;} if(y%(rows*4)===0)await sleep();}
+      cv.width=cv.height=1; return true;};
+    // ① 読み込み時に縮小（メモリーが少なく速い）② 読み込み済みの元画像から縮小
+    const file=panoFile(c.i); let done=false;
+    if(file){try{const bmp=await createImageBitmap(file,{resizeWidth:ow,resizeHeight:oh,resizeQuality:'high'});
+      if(bmp.width===ow){lum=0;nS=0; if(!(await drawFrom(bmp,ow,oh))){bmp.close();return;} done=lum/Math.max(1,nS)>3;} bmp.close&&bmp.close();}catch(e){}}
+    if(!done){lum=0;nS=0; if(!(await drawFrom(src.el,src.W,src.H)))return; done=lum/Math.max(1,nS)>3;}
+    if(!done){PANO.black=true; continue;}
+    g.generateMipmap(g.TEXTURE_2D);
+    if(g.getError()||g.isContextLost())continue;
+    ok=true; PANO.ovW=ow; PANO.ovH=oh;
+  }
+  if(!ok&&PANO.black){PANO.black=false; panoFail('360°画像を表示用に変換できませんでした（画像が真っ黒になります）。\nほかのアプリを閉じてから「もう一度表示する」を押してください。改善しないときは、使った iPad の機種と画像の大きさ（120MP／30MP）を教えてください。',true);return;}
+  if(!ok){panoFail('表示用のメモリーが足りず、画像を表示できませんでした。\nほかのアプリを閉じてから「もう一度表示する」を押してください。改善しないときは、合成に使う画像の枚数を減らしてください。',true);return;}
   panoAim(j,P); $('#pano-busy').hidden=true;
   const f=panoFile(c.i); let t=(S.ctimes&&S.files&&S.files.length&&S.ctimes[c.i])||null;
   if(t==null&&f){try{t=await readShotTime(f);}catch(e){}}
@@ -2997,8 +3034,8 @@ function panoTurn(dx,dy){
   panoReq();
 }
 function panoSetFov(f){PANO.fov=Math.max(8,Math.min(110,f)); $('#pano-fov').textContent=`画角 ${Math.round(PANO.fov)}°`; panoReq();}
-(function(){
-  const cv=$('#pano-gl'), pts=new Map(); let pd=0,pf=0;
+function panoBindCanvas(cv){
+  const pts=new Map(); let pd=0,pf=0;
   cv.addEventListener('pointerdown',e=>{try{cv.setPointerCapture(e.pointerId)}catch(_){} pts.set(e.pointerId,{x:e.clientX,y:e.clientY});
     if(pts.size===2){const a=[...pts.values()];pd=Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y);pf=PANO.fov;}});
   cv.addEventListener('pointermove',e=>{const p=pts.get(e.pointerId);if(!p)return;const dx=e.clientX-p.x,dy=e.clientY-p.y;p.x=e.clientX;p.y=e.clientY;
@@ -3007,8 +3044,9 @@ function panoSetFov(f){PANO.fov=Math.max(8,Math.min(110,f)); $('#pano-fov').text
   const lift=e=>{pts.delete(e.pointerId);if(pts.size<2)pd=0;};
   cv.addEventListener('pointerup',lift); cv.addEventListener('pointercancel',lift);
   cv.addEventListener('wheel',e=>{e.preventDefault();panoSetFov(PANO.fov*(e.deltaY>0?1.08:1/1.08));},{passive:false});
-  ['gesturestart','gesturechange'].forEach(t=>$('#pano').addEventListener(t,e=>e.preventDefault()));
-})();
+}
+panoBindCanvas($('#pano-gl'));
+['gesturestart','gesturechange'].forEach(t=>$('#pano').addEventListener(t,e=>e.preventDefault()));
 
 /* ---- 切り出し枠と出力サイズ ---- */
 function panoCapGeom(){
@@ -3094,10 +3132,11 @@ window.addEventListener('orientationchange',()=>setTimeout(panoFit,300));
 /* iPad の「戻る」操作（ブラウザの戻る・スワイプ）でも閉じられるよう履歴を1つ積む */
 window.addEventListener('popstate',()=>{if(!$('#pano').hidden)panoClose(true);});
 async function panoOpen(j,P){
-  if(busy||!S.sol||!S.getSrc||!S.img)return;
-  $('#pano').hidden=false; document.body.style.overflow='hidden'; panoFit();
+  if(busy||!S.sol||!S.img)return;
+  $('#pano').hidden=false; document.body.style.overflow='hidden'; panoFit(); $('#pano-busy').classList.remove('act');
   try{if(!(history.state&&history.state.pano))history.pushState({pano:1},'');}catch(e){}
-  try{if(!panoInitGL())throw new Error('この端末では WebGL2 が使えません');}catch(e){$('#pano-busy').hidden=false;$('#pano-busy').textContent='360°ビューアーを起動できませんでした：'+(e.message||e);return;}
+  if(!S.getSrc){panoFail('この案件には元の 360°画像が読み込まれていないため、表示できません。\n「360° 画像」で同じ画像を選んで合成し直すと表示できます。');return;}
+  try{if(!panoInitGL())throw new Error('この端末では WebGL2 が使えません');}catch(e){panoFail('360°ビューアーを起動できませんでした：'+(e.message||e),true);return;}
   PANO.trackball=!(S.o.mode==='wall'||isPier(S.o.mode)); PANO.fov=70; PANO.mir=$('#pano-mir').checked;
   await panoLoad(j,P);
 }
