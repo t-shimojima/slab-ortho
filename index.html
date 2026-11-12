@@ -227,7 +227,7 @@ input[type=text],input[type=date]{font:inherit;font-size:15px;width:100%;padding
 <header class="top">
   <div class="brand">
     <h1>床版下面オルソ</h1>
-    <p>DJI Avata 360 の 360° 静止画から、床版下面の平面オルソ画像を端末内で合成します（v1.15）</p>
+    <p>DJI Avata 360 の 360° 静止画から、床版下面の平面オルソ画像を端末内で合成します（v1.18）</p>
     <div class="offline" id="offline"><i></i><span>オフライン対応を確認中…</span></div>
   </div>
   <nav class="tabs" role="tablist">
@@ -1366,6 +1366,10 @@ async function renderWall(sol,o,getSrc,gains,view,crop,gsd,names){
   }
   return {...F,rgb,cov};
 }
+/* 絶対高度（GPS と気圧の融合値）。電池交換で離陸地点が変わると相対高度の基準がずれるため、その差を求めるのに使う */
+async function readAbsAlt(file){
+  try{const t=await file.slice(0,400000).text();const m=t.match(/AbsoluteAltitude="([-+\d.]+)"/);return m?parseFloat(m[1]):null;}catch(e){return null}
+}
 async function readAlt(file){
   try{const t=await file.slice(0,400000).text();const m=t.match(/RelativeAltitude="([-+\d.]+)"/);return m?parseFloat(m[1]):null;}catch(e){return null}
 }
@@ -1524,7 +1528,9 @@ async function renderPier(face,o,getSrc,crop,gsd,names){
   const F=applyView(frameFor(sol,o,cr,gsd,30e6),{plan:false,rot:false});
   const {W,H,G}=F;
   log(`合成 ${W}×${H} px（${fmt(W*G,1)}×${fmt(H*G,1)} m、${fmt(G*1000,2)} mm/px）`);
-  const seam=3*D2R, pref=15*D2R;
+  // 円柱：水平線付近（各画像の正面）は最も正対して写り、上下の画像のずれも最小になるため除外しない。
+  // 除外すると上下 2m 離れた画像の斜めの写りで埋めることになり、横目地の段差と白っぽい帯が出る（明石大橋 P 円柱で確認）
+  const cylF=face.type==='cyl', seam=(cylF?0.05:3)*D2R, pref=(cylF?0.1:15)*D2R;
   // 実寸（m）の座標で、画像 k のカメラから点 (Wx,Wy) を見た方向と入射角を求める。
   // カメラの位置は「正面の点」(tx,ty)、そこから離隔 Dt だけ手前にある
   const inv=cams.map(c=>({a:c.a/c.s,b:c.b/c.s,tx:c.tx,ty:c.ty,Dt:(face.Dk?face.Dk[c.i]:face.Dt[c.i])*c.s}));  // 位置合わせの縮尺 s と整合する実効的な離隔
@@ -1694,6 +1700,100 @@ function rectEdgeDist(band,ha){
   const e=[];[1.5,2,2.5,3,3.5,4,5].forEach(D=>{const r=rectEdgeCenter(band,D,ha);if(r)e.push({D:D*2*ha/r.w,sc:r.sc});});
   if(!e.length)return null; e.sort((p,q)=>p.sc-q.sc); return e[0].D;
 }
+/* 正面（柱の中心）の真下方向で、柱と水面の境目（明るい柱 → 暗い水面に急に変わる所）の緯度（ラジアン）を返す。見つからなければ null */
+function waterLineLat(band){
+  const out=[0,0,0], st=0.1, lats=[], L=[], G=[];
+  for(let la=-10;la>=-74.5;la-=st){let l=0,g=0,c=0;for(let lo=-1.5;lo<=1.5;lo+=0.5){sampleWall(band,lo*D2R,la*D2R,out);l+=(out[0]+out[1]+out[2])/3;g+=out[1]-out[0];c++;}
+    lats.push(la);L.push(l/c);G.push(g/c);}
+  const k=Math.round(3/st), k2=Math.round(6/st);
+  // 柱の根元は明るく（水の跡で白っぽい）、その下の水面は暗い。下 6° まで暗いままのとき水面とみなす（柱の上の影の線と区別する）
+  for(let y=k;y<L.length-k;y++){let up=0,dn=0,dn2=0;const m2=Math.min(k2,L.length-y);for(let q=0;q<k;q++){up+=L[y-k+q];dn+=L[y+q];}for(let q=0;q<m2;q++)dn2+=L[y+q];up/=k;dn/=k;dn2/=m2;
+    if(up>110&&dn<0.45*up&&dn<100&&dn2<110){let best=y,bd=-1e9;for(let q=y-k;q<y+k-4;q++){const d=L[q]-L[q+4];if(d>bd){bd=d;best=q+2;}}return lats[best]*D2R;}}
+  return null;
+}
+/* 飛行ごとの水面の高さ（相対高度の基準での値）を、各コースの下側の画像に写る水面の境目から求める。
+   コース内で「高度 = 水面の高さ + 離隔 × tan(境目の俯角)」を当てはめる（離隔は未知でよい） */
+async function waterLevels(n,seg,courses,alts,phiOf,getSrc){
+  const wsCourse=[], single=[];
+  for(const c of courses){
+    const low=c.filter(k=>alts[k]!=null).sort((a,b)=>alts[a]-alts[b]).slice(0,4), pts=[];
+    for(const k of low){const src=await getSrc(k); const band=getWallBand(src,phiOf(k),1024); src.close&&src.close();
+      const la=waterLineLat(band); if(la!=null&&la<-12*D2R)pts.push({k,t:Math.tan(-la),z:alts[k]});}
+    if(pts.length===1){single.push({s:seg[c[0]],p:pts[0]});continue;} if(pts.length<2)continue;
+    const tm=pts.reduce((a,p)=>a+p.t,0)/pts.length, zm=pts.reduce((a,p)=>a+p.z,0)/pts.length;
+    let sxy=0,sxx=0;pts.forEach(p=>{sxy+=(p.t-tm)*(p.z-zm);sxx+=(p.t-tm)**2});
+    if(sxx<0.3)continue; const D=sxy/sxx; if(!(D>0.5&&D<6))continue;
+    const w=pts.map(p=>p.z-D*p.t).sort((a,b)=>a-b)[pts.length>>1];
+    wsCourse.push({s:seg[c[0]],w,D});
+  }
+  // 離隔が他のコースと大きく違うコースは、境目の取り違えとみなして使わない
+  const Ds=wsCourse.map(e=>e.D).sort((a,b)=>a-b), Dm=Ds.length?Ds[Ds.length>>1]:0;
+  const good=wsCourse.filter(e=>e.D>0.6*Dm&&e.D<1.6*Dm);
+  // 境目が1枚にしか写っていないコースは、ほかのコースの離隔（中央値）で水面の高さを求める
+  if(Dm>0)single.forEach(e=>good.push({s:e.s,w:e.p.z-Dm*e.p.t,D:Dm}));
+  const out=[];for(let s=0;s<=seg[n-1];s++){const v=good.filter(e=>e.s===s).map(e=>e.w).sort((a,b)=>a-b);out.push(v.length?v[v.length>>1]:null);}
+  return {w:out,nc:good.length};
+}
+/* 円柱：隣り合うコースの境目で、横方向に続く型枠目地（暗い横線）の上下位置を照合し、コースごとに上下のずれを直す。
+   高度計の誤差（数cm〜数十cm）で横目地が段違いになるのを防ぐ。コースの中の画像どうしの位置関係は変えない */
+async function alignJointsRound(sol,R,Dk,phis,courses,courseOf,getSrc){
+  const camOf=new Map(sol.cams.map(c=>[c.i,c]));
+  const cs=courses.map((c,g)=>({g,cams:c.map(k=>camOf.get(k)).filter(Boolean)})).filter(e=>e.cams.length>=2);
+  if(cs.length<2)return;
+  cs.forEach(e=>{e.x=e.cams.reduce((a,c)=>a+c.tx,0)/e.cams.length;}); cs.sort((p,q)=>p.x-q.x);
+  const circ=2*Math.PI*R, span=cs[cs.length-1].x-cs[0].x, ring=span>0.6*circ;
+  const st=0.004, out=[0,0,0], seam=4*D2R;
+  const view=c=>({a:c.a/c.s,b:c.b/c.s,tx:c.tx,ty:c.ty,Dt:Dk[c.i]*c.s});
+  // コース e の、周方向 xs（m）付近の細い帯を、高さ y0〜y1 について明るさの縦の並びにする（高さごとに一番近い画像を使う）
+  const bands=new Map();
+  const getBand=async k=>{if(!bands.has(k)){const src=await getSrc(k);bands.set(k,getWallBand(src,phis[k],2048));src.close&&src.close();}return bands.get(k);};
+  const profile=async(e,xs,y0,y1)=>{const nY=Math.round((y1-y0)/st), P=new Float32Array(nY).fill(NaN);
+    const vs=e.cams.map(c=>({c,v:view(c)}));
+    for(const {c,v} of vs){const b=await getBand(c.i);
+      for(let q=0;q<nY;q++){const Wy=y0+(q+0.5)*st; const near=vs.reduce((m,o)=>Math.abs(o.v.ty-Wy)<Math.abs(m.v.ty-Wy)?o:m); if(near.c!==c)continue;
+        let sum=0,cnt=0; for(let dxs=-0.12;dxs<=0.12001;dxs+=0.03){const dx=xs+dxs-v.tx,dy=Wy-v.ty,X=v.a*dx+v.b*dy,Y=v.a*dy-v.b*dx,t=X/R; if(Math.abs(t)>1.2)continue;
+          const xo=R*Math.sin(t),hd=v.Dt+R*(1-Math.cos(t)),lat=Math.atan2(Y,Math.hypot(hd,xo)); if(Math.abs(lat)<seam||Math.abs(lat)>70*D2R)continue;
+          sampleWall(b,Math.atan2(xo,hd),lat,out); sum+=out[0]+out[1]+out[2]; cnt++;}
+        if(cnt>=4)P[q]=sum/cnt/3;}}
+    // 高域だけを残す（幅 0.12 m の移動平均を引く）
+    const r=Math.round(0.06/st), H=new Float32Array(nY).fill(NaN);
+    for(let q=0;q<nY;q++){if(isNaN(P[q]))continue;let s2=0,n2=0;for(let z=q-r;z<=q+r;z++)if(z>=0&&z<nY&&!isNaN(P[z])){s2+=P[z];n2++;} if(n2>r)H[q]=Math.max(-30,Math.min(30,P[q]-s2/n2));}
+    return H;};
+  const meas=[];
+  for(let q=0;q<cs.length;q++){
+    const A=cs[q], last=q===cs.length-1; if(last&&!ring)break;
+    const B=last?cs[0]:cs[q+1], xa=A.x, xb=last?B.x+circ:B.x, xm=(xa+xb)/2;
+    if(Math.abs(xb-xa)>0.45*circ)continue;
+    const tys=[...A.cams,...B.cams].map(c=>c.ty), y0=Math.min(...tys)-1.2, y1=Math.max(...tys)+1.2;
+    log(`  横目地の照合：C${A.g+1} と C${B.g+1}`); await sleep();
+    const PA=await profile(A,xm,y0,y1);
+    const PB=await profile(B,last?xm-circ:xm,y0,y1);
+    // 片方のコースの読み込みを済ませたら、もう使わない画像は解放する
+    [...bands.keys()].forEach(k=>{if(courseOf[k]!==B.g)bands.delete(k);});
+    // 画像ごと（その画像の高さ ±0.9 m の範囲）に、隣のコースとの上下のずれを求める（コースの中でも縮尺の誤差でずれ方が変わるため）
+    const M=Math.round(0.35/st);
+    for(const c of A.cams){const i0=Math.max(0,Math.round((c.ty-0.9-y0)/st)), i1=Math.min(PA.length,Math.round((c.ty+0.9-y0)/st));
+      const wn=sh=>{let ab=0,aa=0,b2=0,n=0;for(let i=i0;i<i1;i++){const j=i+sh;if(j<0||j>=PB.length)continue;const a=PA[i],b=PB[j];if(isNaN(a)||isNaN(b))continue;ab+=a*b;aa+=a*a;b2+=b*b;n++;}return n<150||aa<=0||b2<=0?-1:ab/Math.sqrt(aa*b2);};
+      let bb=-1,bsh=0,sec=-1; const sc=[]; for(let sh=-M;sh<=M;sh++){const v=wn(sh);sc.push(v);if(v>bb){bb=v;bsh=sh;}}
+      sc.forEach((v,q)=>{if(Math.abs(q-M-bsh)>=Math.round(0.08/st)&&v>sec)sec=v;});
+      if(bb<0.35||bb-sec<0.1)continue;
+      const Wy=c.ty, cb=B.cams.reduce((m,o)=>Math.abs(o.ty-Wy)<Math.abs(m.ty-Wy)?o:m);
+      meas.push({a:c,b:cb,d:-bsh*st,w:bb-sec});}
+  }
+  bands.clear();
+  if(!meas.length){log('  横目地で照合できる境目がありませんでした');return;}
+  // 画像ごとの上下の補正量 u：u_b − u_a = d（照合結果）、同じコースの上下に隣り合う画像はなるべく同じ、全体の平均は 0（水面の基準を保つ）
+  const all=cs.flatMap(e=>e.cams), id=new Map(all.map((c,q)=>[c,q])), u=new Float64Array(all.length), nb=all.map(()=>[]);
+  cs.forEach(e=>{const s2=e.cams.slice().sort((p,q)=>p.ty-q.ty);for(let q=1;q<s2.length;q++){nb[id.get(s2[q])].push(id.get(s2[q-1]));nb[id.get(s2[q-1])].push(id.get(s2[q]));}});
+  const ms=meas.map(m=>({a:id.get(m.a),b:id.get(m.b),d:m.d,w:3*m.w}));
+  for(let it=0;it<500;it++)for(let q=0;q<all.length;q++){let num=0,den=0.01;
+    nb[q].forEach(o=>{num+=0.3*u[o];den+=0.3;});
+    ms.forEach(m=>{if(m.b===q){num+=m.w*(u[m.a]+m.d);den+=m.w;}else if(m.a===q){num+=m.w*(u[m.b]-m.d);den+=m.w;}});
+    u[q]=num/den;}
+  const mu=u.reduce((a,b)=>a+b,0)/u.length; let mx=0;
+  all.forEach((c,q)=>{const sh=u[q]-mu; c.ty+=sh; mx=Math.max(mx,Math.abs(sh));});
+  log(`  横目地に合わせて画像ごとの上下位置を補正しました（${meas.length} か所で照合、最大 ${fmt(mx*100,0)} cm）`);
+}
 /* 全体の流れ：コース分け → 面ごとに位置合わせ → 高度計で縮尺・離隔を補正 */
 async function registerPier(n,names,getSrc,yaws,alts){
   const o=readOpts(), t0=performance.now(), round=o.mode==='pier-round';
@@ -1704,6 +1804,14 @@ async function registerPier(n,names,getSrc,yaws,alts){
   const seg=new Array(n).fill(0); for(let k=1;k<n;k++)seg[k]=seg[k-1]+((tsec[k]!=null&&tsec[k-1]!=null&&tsec[k]-tsec[k-1]>90)?1:0);
   if(seg[n-1]>0)log(`撮影が ${seg[n-1]+1} 回に分かれています（電池交換など）。高度の基準が変わるため、別々に扱います。`);
   const sameSeg=(i,j)=>seg[i]===seg[j];
+  // 別の飛行どうしの高さの差：各飛行の「絶対高度 − 相対高度」（離陸地点の高さ）の差で、相対高度を最初の飛行の基準にそろえる。
+  // 絶対高度には飛行ごとに 1m 程度の誤差があるため、別の飛行をまたぐ組み合わせは広めに探す
+  const absA=(S.absAlts&&S.absAlts.length===n)?S.absAlts:null; let altX=null;
+  if(seg[n-1]>0&&absA){const off=[];for(let s=0;s<=seg[n-1];s++){const d=[];for(let k=0;k<n;k++)if(seg[k]===s&&absA[k]!=null&&alts[k]!=null)d.push(absA[k]-alts[k]);
+      d.sort((p,q)=>p-q); off.push(d.length?d[d.length>>1]:null);}
+    if(off.every(v=>v!=null)){altX=alts.map((a,k)=>a==null?null:a+off[seg[k]]-off[0]);
+      log(`飛行ごとの高さの基準の差（絶対高度から推定）：${off.map((v,s)=>`${s+1}回目 ${s?(v-off[0]>=0?'+':'')+fmt(v-off[0],2)+' m':'基準'}`).join('、')}。別の飛行の画像どうしも、この差を見込んでつなぎます。`);}}
+  const crossDy=(i,j)=>altX&&altX[i]!=null&&altX[j]!=null?altX[i]-altX[j]:null;
   // 機首方位（コース・面の判定、柱の周りの位置）と、360°画像の向き（画像どうしの回転）を分けて扱う
   const noses=(S.noses&&S.noses.length===n&&S.noses.every(v=>v!=null))?S.noses:yaws;
   const dNY=noses.map((v,k)=>angDiff(v,yaws[k])), mNY=dNY.slice().sort((a,b)=>a-b)[n>>1];
@@ -1715,6 +1823,14 @@ async function registerPier(n,names,getSrc,yaws,alts){
   const courses=groupCourses(noses,alts), courseOf=new Array(n);
   courses.forEach((c,g)=>c.forEach(k=>courseOf[k]=g));
   log(`コース：${courses.length} 本（${courses.map((c,g)=>`C${g+1}=${c.length}枚`).join('、')}）`);
+  // 別の飛行の高さの基準は、写っている水面（どこでも同じ高さ）の境目から求めるのを優先する。絶対高度は飛行ごとに数 m ずれることがある
+  if(seg[n-1]>0){
+    log('水面の境目から、飛行ごとの高さの基準をそろえています…');
+    const wl=await waterLevels(n,seg,courses,alts,k=>angDiff(noses[k],panoW[k])*D2R,getSrc);
+    if(wl.w.every(v=>v!=null)){const w0=wl.w[0]; altX=alts.map((a,k)=>a==null?null:a-(wl.w[seg[k]]-w0));
+      log(`飛行ごとの高さの基準の差（水面から推定、${wl.nc} コース）：${wl.w.map((v,s)=>`${s+1}回目 ${s?((w0-v)>=0?'+':'')+fmt(w0-v,2)+' m':'基準'}`).join('、')}。水面が水平になるようにつなぎます。`);}
+    else log('水面の境目が見つからない飛行があるため、絶対高度の差でつなぎます（上下にずれることがあります）。');
+  }
   const D0=o.h, faces=[];
   if(round){
     const R=o.pd/2; if(!(R>0.2))throw new Error('柱の直径を入力してください。');
@@ -1726,7 +1842,7 @@ async function registerPier(n,names,getSrc,yaws,alts){
     if(locked)log('注意：360°画像の向きが機首に追従していないため、各画像の機首の方向を柱の中心として扱います。');
     let loose=true; // 離隔が未確定の間は縮尺の誤差を見込んで広めに探す
     const pred=(i,j)=>{if(alts[i]==null||alts[j]==null)return null;const dx=R*angDiff(noses[j],noses[i])*D2R, dy=alts[i]-alts[j];
-      if(!sameSeg(i,j))return {dx,dy:0,wx:0.5+0.8*Math.abs(dx),wy:4};
+      if(!sameSeg(i,j)){const cd=crossDy(i,j); return cd==null?{dx,dy:0,wx:0.5+0.8*Math.abs(dx),wy:4}:{dx,dy:cd,wx:0.5+0.8*Math.abs(dx),wy:1.5+0.8*Math.abs(cd)};}
       // 離隔が未確定の間も、遠くの背景（ずれが小さい）を拾わないよう、高さの差の 0.45〜2 倍の範囲だけを探す
       return loose?{dx,dy:1.25*dy,wx:0.5+0.8*Math.abs(dx),wy:0.15+0.8*Math.abs(dy)}:{dx,dy,wx:0.5+0.35*Math.abs(dx),wy:0.4+0.25*Math.abs(dy)};};
     // 1) コースごとに（上下の画像だけで）位置合わせし、高度計からそのコースの離隔を求める
@@ -1743,11 +1859,12 @@ async function registerPier(n,names,getSrc,yaws,alts){
     log(`離隔（コースごとに推定）：${courses.map((c,g)=>`C${g+1} ${Dc[g]!=null?fmt(Dc[g],2)+'m':'—'}`).join('、')}`);
     loose=false;
     // 2) 推定した離隔で全体を位置合わせし、全体の縮尺をもう一度高度計で合わせる
-    const reg=await pierRegister([...Array(n).keys()],names,getSrc,phis,Dk,shape,pairOK,'全体：',pred,(i,j)=>alts[i]==null||alts[j]==null||!sameSeg(i,j)?null:{dx:R*angDiff(noses[j],noses[i])*D2R,dy:alts[i]-alts[j]});
+    const reg=await pierRegister([...Array(n).keys()],names,getSrc,phis,Dk,shape,pairOK,'全体：',pred,(i,j)=>{if(alts[i]==null||alts[j]==null)return null; const dy=sameSeg(i,j)?alts[i]-alts[j]:crossDy(i,j); return dy==null?null:{dx:R*angDiff(noses[j],noses[i])*D2R,dy};});
     if(!reg) throw new Error('画像同士の位置合わせができませんでした。コースの間隔（30°以内）を確認してください。');
     const cal=pierAltCalib(reg.sol,alts,courseOf,Dk);
     const Dt=Dk.slice(); if(cal){cal.Dt.forEach((v,g)=>courses[g].forEach(k=>Dt[k]=v));}
     if(reg.sol.dropped.length) log(`つながらなかった画像：${reg.sol.dropped.map(i=>names[i]).join(', ')}`);
+    await alignJointsRound(reg.sol,R,Dk,phis,courses,courseOf,getSrc);
     const sol=reg.sol, circ=2*Math.PI*R, txs=sol.cams.map(c=>c.tx), mn=Math.min(...txs), mx=Math.max(...txs);
     const c1=sol.cams.filter(c=>courseOf[c.i]===0), x1=c1.length?c1.reduce((a,c)=>a+c.tx,0)/c1.length:mn;
     let xr=null; if(mx-mn>0.5*circ){const gap=Math.max(0,circ-(mx-mn));xr=[mn-gap/2,mn-gap/2+circ];}
@@ -1783,7 +1900,8 @@ async function registerPier(n,names,getSrc,yaws,alts){
       const edgeDist=async ks=>{const ds=[];for(const k of ks.filter((_,q)=>q%Math.max(1,Math.floor(ks.length/6))===0)){const src=await getSrc(k);const band=getWallBand(src,phis[k],1024);src.close&&src.close();
           const d=rectEdgeDist(band,ha); if(d&&d>0.8&&d<8)ds.push(d);} if(ds.length<2)return null; ds.sort((p,q)=>p-q); return ds[ds.length>>1];};
       // 離隔が未確定の間は、高さの差の 0.45〜2 倍の範囲だけを探す（遠くの背景・桁はずれが小さく、取り違えの原因になる）
-      const predF=(i,j)=>{if(alts[i]==null||alts[j]==null||!sameSeg(i,j))return null; const dz=alts[i]-alts[j], wx=type==='tip'?0.6:2*ha+1.0;
+      const predF=(i,j)=>{if(alts[i]==null||alts[j]==null)return null; const same=sameSeg(i,j), dz=same?alts[i]-alts[j]:crossDy(i,j), wx=type==='tip'?0.6:2*ha+1.0;
+        if(dz==null)return null; if(!same)return {dx:0,dy:dz,wx,wy:1.5+0.8*Math.abs(dz)};  // 別の飛行：絶対高度の誤差を見込んで広めに探す
         return Dk[i]===D0?{dx:0,dy:1.25*dz,wx,wy:0.15+0.8*Math.abs(dz)}:{dx:0,dy:dz,wx,wy:0.4+0.25*Math.abs(dz)};};
       const shp=()=>type==='tip'?{type:'cyl',R:r}:{type:'plane'};
       // 1) 列（コース）ごとに離隔を推定してから、2) その離隔で面全体を位置合わせする
@@ -2461,12 +2579,12 @@ $('#o-run').addEventListener('click',()=>task(async()=>{
   { const d=yaws.map((y,k)=>y!=null&&noses[k]!=null?angDiff(noses[k],y):null).filter(v=>v!=null);
     if(d.length>1){const m=d.slice().sort((a,b)=>a-b)[d.length>>1], sp=Math.max(...d.map(v=>Math.abs(angDiff(v,m))));
       if(sp>5)log(`注意：360°画像の向きが機首の向きに追従していません（機首との差 ${fmt(Math.min(...d),0)}〜${fmt(Math.max(...d),0)}°）。画像の向きの記録値で計算します。`);}}
-  const alts=await Promise.all(files.map(readAlt));
+  const alts=await Promise.all(files.map(readAlt)); S.absAlts=await Promise.all(files.map(readAbsAlt));
   if(alts&&alts.some(v=>v!=null)) log(`機体の高度：${alts.map(v=>v==null?'—':fmt(v,1)+' m').join(', ')}`);
   await runPipeline(files.length,files.map(f=>f.name),k=>openFile(files[k]),yaws,null,alts);
 }));
 $('#o-sample').addEventListener('click',()=>task(async()=>{
-  logEl.textContent=''; S.files=[]; S.ctimes=null; S.blobs=null; S.pick=null; S.noses=null; $('#o-files').value=''; S.mode='sample'; S.projectId=null;
+  logEl.textContent=''; S.files=[]; S.ctimes=null; S.blobs=null; S.pick=null; S.noses=null; S.absAlts=null; $('#o-files').value=''; S.mode='sample'; S.projectId=null;
   $('#o-mode').value='slab'; modeUI();  // サンプルは床版の模擬データ
   log('サンプル：12 m × 7.5 m の模擬床版を h = 3.0 m から 2コース×4枚 撮影した 360° 画像を生成します');
   $('#o-h').value='3.0'; if(!$('#i-bridge').value){setInfo({bridge:'サンプル橋',span:'第1径間',date:new Date().toISOString().slice(0,10),origin:'left'});}
