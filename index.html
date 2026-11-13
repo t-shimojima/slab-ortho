@@ -220,6 +220,28 @@ input[type=text],input[type=date]{font:inherit;font-size:15px;width:100%;padding
 #load-ov p{margin:4px 0;font-size:13px;color:var(--muted);line-height:1.6}
 #load-ov .num{font-size:13px;color:var(--ink)}
 @media (prefers-reduced-motion:reduce){.spin,#load-ov .bar.ind i{animation:none}}
+/* ---- 変状スケッチ ---- */
+.sk-bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:8px}
+.sk-kinds{display:flex;flex-wrap:wrap;gap:6px}
+.skk{font:inherit;font-size:13px;display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--surface2);color:var(--ink);padding:4px 10px 4px 6px;border-radius:8px;min-height:40px;cursor:pointer}
+.skk[aria-pressed="true"]{background:var(--surface);border-color:var(--accent);box-shadow:inset 0 0 0 2px var(--accent);font-weight:700}
+.skk svg,#sk-list svg{background:#fff;border-radius:3px;flex:0 0 auto}
+.skk svg{width:28px;height:16px}
+#sk-list svg{width:22px;height:12px;vertical-align:-1px}
+#sk-tools.dis{opacity:.45;pointer-events:none}
+.sk-stage{position:relative;height:70vh;min-height:340px;border-radius:8px;overflow:hidden;background:#cfd3d4;border:1px solid var(--line)}
+#sk-cv{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+#sk-empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:24px;text-align:center;color:#3a4246;background:#e3e6e7;line-height:1.7}
+.sk-zoom{position:absolute;right:8px;top:8px;display:flex;flex-direction:column;gap:6px}
+.sk-zoom .btn{min-width:44px;background:rgba(249,250,249,.92)}
+.sk-cols{display:grid;grid-template-columns:1.5fr 1fr;gap:14px;margin-top:14px;align-items:start}
+@media (max-width:900px){.sk-cols{grid-template-columns:1fr}}
+#sk-list{min-width:0;font-size:13px}
+#sk-list td,#sk-list th{padding:6px 8px}
+#sk-attr .row{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end}
+#sk-attr select,#sk-attr input{width:auto}
+#pano-sk{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none}
+#pano-skbar{display:inline-flex;flex-wrap:wrap;gap:6px;align-items:center;border-left:1px solid #3b464b;padding-left:8px}
 </style>
 </head>
 <body>
@@ -227,12 +249,13 @@ input[type=text],input[type=date]{font:inherit;font-size:15px;width:100%;padding
 <header class="top">
   <div class="brand">
     <h1>床版下面オルソ</h1>
-    <p>DJI Avata 360 の 360° 静止画から、床版下面の平面オルソ画像を端末内で合成します（v1.18）</p>
+    <p>DJI Avata 360 の 360° 静止画から、床版下面の平面オルソ画像を端末内で合成します（v1.19）</p>
     <div class="offline" id="offline"><i></i><span>オフライン対応を確認中…</span></div>
   </div>
   <nav class="tabs" role="tablist">
     <button role="tab" id="tab-plan" aria-selected="true" data-tab="plan">撮影計画</button>
     <button role="tab" id="tab-ortho" aria-selected="false" data-tab="ortho">オルソ合成</button>
+    <button role="tab" id="tab-sketch" aria-selected="false" data-tab="sketch">変状スケッチ</button>
     <button role="tab" id="tab-data" aria-selected="false" data-tab="data">保存データ</button>
     <button role="tab" id="tab-guide" aria-selected="false" data-tab="guide">撮影要領</button>
   </nav>
@@ -423,6 +446,7 @@ input[type=text],input[type=date]{font:inherit;font-size:15px;width:100%;padding
           <button class="btn small" id="v-rot" data-busy="need-img" disabled>180°回転</button>
           <label><input type="checkbox" id="v-grid" checked> 1m グリッド</label>
           <label><input type="checkbox" id="v-cams" checked> 撮影位置</label>
+          <label><input type="checkbox" id="v-sk" checked> 変状</label>
           <select id="v-zoom" style="width:auto;min-height:36px;padding:4px 8px"><option value="1">全体</option><option value="2">2倍</option><option value="4">4倍</option></select>
         </div>
         <div class="viewer" id="viewer"><div class="empty" id="viewer-empty">画像を選んで「合成を実行」を押すか、「サンプルで試す」で動作を確認できます。保存した案件は「保存データ」から開けます。</div>
@@ -463,9 +487,11 @@ input[type=text],input[type=date]{font:inherit;font-size:15px;width:100%;padding
         </div>
         <div class="row">
           <label style="font-size:13px;display:flex;gap:6px;align-items:center"><input type="checkbox" id="x-grid" checked> 1m グリッドを入れる</label>
+          <label style="font-size:13px;display:flex;gap:6px;align-items:center"><input type="checkbox" id="x-sk" checked> 変状を入れる</label>
           <button class="btn" id="x-jpg" data-busy="need-img" disabled>JPEG を作成</button>
           <select id="x-paper" style="width:auto"><option value="A3">A3 横</option><option value="A4">A4 横</option></select>
           <button class="btn" id="x-pdf" data-busy="need-img" disabled>PDF を作成</button>
+          <button class="btn" id="x-dxf" data-busy="need-img" disabled>DXF を作成</button>
           <button class="btn" id="p-save" data-busy="need-img" disabled>案件を上書き保存</button>
         </div>
         <div class="ready" id="export-ready" hidden><span>作成しました：</span><span class="num" id="export-name"></span><button class="btn primary" id="x-share">保存・共有…</button><a class="btn" id="x-dl" style="text-decoration:none;display:inline-flex;align-items:center">ダウンロード</a></div>
@@ -478,6 +504,54 @@ input[type=text],input[type=date]{font:inherit;font-size:15px;width:100%;padding
         </div>
         <div class="thumbs" id="thumbs"><div class="empty">画像を読み込むと、床版平面に投影した各画像がここに並びます。</div></div>
       </div>
+    </div>
+  </div>
+</section>
+
+<section class="panel" id="panel-sketch" hidden>
+  <h2>変状スケッチ</h2>
+  <p class="lead">合成したオルソ画像に、損傷図の凡例で変状を記入します。記入は元の 360°画像と結び付けて保存されるので、360°画像の上で記入してもオルソに反映され、合成をやり直しても位置がずれません。</p>
+  <div class="box">
+    <div id="sk-tools">
+      <div class="sk-bar"><div class="sk-kinds" id="sk-kinds" role="group" aria-label="変状の種類"></div></div>
+      <div class="sk-bar">
+        <span class="seg" role="group" aria-label="前回・今回"><button data-skst="new" aria-pressed="true">今回・進行（赤字）</button><button data-skst="old" aria-pressed="false">前回（黒字）</button></span>
+        <span class="seg" role="group" aria-label="操作"><button data-sktool="draw" aria-pressed="true">描く</button><button data-sktool="erase" aria-pressed="false">消す</button><button data-sktool="select" aria-pressed="false">選ぶ・編集</button></span>
+        <label style="font-size:13px;display:flex;gap:6px;align-items:center"><input type="checkbox" id="sk-fdraw"> 指・マウスで描く</label>
+        <button class="btn small" id="sk-undo" disabled>取り消し</button><button class="btn small" id="sk-redo" disabled>やり直し</button>
+      </div>
+    </div>
+    <div class="sk-stage" id="sk-stage"><canvas id="sk-cv"></canvas>
+      <div class="sk-zoom"><button class="btn small" id="sk-zin" aria-label="拡大">＋</button><button class="btn small" id="sk-zout" aria-label="縮小">－</button><button class="btn small" id="sk-fit">全体</button></div>
+      <div id="sk-empty"></div></div>
+    <p class="hint" id="sk-hint"></p>
+    <div class="box" id="sk-attr" hidden style="margin-top:10px;background:var(--surface2)">
+      <div class="row">
+        <div class="field"><label for="ska-kind">種類</label><select id="ska-kind"></select></div>
+        <div class="field"><label for="ska-st">区分</label><select id="ska-st"><option value="new">今回・進行（赤字）</option><option value="old">前回（黒字）</option></select></div>
+        <div class="field"><label for="ska-label">番号</label><input type="text" id="ska-label" placeholder="例：1" style="width:110px" autocomplete="off"></div>
+        <div class="field" id="ska-wrow"><label for="ska-width">ひび幅</label><div class="row"><input type="number" id="ska-width" step="0.05" min="0" style="width:96px"><span class="unit">mm</span></div></div>
+        <div class="field" style="flex:1 1 200px"><label for="ska-memo">メモ</label><input type="text" id="ska-memo" style="width:100%" autocomplete="off"></div>
+        <button class="btn small danger" id="ska-del">この変状を削除</button><button class="btn small" id="ska-close">閉じる</button>
+      </div>
+      <p class="hint" id="ska-info"></p>
+    </div>
+  </div>
+  <div class="sk-cols">
+    <div class="box">
+      <h3>変状一覧</h3>
+      <p class="hint" id="sk-sum" style="margin-top:0"></p>
+      <div class="tablewrap" id="sk-listwrap" hidden><table id="sk-list"><thead><tr><th>No.</th><th>種類</th><th>区分</th><th>番号</th><th>長さ・面積</th><th>ひび幅</th><th>注意</th></tr></thead><tbody></tbody></table></div>
+      <p class="hint" id="sk-lost" hidden>位置を復元できない変状が <b id="sk-lostn">0</b> 件あります（記入に使った画像が合成から外れたため）。<button class="btn small" id="sk-lostdel">これらを削除する</button></p>
+    </div>
+    <div class="box export">
+      <h3 style="margin:0">変状図の書き出し</h3>
+      <div class="row"><button class="btn" id="sk-xjpg" data-busy="need-img" disabled>JPEG を作成</button>
+        <select id="sk-paper" style="width:auto"><option value="A3">A3 横</option><option value="A4">A4 横</option></select><button class="btn" id="sk-xpdf" data-busy="need-img" disabled>PDF を作成</button></div>
+      <div class="row"><button class="btn primary" id="sk-xdxf" data-busy="need-img" disabled>DXF を作成（背景画像付き・ZIP）</button>
+        <select id="sk-dxfu" style="width:auto"><option value="mm">単位 mm</option><option value="m">単位 m</option></select></div>
+      <div class="ready" id="sk-ready" hidden><span>作成しました：</span><span class="num" id="sk-ename"></span><button class="btn primary" id="sk-share">保存・共有…</button><a class="btn" id="sk-dl" style="text-decoration:none;display:inline-flex;align-items:center">ダウンロード</a></div>
+      <p class="hint">DXF は AutoCAD 2010 形式で、DXF・背景の JPEG・配置方法の説明を 1 つの ZIP にまとめます。展開して同じフォルダのまま開くと、AutoCAD などでは背景画像付きで表示されます。画像を読み込めない CAD では、説明のとおり JPEG を原点に置くと重なります。</p>
     </div>
   </div>
 </section>
@@ -589,6 +663,7 @@ input[type=text],input[type=date]{font:inherit;font-size:15px;width:100%;padding
   </div>
   <div class="pstage">
     <canvas id="pano-gl"></canvas>
+    <canvas id="pano-sk"></canvas>
     <button id="pano-x" aria-label="閉じる" title="閉じる">✕</button>
     <div id="pano-frame" hidden></div>
     <div class="pmsg" id="pano-busy" hidden></div>
@@ -613,6 +688,7 @@ input[type=text],input[type=date]{font:inherit;font-size:15px;width:100%;padding
     <span id="pano-out"></span>
     <label title="橋梁名・元画像・オルソ上の位置・目安の縮尺を画像の下に書き込みます"><input type="checkbox" id="pano-stamp"> 位置情報を書き込む</label>
     <label title="見下げ図と同じ左右の向きで表示・保存します"><input type="checkbox" id="pano-mir"> 左右反転</label>
+    <span id="pano-skbar" hidden><span style="font-size:13px;color:#c9d1d5">変状を記入</span><select id="pano-skind" aria-label="変状の種類"></select><select id="pano-sst" aria-label="区分"><option value="new">今回・進行</option><option value="old">前回</option></select><label><input type="checkbox" id="pano-sfd"> 指で描く</label><button class="btn small" id="pano-sundo">取り消し</button></span>
     <span style="margin-left:auto;display:inline-flex;gap:6px;align-items:center"><span id="pano-fov"></span>
     <button class="btn small" id="pano-zout" aria-label="縮小">－</button><button class="btn small" id="pano-zin" aria-label="拡大">＋</button></span>
   </div>
@@ -634,10 +710,11 @@ const sleep=()=>new Promise(r=>setTimeout(r,0));
 const fmt=(v,d=1)=>Number(v).toFixed(d);
 function showTab(t){
   document.querySelectorAll('nav.tabs button').forEach(b=>b.setAttribute('aria-selected',b.dataset.tab===t));
-  ['plan','ortho','data','guide'].forEach(k=>$('#panel-'+k).hidden=(k!==t));
+  ['plan','ortho','sketch','data','guide'].forEach(k=>$('#panel-'+k).hidden=(k!==t));
   try{localStorage.setItem('slabortho-tab',t)}catch(e){}
   if(t==='data')refreshProjects();
   if(t==='ortho')setTimeout(applyZoom,0);
+  if(t==='sketch')setTimeout(()=>{if(typeof skShow==='function')skShow();},0);
 }
 document.querySelectorAll('nav.tabs button').forEach(b=>b.addEventListener('click',()=>showTab(b.dataset.tab)));
 /* ================= 撮影計画 ================= */
@@ -2227,6 +2304,7 @@ function buildPreview(){
   PV.width=w;PV.height=h; PV.getContext('2d').putImageData(new ImageData(readRGBA(img,0,h,f),w,h),0,0);
   $('#inner').hidden=false;$('#viewer-empty').hidden=true;
   applyZoom();drawOverlay();updateOutInfo();
+  if(typeof skImgChanged==='function')skImgChanged();
 }
 function applyZoom(){
   if(!S.img)return; const z=+$('#v-zoom').value||1, vw=$('#viewer').clientWidth-2;
@@ -2252,6 +2330,7 @@ function drawOverlay(){
   if(o!=='none'&&!(S.marks&&S.marks.length)){const [A,B]=sideNames(),L=o==='left'?A:B,R=o==='left'?B:A;
     s+=`<text x="${u*2}" y="${img.H/2}" style="font-size:${u*5}px;fill:#fff;paint-order:stroke;stroke:#000;stroke-width:${u*0.8}px">${L}</text>`;
     s+=`<text x="${img.W-u*2}" y="${img.H/2}" text-anchor="end" style="font-size:${u*5}px;fill:#fff;paint-order:stroke;stroke:#000;stroke-width:${u*0.8}px">${R}</text>`;}
+  if(typeof skOverlaySVG==='function')s+=skOverlaySVG(u);
   if(S.cropDraft){const r=S.cropDraft;s+=`<rect x="${Math.min(r[0],r[2])}" y="${Math.min(r[1],r[3])}" width="${Math.abs(r[2]-r[0])}" height="${Math.abs(r[3]-r[1])}" fill="rgba(242,193,78,.15)" stroke="#f2c14e" stroke-width="${u*0.5}" stroke-dasharray="${u*2} ${u}"/>`;}
   if(S.tool==='level'&&S.lvPts){S.lvPts.forEach(p=>{s+=`<circle cx="${p[0]}" cy="${p[1]}" r="${u*1.2}" fill="#4ec9f2" stroke="#000" stroke-width="${u*0.3}"/>`});
     if(S.lvPts.length===2){const [a,b]=S.lvPts;s+=`<line x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}" stroke="#4ec9f2" stroke-width="${u*0.5}"/>`;}}
@@ -2555,7 +2634,7 @@ async function register(n,names,getSrc,yaws,truth,alts){
 }
 async function renderCurrent(){
   const t0=performance.now();
-  S.img=null; S.measure=[]; S.lvPts=[]; S.exported=null; $('#export-ready').hidden=true; setBusy(true); setLevel(0);
+  S.img=null; S.measure=[]; S.lvPts=[]; S.exported=null; $('#export-ready').hidden=true; $('#sk-ready').hidden=true; setBusy(true); setLevel(0);
   const img=isPier(S.o.mode)?await renderPier(S.faces[S.faceSel],S.o,S.getSrc,S.crop,currentGsd(),S.names)
            :S.o.mode==='wall'?await renderWall(S.sol,S.o,S.getSrc,S.gains,S.view,S.crop,currentGsd(),S.names)
                             :await renderMosaic2(S.sol,S.o,S.getSrc,S.gains,S.view,S.crop,currentGsd(),S.names);
@@ -2563,6 +2642,7 @@ async function renderCurrent(){
   log(`合成完了（${fmt((performance.now()-t0)/1000,1)} 秒）`);
 }
 async function runPipeline(n,names,getSrc,yaws,truth,alts){
+  const carry=skCarry();
   S.img=null;S.crop=null;S.cropDraft=null;S.scaleFix=1;S.thumbs=[];S.view={plan:$('#o-mode').value!=='slab'?false:viewSel()==='down',rot:false};
   $('#inner').hidden=true;$('#viewer-empty').hidden=false;$('#viewer-empty').textContent='処理中…';
   S.faces=null; S.marks=null; faceUI();
@@ -2570,6 +2650,7 @@ async function runPipeline(n,names,getSrc,yaws,truth,alts){
   else await register(n,names,getSrc,yaws,truth,alts);
   await renderCurrent();
   if(S.mode==='files'){await saveProject(true);}
+  await skAfterPipeline(carry);
 }
 $('#o-run').addEventListener('click',()=>task(async()=>{
   if(!S.files.length)return; logEl.textContent='';
@@ -2622,6 +2703,7 @@ function drawBurn(ctx,W,H,G,opt){
   ctx.strokeStyle='#fff';ctx.lineWidth=lw;ctx.strokeRect(sx,sy,bpx,fs*0.45);
   ctx.fillStyle='#fff';ctx.font=overlayFont(fs*0.75);ctx.fillText('0',sx-fs*0.2,sy+fs*1.25);ctx.fillText(bar+' m',sx+bpx-fs*0.6,sy+fs*1.25);
   burnMarks(ctx,W,H,1,fs);
+  if(opt.sk&&typeof skBurn==='function')skBurn(ctx,W,H,1,Math.max(12,fs*0.62),{legend:true});
   if(v.origin!=='none'&&!(S.marks&&S.marks.length)){const [A,B]=sideNames(),L=v.origin==='left'?A:B,R=v.origin==='left'?B:A;ctx.font=overlayFont(fs*1.1);
     const lab=(t,x,al)=>{ctx.textAlign=al;ctx.lineWidth=fs*0.18;ctx.strokeStyle='rgba(0,0,0,.8)';ctx.strokeText(t,x,H/2);ctx.fillStyle='#fff';ctx.fillText(t,x,H/2);ctx.textAlign='left';};
     lab(L,fs*0.8,'left');lab(R,W-fs*0.8,'right');}
@@ -2631,12 +2713,12 @@ function burnMarks(ctx,W,H,f,fs){
     ctx.save();ctx.strokeStyle='#e5484d';ctx.lineWidth=Math.max(2,fs*0.12);ctx.setLineDash([fs*0.6,fs*0.3]);ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();ctx.setLineDash([]);
     ctx.font=overlayFont(fs*1.1);ctx.lineWidth=fs*0.18;ctx.strokeStyle='rgba(120,0,0,.85)';ctx.strokeText(m.label,x+fs*0.3,fs*1.4);ctx.fillStyle='#fff';ctx.fillText(m.label,x+fs*0.3,fs*1.4);ctx.restore();});
 }
-async function exportJPEG(){
-  const img=S.img,{W,H}=img,G=Geff(),opt={grid:$('#x-grid').checked};
+async function exportJPEG(xo){
+  const img=S.img,{W,H}=img,G=Geff(),opt=Object.assign({grid:$('#x-grid').checked,sk:$('#x-sk').checked},xo||{});
   const canvasOK=W*H<=16e6&&W<=16384&&H<=16384;
   if(canvasOK){
     const cv=document.createElement('canvas');cv.width=W;cv.height=H;const ctx=cv.getContext('2d');
-    ctx.putImageData(new ImageData(readRGBA(img,0,H,1),W,H),0,0);drawBurn(ctx,W,H,G,opt);
+    ctx.putImageData(new ImageData(readRGBA(img,0,H,1),W,H),0,0);if(!opt.plain)drawBurn(ctx,W,H,G,opt);
     const b=await new Promise(r=>cv.toBlob(r,'image/jpeg',0.92));cv.width=cv.height=1;return b;
   }
   const enc=new JpegEncoder(W,H,92), SH=Math.max(8,Math.floor(Math.min(4096,15e6/W)/8)*8);
@@ -2644,14 +2726,15 @@ async function exportJPEG(){
   for(let y=0;y<H;y+=SH){
     const h=Math.min(SH,H-y); prog(y/H); if((y/SH)%2===0)await sleep();
     ctx.setTransform(1,0,0,1,0,0);ctx.putImageData(new ImageData(readRGBA(img,y,h,1),W,h),0,0);
-    ctx.save();ctx.beginPath();ctx.rect(0,0,W,h);ctx.clip();ctx.translate(0,-y);drawBurn(ctx,W,H,G,opt);ctx.restore();
+    ctx.save();ctx.beginPath();ctx.rect(0,0,W,h);ctx.clip();ctx.translate(0,-y);if(!opt.plain)drawBurn(ctx,W,H,G,opt);ctx.restore();
     enc.addRows(ctx.getImageData(0,0,W,h).data,h);
   }
   cv.width=cv.height=1; prog(1);
   return enc.finish();
 }
 const SCALES=[10,20,25,30,40,50,60,75,100,125,150,200,250,300,400,500,750,1000,1500,2000];
-async function exportPDF(){
+async function exportPDF(xo){
+  xo=xo||{sk:$('#x-sk').checked};
   const img=S.img,G=Geff(),paper=$('#x-paper').value, v=info();
   const [PWmm,PHmm]=paper==='A4'?[297,210]:[420,297], mm=72/25.4;
   const M=10, TB=paper==='A4'?18:22, gap=4;                   // 余白・表題欄の高さ（mm）
@@ -2665,6 +2748,7 @@ async function exportPDF(){
   const cv=document.createElement('canvas');cv.width=w;cv.height=h;const ctx=cv.getContext('2d');
   ctx.putImageData(new ImageData(readRGBA(img,0,h,f),w,h),0,0);
   burnMarks(ctx,w,h,f,Math.max(14,w/45));
+  if(xo.sk&&typeof skBurn==='function')skBurn(ctx,w,h,f,Math.max(10,2.3*w/iw),{shapes:false,labels:true});
   if(v.origin!=='none'&&!(S.marks&&S.marks.length)){const [A,B]=sideNames(),L=v.origin==='left'?A:B,R=v.origin==='left'?B:A,fs=Math.max(14,w/45);ctx.font=overlayFont(fs);
     const lab=(t,x,al)=>{ctx.textAlign=al;ctx.lineWidth=fs*0.18;ctx.strokeStyle='rgba(0,0,0,.8)';ctx.strokeText(t,x,h/2);ctx.fillStyle='#fff';ctx.fillText(t,x,h/2);};
     lab(L,fs*0.6,'left');lab(R,w-fs*0.6,'right');ctx.textAlign='left';}
@@ -2699,7 +2783,12 @@ async function exportPDF(){
     for(let m=1;m*1000<realH;m++){ops+=`1 0 0 1 ${P(ix+0.6)} ${P(iy+ih-m*1000/n+0.6)} Tm (${m}m) Tj\n`;}
     ops+='ET 0 g\n';
   }
-  return {blob:buildPDF(PWmm*mm,PHmm*mm,[{name:'Im',bytes:imBytes,pw:w,ph:h},{name:'Tb',bytes:tbBytes,pw:tw,ph:th}],ops),scale:n};
+  const pims=[{name:'Im',bytes:imBytes,pw:w,ph:h},{name:'Tb',bytes:tbBytes,pw:tw,ph:th}];
+  if(xo.sk&&typeof skPdfOps==='function'){ops+=skPdfOps(ix,iy,iw,ih,mm); const lg=skPdfLegend();
+    if(lg){const lb=new Uint8Array(await (await new Promise(r=>lg.cv.toBlob(r,'image/jpeg',0.92))).arrayBuffer()), lw=Math.min(lg.wmm,PWmm*0.3), lh=lg.hmm*lw/lg.wmm;
+      pims.push({name:'Lg',bytes:lb,pw:lg.cv.width,ph:lg.cv.height}); lg.cv.width=lg.cv.height=1;
+      ops+=`q ${P(lw)} 0 0 ${P(lh)} ${P(PWmm-M-gap-lw)} ${P(PHmm-M-gap-lh)} cm /Lg Do Q\n0.3 w 0 G ${P(PWmm-M-gap-lw)} ${P(PHmm-M-gap-lh)} ${P(lw)} ${P(lh)} re S\n`;}}
+  return {blob:buildPDF(PWmm*mm,PHmm*mm,pims,ops),scale:n};
 }
 /* iPad・iPhone・Android は共有シート、PC はダウンロード（PC の共有画面には「保存」がないため） */
 const MOBILE=/iPad|iPhone|iPod|Android/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
@@ -2709,6 +2798,7 @@ function readyExport(blob,name){
   if(exportUrl)URL.revokeObjectURL(exportUrl); exportUrl=URL.createObjectURL(blob);
   const a=$('#x-dl'); a.href=exportUrl; a.setAttribute('download',name);
   $('#export-name').textContent=`${name}（${fmt(blob.size/1048576,1)} MB）`;$('#export-ready').hidden=false;
+  const sd=$('#sk-dl'); if(sd){sd.href=exportUrl; sd.setAttribute('download',name); $('#sk-ename').textContent=$('#export-name').textContent; $('#sk-ready').hidden=false;}
 }
 $('#x-jpg').addEventListener('click',()=>task(async()=>{
   if(!S.img)return; log('JPEG を作成しています…'); await sleep(); const t0=performance.now();
@@ -2718,7 +2808,7 @@ $('#x-jpg').addEventListener('click',()=>task(async()=>{
 }));
 $('#x-pdf').addEventListener('click',()=>task(async()=>{
   if(!S.img)return; log('PDF を作成しています…'); await sleep();
-  const {blob,scale}=await exportPDF(); readyExport(blob,`${baseName()}${faceSuffix()}_オルソ_${$('#x-paper').value}.pdf`);
+  const {blob,scale}=await exportPDF({sk:$('#x-sk').checked}); readyExport(blob,`${baseName()}${faceSuffix()}_オルソ_${$('#x-paper').value}.pdf`);
   log(`PDF 作成完了（${$('#x-paper').value}、縮尺 1:${scale}、${fmt(blob.size/1048576,1)} MB）`);
   if(S.projectId)await saveProject(false);
 }));
@@ -2749,8 +2839,10 @@ $('#x-share').addEventListener('click',async()=>{
 
 /* ================= 保存（端末内の IndexedDB） ================= */
 const DB=(()=>{let dbp=null;
-  function open(){if(dbp)return dbp;dbp=new Promise((res,rej)=>{const r=indexedDB.open('slabortho',1);
-    r.onupgradeneeded=()=>{const d=r.result;d.createObjectStore('projects',{keyPath:'id'});d.createObjectStore('images');};
+  function open(){if(dbp)return dbp;dbp=new Promise((res,rej)=>{const r=indexedDB.open('slabortho',2);
+    r.onupgradeneeded=()=>{const d=r.result,has=n=>d.objectStoreNames.contains(n);
+      if(!has('projects'))d.createObjectStore('projects',{keyPath:'id'}); if(!has('images'))d.createObjectStore('images');
+      if(!has('orthos'))d.createObjectStore('orthos'); if(!has('sketches'))d.createObjectStore('sketches',{keyPath:'id'});};
     r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});return dbp;}
   const tx=async(store,mode,fn)=>{const d=await open();return new Promise((res,rej)=>{const t=d.transaction(store,mode);const out=fn(t.objectStore(store));t.oncomplete=()=>res(out&&out.result!==undefined?out.result:out);t.onerror=()=>rej(t.error);t.onabort=()=>rej(t.error);});};
   return{
@@ -2774,6 +2866,7 @@ async function saveProject(withImages){
     const rec={id,updated:Date.now(),info:info(),o:S.o,names:S.names,yaws:S.yaws,sol:S.sol,gains:S.gains?[...S.gains]:null,srcInfo:S.srcInfo,autoG:S.autoG,
       view:S.view,crop:S.crop,scaleFix:S.scaleFix,faces:S.faces?S.faces.map(f=>({...f,gains:f.gains?[...f.gains]:null})):null,faceSel:S.faceSel||0,gsdSel:$('#o-gsd').value,thumbs:S.thumbs,thumb,nImg:S.names.length};
     await DB.put('projects',rec);S.dirty=false;
+    try{await orthoCacheSave();}catch(e){console.error(e);log('合成結果の画像保存に失敗しました：'+(e&&e.message||e)+'（次に開くときは合成し直します）');}
     log(isNew?`案件を保存しました（「保存データ」から開き直せます）`:'案件を上書き保存しました');
     refreshProjects();
   }catch(e){console.error(e);log('保存できませんでした：'+(e&&e.message||e)+'（端末の空き容量を確認してください）');}
@@ -2794,7 +2887,10 @@ async function openProject(id){
   $('#thumb-note').textContent=`${rec.sol.cams.length}/${rec.nImg} 枚を使用`;
   if(S.faces){const f=S.faces[S.faceSel];Object.assign(S,{sol:f.sol,gains:f.gains,marks:f.marks});}else S.marks=null;
   faceUI();
-  await renderCurrent();
+  S.img=null; S.orthoSig=null; let cached=false;
+  try{cached=await orthoCacheLoad(id);}catch(e){console.error(e);cached=false;}
+  if(!cached){await renderCurrent(); try{await orthoCacheSave();}catch(e){console.error(e);}}
+  await skLoad(id);
 }
 async function refreshProjects(){
   const box=$('#projects'); let list=[];
@@ -2810,7 +2906,7 @@ async function refreshProjects(){
     el.querySelector('[data-open]').addEventListener('click',()=>task(()=>openProject(id)));
     el.querySelector('[data-del]').addEventListener('click',()=>{el.querySelector('.confirm').hidden=false;});
     el.querySelector('[data-del-no]').addEventListener('click',()=>{el.querySelector('.confirm').hidden=true;});
-    el.querySelector('[data-del-yes]').addEventListener('click',async()=>{await DB.del('projects',id);await DB.delRange('images',id+'/',id+'/\uffff');if(S.projectId===id)S.projectId=null;refreshProjects();});
+    el.querySelector('[data-del-yes]').addEventListener('click',async()=>{await DB.del('projects',id);await DB.delRange('images',id+'/',id+'/\uffff');try{await DB.delRange('orthos',id+'/',id+'/\uffff');await DB.del('sketches',id);}catch(e){}if(SK.key===id)await skLoad(null);if(S.projectId===id)S.projectId=null;refreshProjects();});
   });
   try{const e=await navigator.storage.estimate();const u=e.usage||0;$('#storage').textContent=`端末内の使用量 ${u>=1073741824?fmt(u/1073741824,2)+' GB':fmt(u/1048576,0)+' MB'}`;}catch(e){}
 }
@@ -2966,7 +3062,7 @@ function panoReq(detail){PANO.need=true; requestAnimationFrame(panoFrame); if(de
 function panoFrame(){
   if(!PANO.need||$('#pano').hidden||!pgl||!PANO.ovW)return; PANO.need=false; panoResize();
   const cv=$('#pano-gl'); pgl.bindFramebuffer(pgl.FRAMEBUFFER,null); panoDraw(cv.width,cv.height,cv.width/cv.height,panoTanV(),PANO.mir);
-  panoGuide(); panoHud();
+  panoGuide(); panoHud(); skPanoDraw();
 }
 
 /* ---- 各画像から見たオルソ上の点 (Wx,Wy) の方向（正距円筒の u,v）と、写りの良さ sc（小さいほど正面） ---- */
@@ -3154,12 +3250,12 @@ function panoTurn(dx,dy){
 function panoSetFov(f){PANO.fov=Math.max(8,Math.min(110,f)); $('#pano-fov').textContent=`画角 ${Math.round(PANO.fov)}°`; panoReq();}
 function panoBindCanvas(cv){
   const pts=new Map(); let pd=0,pf=0;
-  cv.addEventListener('pointerdown',e=>{try{cv.setPointerCapture(e.pointerId)}catch(_){} pts.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  cv.addEventListener('pointerdown',e=>{if(SKQ.down(e,cv))return; try{cv.setPointerCapture(e.pointerId)}catch(_){} pts.set(e.pointerId,{x:e.clientX,y:e.clientY});
     if(pts.size===2){const a=[...pts.values()];pd=Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y);pf=PANO.fov;}});
-  cv.addEventListener('pointermove',e=>{const p=pts.get(e.pointerId);if(!p)return;const dx=e.clientX-p.x,dy=e.clientY-p.y;p.x=e.clientX;p.y=e.clientY;
+  cv.addEventListener('pointermove',e=>{if(SKQ.move(e))return;const p=pts.get(e.pointerId);if(!p)return;const dx=e.clientX-p.x,dy=e.clientY-p.y;p.x=e.clientX;p.y=e.clientY;
     if(pts.size>=2){const a=[...pts.values()],d=Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y);if(pd>8&&d>8)panoSetFov(pf*pd/d);return;}
     panoTurn(dx,dy);});
-  const lift=e=>{pts.delete(e.pointerId);if(pts.size<2)pd=0;};
+  const lift=e=>{if(SKQ.up(e))return;pts.delete(e.pointerId);if(pts.size<2)pd=0;};
   cv.addEventListener('pointerup',lift); cv.addEventListener('pointercancel',lift);
   cv.addEventListener('wheel',e=>{e.preventDefault();panoSetFov(PANO.fov*(e.deltaY>0?1.08:1/1.08));},{passive:false});
 }
@@ -3265,6 +3361,7 @@ function panoClose(fromPop){
   if(pgl){const g=pgl,z=new Uint8Array([0,0,0,255]);g.activeTexture(g.TEXTURE0);g.bindTexture(g.TEXTURE_2D,PG.ov);g.texImage2D(g.TEXTURE_2D,0,g.RGBA,1,1,0,g.RGBA,g.UNSIGNED_BYTE,z);
     g.activeTexture(g.TEXTURE1);g.bindTexture(g.TEXTURE_2D,PG.dt);g.texImage2D(g.TEXTURE_2D,0,g.RGBA,1,1,0,g.RGBA,g.UNSIGNED_BYTE,z);g.activeTexture(g.TEXTURE0);}
   PANO.ovW=0; PANO.dOn=0; $('#pano-save').hidden=true;
+  SKQ.cur=null; skPanoDraw(); skUI(); skReq();
 }
 async function panoStep(dir){
   const list=panoList(), pos=list.indexOf(PANO.j), nj=list[pos+dir]; if(nj==null)return;
@@ -3411,6 +3508,591 @@ const helpVal=v=>typeof v==='function'?v():v;
 })();
 try{const t=localStorage.getItem('slabortho-tab');if(t&&$('#panel-'+t))showTab(t)}catch(e){}
 setBusy(false); modeUI();
+</script>
+<script>
+/* DXF のひな形（AutoCAD 2010 形式・画層・文字スタイル・背景画像の定義） */
+const DXF_TPL="  0\nSECTION\n  2\nHEADER\n  9\n$ACADVER\n  1\nAC1024\n  9\n$ACADMAINTVER\n 70\n6\n  9\n$DWGCODEPAGE\n  3\nANSI_932\n  9\n$LASTSAVEDBY\n  1\nezdxf\n  9\n$INSBASE\n 10\n0.0\n 20\n0.0\n 30\n0.0\n  9\n$EXTMIN\n 10\n1e+20\n 20\n1e+20\n 30\n1e+20\n  9\n$EXTMAX\n 10\n-1e+20\n 20\n-1e+20\n 30\n-1e+20\n  9\n$LIMMIN\n 10\n0.0\n 20\n0.0\n  9\n$LIMMAX\n 10\n420.0\n 20\n297.0\n  9\n$ORTHOMODE\n 70\n0\n  9\n$REGENMODE\n 70\n1\n  9\n$FILLMODE\n 70\n1\n  9\n$QTEXTMODE\n 70\n0\n  9\n$MIRRTEXT\n 70\n1\n  9\n$LTSCALE\n 40\n1.0\n  9\n$ATTMODE\n 70\n1\n  9\n$TEXTSIZE\n 40\n2.5\n  9\n$TRACEWID\n 40\n1.0\n  9\n$TEXTSTYLE\n  7\nStandard\n  9\n$CLAYER\n  8\n0\n  9\n$CELTYPE\n  6\nByLayer\n  9\n$CECOLOR\n 62\n256\n  9\n$CELTSCALE\n 40\n1.0\n  9\n$DISPSILH\n 70\n0\n  9\n$DIMSCALE\n 40\n1.0\n  9\n$DIMASZ\n 40\n2.5\n  9\n$DIMEXO\n 40\n0.625\n  9\n$DIMDLI\n 40\n3.75\n  9\n$DIMRND\n 40\n0.0\n  9\n$DIMDLE\n 40\n0.0\n  9\n$DIMEXE\n 40\n1.25\n  9\n$DIMTP\n 40\n0.0\n  9\n$DIMTM\n 40\n0.0\n  9\n$DIMTXT\n 40\n2.5\n  9\n$DIMCEN\n 40\n2.5\n  9\n$DIMTSZ\n 40\n0.0\n  9\n$DIMTOL\n 70\n0\n  9\n$DIMLIM\n 70\n0\n  9\n$DIMTIH\n 70\n0\n  9\n$DIMTOH\n 70\n0\n  9\n$DIMSE1\n 70\n0\n  9\n$DIMSE2\n 70\n0\n  9\n$DIMTAD\n 70\n1\n  9\n$DIMZIN\n 70\n8\n  9\n$DIMBLK\n  1\n\n  9\n$DIMASO\n 70\n1\n  9\n$DIMSHO\n 70\n1\n  9\n$DIMPOST\n  1\n\n  9\n$DIMAPOST\n  1\n\n  9\n$DIMALT\n 70\n0\n  9\n$DIMALTD\n 70\n3\n  9\n$DIMALTF\n 40\n0.03937007874\n  9\n$DIMLFAC\n 40\n1.0\n  9\n$DIMTOFL\n 70\n1\n  9\n$DIMTVP\n 40\n0.0\n  9\n$DIMTIX\n 70\n0\n  9\n$DIMSOXD\n 70\n0\n  9\n$DIMSAH\n 70\n0\n  9\n$DIMBLK1\n  1\n\n  9\n$DIMBLK2\n  1\n\n  9\n$DIMSTYLE\n  2\nISO-25\n  9\n$DIMCLRD\n 70\n0\n  9\n$DIMCLRE\n 70\n0\n  9\n$DIMCLRT\n 70\n0\n  9\n$DIMTFAC\n 40\n1.0\n  9\n$DIMGAP\n 40\n0.625\n  9\n$DIMJUST\n 70\n0\n  9\n$DIMSD1\n 70\n0\n  9\n$DIMSD2\n 70\n0\n  9\n$DIMTOLJ\n 70\n0\n  9\n$DIMTZIN\n 70\n8\n  9\n$DIMALTZ\n 70\n0\n  9\n$DIMALTTZ\n 70\n0\n  9\n$DIMUPT\n 70\n0\n  9\n$DIMDEC\n 70\n2\n  9\n$DIMTDEC\n 70\n2\n  9\n$DIMALTU\n 70\n2\n  9\n$DIMALTTD\n 70\n3\n  9\n$DIMTXSTY\n  7\nStandard\n  9\n$DIMAUNIT\n 70\n0\n  9\n$DIMADEC\n 70\n0\n  9\n$DIMALTRND\n 40\n0.0\n  9\n$DIMAZIN\n 70\n0\n  9\n$DIMDSEP\n 70\n44\n  9\n$DIMATFIT\n 70\n3\n  9\n$DIMFRAC\n 70\n0\n  9\n$DIMLDRBLK\n  1\n\n  9\n$DIMLUNIT\n 70\n2\n  9\n$DIMLWD\n 70\n-2\n  9\n$DIMLWE\n 70\n-2\n  9\n$DIMTMOVE\n 70\n0\n  9\n$DIMFXL\n 40\n1.0\n  9\n$DIMFXLON\n 70\n0\n  9\n$DIMJOGANG\n 40\n0.785398163397\n  9\n$DIMTFILL\n 70\n0\n  9\n$DIMTFILLCLR\n 70\n0\n  9\n$DIMARCSYM\n 70\n0\n  9\n$DIMLTYPE\n  6\n\n  9\n$DIMLTEX1\n  6\n\n  9\n$DIMLTEX2\n  6\n\n  9\n$DIMTXTDIRECTION\n 70\n0\n  9\n$LUNITS\n 70\n2\n  9\n$LUPREC\n 70\n4\n  9\n$SKETCHINC\n 40\n1.0\n  9\n$FILLETRAD\n 40\n10.0\n  9\n$AUNITS\n 70\n0\n  9\n$AUPREC\n 70\n2\n  9\n$MENU\n  1\n.\n  9\n$ELEVATION\n 40\n0.0\n  9\n$PELEVATION\n 40\n0.0\n  9\n$THICKNESS\n 40\n0.0\n  9\n$LIMCHECK\n 70\n0\n  9\n$CHAMFERA\n 40\n0.0\n  9\n$CHAMFERB\n 40\n0.0\n  9\n$CHAMFERC\n 40\n0.0\n  9\n$CHAMFERD\n 40\n0.0\n  9\n$SKPOLY\n 70\n0\n  9\n$TDCREATE\n 40\n2461358.316689815\n  9\n$TDUCREATE\n 40\n2458532.153996898\n  9\n$TDUPDATE\n 40\n2461358.316689815\n  9\n$TDUUPDATE\n 40\n2458532.1544311\n  9\n$TDINDWG\n 40\n0.0\n  9\n$TDUSRTIMER\n 40\n0.0\n  9\n$USRTIMER\n 70\n1\n  9\n$ANGBASE\n 50\n0.0\n  9\n$ANGDIR\n 70\n0\n  9\n$PDMODE\n 70\n0\n  9\n$PDSIZE\n 40\n0.0\n  9\n$PLINEWID\n 40\n0.0\n  9\n$SPLFRAME\n 70\n0\n  9\n$SPLINETYPE\n 70\n6\n  9\n$SPLINESEGS\n 70\n8\n  9\n$HANDSEED\n  5\n__SEED__\n  9\n$SURFTAB1\n 70\n6\n  9\n$SURFTAB2\n 70\n6\n  9\n$SURFTYPE\n 70\n6\n  9\n$SURFU\n 70\n6\n  9\n$SURFV\n 70\n6\n  9\n$UCSBASE\n  2\n\n  9\n$UCSNAME\n  2\n\n  9\n$UCSORG\n 10\n0.0\n 20\n0.0\n 30\n0.0\n  9\n$UCSXDIR\n 10\n1.0\n 20\n0.0\n 30\n0.0\n  9\n$UCSYDIR\n 10\n0.0\n 20\n1.0\n 30\n0.0\n  9\n$UCSORTHOREF\n  2\n\n  9\n$UCSORTHOVIEW\n 70\n0\n  9\n$UCSORGTOP\n 10\n0.0\n 20\n0.0\n 30\n0.0\n  9\n$UCSORGBOTTOM\n 10\n0.0\n 20\n0.0\n 30\n0.0\n  9\n$UCSORGLEFT\n 10\n0.0\n 20\n0.0\n 30\n0.0\n  9\n$UCSORGRIGHT\n 10\n0.0\n 20\n0.0\n 30\n0.0\n  9\n$UCSORGFRONT\n 10\n0.0\n 20\n0.0\n 30\n0.0\n  9\n$UCSORGBACK\n 10\n0.0\n 20\n0.0\n 30\n0.0\n  9\n$PUCSBASE\n  2\n\n  9\n$PUCSNAME\n  2\n\n  9\n$PUCSORG\n 10\n0.0\n 20\n0.0\n 30\n0.0\n  9\n$PUCSXDIR\n 10\n1.0\n 20\n0.0\n 30\n0.0\n  9\n$PUCSYDIR\n 10\n0.0\n 20\n1.0\n 30\n0.0\n  9\n$PUCSORTHOREF\n  2\n\n  9\n$PUCSORTHOVIEW\n 70\n0\n  9\n$PUCSORGTOP\n 10\n0.0\n 20\n0.0\n 30\n0.0\n  9\n$PUCSORGBOTTOM\n 10\n0.0\n 20\n0.0\n 30\n0.0\n  9\n$PUCSORGLEFT\n 10\n0.0\n 20\n0.0\n 30\n0.0\n  9\n$PUCSORGRIGHT\n 10\n0.0\n 20\n0.0\n 30\n0.0\n  9\n$PUCSORGFRONT\n 10\n0.0\n 20\n0.0\n 30\n0.0\n  9\n$PUCSORGBACK\n 10\n0.0\n 20\n0.0\n 30\n0.0\n  9\n$USERI1\n 70\n0\n  9\n$USERI2\n 70\n0\n  9\n$USERI3\n 70\n0\n  9\n$USERI4\n 70\n0\n  9\n$USERI5\n 70\n0\n  9\n$USERR1\n 40\n0.0\n  9\n$USERR2\n 40\n0.0\n  9\n$USERR3\n 40\n0.0\n  9\n$USERR4\n 40\n0.0\n  9\n$USERR5\n 40\n0.0\n  9\n$WORLDVIEW\n 70\n1\n  9\n$SHADEDGE\n 70\n3\n  9\n$SHADEDIF\n 70\n70\n  9\n$TILEMODE\n 70\n1\n  9\n$MAXACTVP\n 70\n64\n  9\n$PINSBASE\n 10\n0.0\n 20\n0.0\n 30\n0.0\n  9\n$PLIMCHECK\n 70\n0\n  9\n$PEXTMIN\n 10\n1e+20\n 20\n1e+20\n 30\n1e+20\n  9\n$PEXTMAX\n 10\n-1e+20\n 20\n-1e+20\n 30\n-1e+20\n  9\n$PLIMMIN\n 10\n0.0\n 20\n0.0\n  9\n$PLIMMAX\n 10\n420.0\n 20\n297.0\n  9\n$UNITMODE\n 70\n0\n  9\n$VISRETAIN\n 70\n1\n  9\n$PLINEGEN\n 70\n0\n  9\n$PSLTSCALE\n 70\n1\n  9\n$TREEDEPTH\n 70\n3020\n  9\n$CMLSTYLE\n  2\nStandard\n  9\n$CMLJUST\n 70\n0\n  9\n$CMLSCALE\n 40\n20.0\n  9\n$PROXYGRAPHICS\n 70\n1\n  9\n$MEASUREMENT\n 70\n1\n  9\n$CELWEIGHT\n370\n-1\n  9\n$ENDCAPS\n280\n0\n  9\n$JOINSTYLE\n280\n0\n  9\n$LWDISPLAY\n290\n0\n  9\n$INSUNITS\n 70\n4\n  9\n$HYPERLINKBASE\n  1\n\n  9\n$STYLESHEET\n  1\n\n  9\n$XEDIT\n290\n1\n  9\n$CEPSNTYPE\n380\n0\n  9\n$PSTYLEMODE\n290\n1\n  9\n$FINGERPRINTGUID\n  2\n{88BA1C66-C54F-4EDA-99E3-A47C4329D5B7}\n  9\n$VERSIONGUID\n  2\n{59AE6D96-0CE6-48FE-AB9A-7D15C5EDA3C1}\n  9\n$EXTNAMES\n290\n1\n  9\n$PSVPSCALE\n 40\n0.0\n  9\n$OLESTARTUP\n290\n0\n  9\n$SORTENTS\n280\n127\n  9\n$INDEXCTL\n280\n0\n  9\n$HIDETEXT\n280\n1\n  9\n$XCLIPFRAME\n280\n1\n  9\n$HALOGAP\n280\n0\n  9\n$OBSCOLOR\n 70\n257\n  9\n$OBSLTYPE\n280\n0\n  9\n$INTERSECTIONDISPLAY\n280\n0\n  9\n$INTERSECTIONCOLOR\n 70\n257\n  9\n$DIMASSOC\n280\n2\n  9\n$PROJECTNAME\n  1\n\n  9\n$CAMERADISPLAY\n290\n0\n  9\n$LENSLENGTH\n 40\n50.0\n  9\n$CAMERAHEIGHT\n 40\n0.0\n  9\n$STEPSPERSEC\n 40\n24.0\n  9\n$STEPSIZE\n 40\n100.0\n  9\n$3DDWFPREC\n 40\n2.0\n  9\n$PSOLWIDTH\n 40\n0.005\n  9\n$PSOLHEIGHT\n 40\n0.08\n  9\n$LOFTANG1\n 40\n1.570796326795\n  9\n$LOFTANG2\n 40\n1.570796326795\n  9\n$LOFTMAG1\n 40\n0.0\n  9\n$LOFTMAG2\n 40\n0.0\n  9\n$LOFTPARAM\n 70\n7\n  9\n$LOFTNORMALS\n280\n1\n  9\n$LATITUDE\n 40\n37.795\n  9\n$LONGITUDE\n 40\n-122.394\n  9\n$NORTHDIRECTION\n 40\n0.0\n  9\n$TIMEZONE\n 70\n-8000\n  9\n$LIGHTGLYPHDISPLAY\n280\n1\n  9\n$TILEMODELIGHTSYNCH\n280\n1\n  9\n$CMATERIAL\n347\n20\n  9\n$SOLIDHIST\n280\n0\n  9\n$SHOWHIST\n280\n1\n  9\n$DWFFRAME\n280\n2\n  9\n$DGNFRAME\n280\n2\n  9\n$REALWORLDSCALE\n290\n1\n  9\n$INTERFERECOLOR\n 62\n256\n  9\n$CSHADOW\n280\n0\n  9\n$SHADOWPLANELOCATION\n 40\n0.0\n  0\nENDSEC\n  0\nSECTION\n  2\nCLASSES\n  0\nCLASS\n  1\nACDBDICTIONARYWDFLT\n  2\nAcDbDictionaryWithDefault\n  3\nObjectDBX Classes\n 90\n0\n 91\n0\n280\n0\n281\n0\n  0\nCLASS\n  1\nSUN\n  2\nAcDbSun\n  3\nSCENEOE\n 90\n1153\n 91\n0\n280\n0\n281\n0\n  0\nCLASS\n  1\nVISUALSTYLE\n  2\nAcDbVisualStyle\n  3\nObjectDBX Classes\n 90\n4095\n 91\n0\n280\n0\n281\n0\n  0\nCLASS\n  1\nMATERIAL\n  2\nAcDbMaterial\n  3\nObjectDBX Classes\n 90\n1153\n 91\n0\n280\n0\n281\n0\n  0\nCLASS\n  1\nSCALE\n  2\nAcDbScale\n  3\nObjectDBX Classes\n 90\n1153\n 91\n0\n280\n0\n281\n0\n  0\nCLASS\n  1\nTABLESTYLE\n  2\nAcDbTableStyle\n  3\nObjectDBX Classes\n 90\n4095\n 91\n0\n280\n0\n281\n0\n  0\nCLASS\n  1\nMLEADERSTYLE\n  2\nAcDbMLeaderStyle\n  3\nACDB_MLEADERSTYLE_CLASS\n 90\n4095\n 91\n0\n280\n0\n281\n0\n  0\nCLASS\n  1\nDICTIONARYVAR\n  2\nAcDbDictionaryVar\n  3\nObjectDBX Classes\n 90\n0\n 91\n0\n280\n0\n281\n0\n  0\nCLASS\n  1\nCELLSTYLEMAP\n  2\nAcDbCellStyleMap\n  3\nObjectDBX Classes\n 90\n1152\n 91\n0\n280\n0\n281\n0\n  0\nCLASS\n  1\nMENTALRAYRENDERSETTINGS\n  2\nAcDbMentalRayRenderSettings\n  3\nSCENEOE\n 90\n1024\n 91\n0\n280\n0\n281\n0\n  0\nCLASS\n  1\nACDBDETAILVIEWSTYLE\n  2\nAcDbDetailViewStyle\n  3\nObjectDBX Classes\n 90\n1025\n 91\n0\n280\n0\n281\n0\n  0\nCLASS\n  1\nACDBSECTIONVIEWSTYLE\n  2\nAcDbSectionViewStyle\n  3\nObjectDBX Classes\n 90\n1025\n 91\n0\n280\n0\n281\n0\n  0\nCLASS\n  1\nRASTERVARIABLES\n  2\nAcDbRasterVariables\n  3\nISM\n 90\n0\n 91\n0\n280\n0\n281\n0\n  0\nCLASS\n  1\nIMAGE\n  2\nAcDbRasterImage\n  3\nISM\n 90\n2175\n 91\n0\n280\n0\n281\n1\n  0\nCLASS\n  1\nIMAGEDEF\n  2\nAcDbRasterImageDef\n  3\nISM\n 90\n0\n 91\n0\n280\n0\n281\n0\n  0\nCLASS\n  1\nIMAGEDEF_REACTOR\n  2\nAcDbRasterImageDefReactor\n  3\nISM\n 90\n1\n 91\n0\n280\n0\n281\n0\n  0\nCLASS\n  1\nACDBPLACEHOLDER\n  2\nAcDbPlaceHolder\n  3\nObjectDBX Classes\n 90\n0\n 91\n0\n280\n0\n281\n0\n  0\nCLASS\n  1\nLAYOUT\n  2\nAcDbLayout\n  3\nObjectDBX Classes\n 90\n0\n 91\n0\n280\n0\n281\n0\n  0\nENDSEC\n  0\nSECTION\n  2\nTABLES\n  0\nTABLE\n  2\nVPORT\n  5\n8\n330\n0\n100\nAcDbSymbolTable\n 70\n1\n  0\nVPORT\n  5\n23\n330\n8\n100\nAcDbSymbolTableRecord\n100\nAcDbViewportTableRecord\n  2\n*Active\n 70\n0\n 10\n0.0\n 20\n0.0\n 11\n1.0\n 21\n1.0\n 12\n0.0\n 22\n0.0\n 13\n0.0\n 23\n0.0\n 14\n0.5\n 24\n0.5\n 15\n0.5\n 25\n0.5\n 16\n0.0\n 26\n0.0\n 36\n1.0\n 17\n0.0\n 27\n0.0\n 37\n0.0\n 40\n1000.0\n 41\n1.34\n 42\n50.0\n 43\n0.0\n 44\n0.0\n 50\n0.0\n 51\n0.0\n 71\n0\n 72\n1000\n 73\n1\n 74\n3\n 75\n0\n 76\n0\n 77\n0\n 78\n0\n281\n0\n 65\n0\n146\n0.0\n  0\nENDTAB\n  0\nTABLE\n  2\nLTYPE\n  5\n2\n330\n0\n100\nAcDbSymbolTable\n 70\n4\n  0\nLTYPE\n  5\n24\n330\n2\n100\nAcDbSymbolTableRecord\n100\nAcDbLinetypeTableRecord\n  2\nByBlock\n 70\n0\n  3\n\n 72\n65\n 73\n0\n 40\n0.0\n  0\nLTYPE\n  5\n25\n330\n2\n100\nAcDbSymbolTableRecord\n100\nAcDbLinetypeTableRecord\n  2\nByLayer\n 70\n0\n  3\n\n 72\n65\n 73\n0\n 40\n0.0\n  0\nLTYPE\n  5\n26\n330\n2\n100\nAcDbSymbolTableRecord\n100\nAcDbLinetypeTableRecord\n  2\nContinuous\n 70\n0\n  3\n\n 72\n65\n 73\n0\n 40\n0.0\n  0\nLTYPE\n  5\n2F\n330\n2\n100\nAcDbSymbolTableRecord\n100\nAcDbLinetypeTableRecord\n  2\nDASHED\n 70\n0\n  3\nDashed __ __ __\n 72\n65\n 73\n2\n 40\n0.75\n 49\n0.5\n 74\n0\n 49\n-0.25\n 74\n0\n  0\nENDTAB\n  0\nTABLE\n  2\nLAYER\n  5\n1\n330\n0\n100\nAcDbSymbolTable\n 70\n15\n  0\nLAYER\n  5\n27\n330\n1\n100\nAcDbSymbolTableRecord\n100\nAcDbLayerTableRecord\n  2\n0\n 70\n0\n 62\n7\n  6\nContinuous\n370\n-3\n390\n13\n347\n21\n  0\nLAYER\n  5\n28\n330\n1\n100\nAcDbSymbolTableRecord\n100\nAcDbLayerTableRecord\n  2\nDefpoints\n 70\n0\n 62\n7\n  6\nContinuous\n290\n0\n370\n-3\n390\n13\n347\n21\n  0\nLAYER\n  5\n31\n330\n1\n100\nAcDbSymbolTableRecord\n100\nAcDbLayerTableRecord\n  2\n背景画像\n 70\n0\n 62\n7\n  6\nContinuous\n370\n-3\n390\n13\n347\n21\n  0\nLAYER\n  5\n32\n330\n1\n100\nAcDbSymbolTableRecord\n100\nAcDbLayerTableRecord\n  2\n変状_ひびわれ\n 70\n0\n 62\n1\n420\n15016731\n  6\nContinuous\n370\n-3\n390\n13\n347\n21\n  0\nLAYER\n  5\n33\n330\n1\n100\nAcDbSymbolTableRecord\n100\nAcDbLayerTableRecord\n  2\n変状_剥離\n 70\n0\n 62\n3\n420\n2005564\n  6\nContinuous\n370\n-3\n390\n13\n347\n21\n  0\nLAYER\n  5\n34\n330\n1\n100\nAcDbSymbolTableRecord\n100\nAcDbLayerTableRecord\n  2\n変状_鉄筋露出\n 70\n0\n 62\n30\n420\n15695130\n  6\nContinuous\n370\n-3\n390\n13\n347\n21\n  0\nLAYER\n  5\n35\n330\n1\n100\nAcDbSymbolTableRecord\n100\nAcDbLayerTableRecord\n  2\n変状_遊離石灰\n 70\n0\n 62\n4\n420\n2005975\n  6\nContinuous\n370\n-3\n390\n13\n347\n21\n  0\nLAYER\n  5\n36\n330\n1\n100\nAcDbSymbolTableRecord\n100\nAcDbLayerTableRecord\n  2\n変状_漏水\n 70\n0\n 62\n6\n420\n13113722\n  6\nContinuous\n370\n-3\n390\n13\n347\n21\n  0\nLAYER\n  5\n37\n330\n1\n100\nAcDbSymbolTableRecord\n100\nAcDbLayerTableRecord\n  2\n変状_その他\n 70\n0\n 62\n200\n420\n7028660\n  6\nContinuous\n370\n-3\n390\n13\n347\n21\n  0\nLAYER\n  5\n38\n330\n1\n100\nAcDbSymbolTableRecord\n100\nAcDbLayerTableRecord\n  2\n変状_うき\n 70\n0\n 62\n1\n420\n15016731\n  6\nContinuous\n370\n-3\n390\n13\n347\n21\n  0\nLAYER\n  5\n39\n330\n1\n100\nAcDbSymbolTableRecord\n100\nAcDbLayerTableRecord\n  2\n変状_変形・欠損\n 70\n0\n 62\n3\n420\n2005564\n  6\nContinuous\n370\n-3\n390\n13\n347\n21\n  0\nLAYER\n  5\n3A\n330\n1\n100\nAcDbSymbolTableRecord\n100\nAcDbLayerTableRecord\n  2\n変状_腐食\n 70\n0\n 62\n30\n420\n15695130\n  6\nContinuous\n370\n-3\n390\n13\n347\n21\n  0\nLAYER\n  5\n3B\n330\n1\n100\nAcDbSymbolTableRecord\n100\nAcDbLayerTableRecord\n  2\n文字_前回\n 70\n0\n 62\n7\n  6\nContinuous\n370\n-3\n390\n13\n347\n21\n  0\nLAYER\n  5\n3C\n330\n1\n100\nAcDbSymbolTableRecord\n100\nAcDbLayerTableRecord\n  2\n文字_今回\n 70\n0\n 62\n1\n  6\nContinuous\n370\n-3\n390\n13\n347\n21\n  0\nLAYER\n  5\n3D\n330\n1\n100\nAcDbSymbolTableRecord\n100\nAcDbLayerTableRecord\n  2\n凡例\n 70\n0\n 62\n7\n  6\nContinuous\n370\n-3\n390\n13\n347\n21\n  0\nENDTAB\n  0\nTABLE\n  2\nSTYLE\n  5\n5\n330\n0\n100\nAcDbSymbolTable\n 70\n2\n  0\nSTYLE\n  5\n29\n330\n5\n100\nAcDbSymbolTableRecord\n100\nAcDbTextStyleTableRecord\n  2\nStandard\n 70\n0\n 40\n0.0\n 41\n1.0\n 50\n0.0\n 71\n0\n 42\n2.5\n  3\ntxt\n  4\n\n  0\nSTYLE\n  5\n30\n330\n5\n100\nAcDbSymbolTableRecord\n100\nAcDbTextStyleTableRecord\n  2\nJP\n 70\n0\n 40\n0.0\n 41\n1.0\n 50\n0.0\n 71\n0\n 42\n2.5\n  3\nmsgothic.ttc\n  4\n\n  0\nENDTAB\n  0\nTABLE\n  2\nVIEW\n  5\n7\n330\n0\n100\nAcDbSymbolTable\n 70\n0\n  0\nENDTAB\n  0\nTABLE\n  2\nUCS\n  5\n6\n330\n0\n100\nAcDbSymbolTable\n 70\n0\n  0\nENDTAB\n  0\nTABLE\n  2\nAPPID\n  5\n3\n330\n0\n100\nAcDbSymbolTable\n 70\n3\n  0\nAPPID\n  5\n2A\n330\n3\n100\nAcDbSymbolTableRecord\n100\nAcDbRegAppTableRecord\n  2\nACAD\n 70\n0\n  0\nAPPID\n  5\n46\n330\n3\n100\nAcDbSymbolTableRecord\n100\nAcDbRegAppTableRecord\n  2\nHATCHBACKGROUNDCOLOR\n 70\n0\n  0\nAPPID\n  5\n47\n330\n3\n100\nAcDbSymbolTableRecord\n100\nAcDbRegAppTableRecord\n  2\nEZDXF\n 70\n0\n  0\nENDTAB\n  0\nTABLE\n  2\nDIMSTYLE\n  5\n4\n330\n0\n100\nAcDbSymbolTable\n 70\n1\n100\nAcDbDimStyleTable\n  0\nDIMSTYLE\n105\n2B\n330\n4\n100\nAcDbSymbolTableRecord\n100\nAcDbDimStyleTableRecord\n  2\nStandard\n 70\n0\n 40\n1.0\n 41\n2.5\n 42\n0.625\n 43\n3.75\n 44\n1.25\n 45\n0.0\n 46\n0.0\n 47\n0.0\n 48\n0.0\n 49\n2.5\n140\n2.5\n141\n2.5\n142\n0.0\n143\n0.03937007874\n144\n1.0\n145\n0.0\n146\n1.0\n147\n0.625\n148\n0.0\n 69\n0\n 70\n0\n 71\n0\n 72\n0\n 73\n0\n 74\n0\n 75\n0\n 76\n0\n 77\n1\n 78\n8\n 79\n3\n170\n0\n171\n3\n172\n1\n173\n0\n174\n0\n175\n0\n176\n0\n177\n0\n178\n0\n179\n2\n271\n2\n272\n2\n273\n2\n274\n3\n275\n0\n276\n0\n277\n2\n278\n44\n279\n0\n280\n0\n281\n0\n282\n0\n283\n0\n284\n8\n285\n0\n286\n0\n288\n0\n289\n3\n290\n0\n371\n-2\n372\n-2\n  0\nENDTAB\n  0\nTABLE\n  2\nBLOCK_RECORD\n  5\n9\n330\n0\n100\nAcDbSymbolTable\n 70\n2\n  0\nBLOCK_RECORD\n  5\n17\n330\n9\n100\nAcDbSymbolTableRecord\n100\nAcDbBlockTableRecord\n  2\n*Model_Space\n340\n1A\n 70\n0\n280\n1\n281\n0\n  0\nBLOCK_RECORD\n  5\n1B\n330\n9\n100\nAcDbSymbolTableRecord\n100\nAcDbBlockTableRecord\n  2\n*Paper_Space\n340\n1E\n 70\n0\n280\n1\n281\n0\n  0\nENDTAB\n  0\nENDSEC\n  0\nSECTION\n  2\nBLOCKS\n  0\nBLOCK\n  5\n18\n330\n17\n100\nAcDbEntity\n  8\n0\n100\nAcDbBlockBegin\n  2\n*Model_Space\n 70\n0\n 10\n0.0\n 20\n0.0\n 30\n0.0\n  3\n*Model_Space\n  1\n\n  0\nENDBLK\n  5\n19\n330\n17\n100\nAcDbEntity\n  8\n0\n100\nAcDbBlockEnd\n  0\nBLOCK\n  5\n1C\n330\n1B\n100\nAcDbEntity\n  8\n0\n100\nAcDbBlockBegin\n  2\n*Paper_Space\n 70\n0\n 10\n0.0\n 20\n0.0\n 30\n0.0\n  3\n*Paper_Space\n  1\n\n  0\nENDBLK\n  5\n1D\n330\n1B\n100\nAcDbEntity\n  8\n0\n100\nAcDbBlockEnd\n  0\nENDSEC\n  0\nSECTION\n  2\nENTITIES\n  0\nIMAGE\n  5\n41\n330\n17\n100\nAcDbEntity\n  8\n背景画像\n100\nAcDbRasterImage\n 90\n0\n 10\n0.0\n 20\n0.0\n 30\n0.0\n11\n__PX__\n 21\n0.0\n 31\n0.0\n 12\n0.0\n 22\n__PX__\n 32\n0.0\n 13\n__W__\n 23\n__H__\n340\n40\n 70\n3\n280\n0\n281\n50\n282\n50\n283\n0\n360\n42\n 71\n1\n 91\n2\n 14\n-0.5\n 24\n-0.5\n 14\n__W5__\n 24\n__H5__\n290\n0\n__ENTITIES__\n  0\nENDSEC\n  0\nSECTION\n  2\nOBJECTS\n  0\nDICTIONARY\n  5\nA\n330\n0\n100\nAcDbDictionary\n281\n1\n  3\nACAD_COLOR\n350\nB\n  3\nACAD_GROUP\n350\nC\n  3\nACAD_LAYOUT\n350\nD\n  3\nACAD_MATERIAL\n350\nE\n  3\nACAD_MLEADERSTYLE\n350\nF\n  3\nACAD_MLINESTYLE\n350\n10\n  3\nACAD_PLOTSETTINGS\n350\n11\n  3\nACAD_PLOTSTYLENAME\n350\n12\n  3\nACAD_SCALELIST\n350\n14\n  3\nACAD_TABLESTYLE\n350\n15\n  3\nACAD_VISUALSTYLE\n350\n16\n  3\nEZDXF_META\n350\n2D\n  3\nACAD_IMAGE_VARS\n350\n3E\n  3\nACAD_IMAGE_DICT\n350\n3F\n  0\nDICTIONARY\n  5\nB\n330\nA\n100\nAcDbDictionary\n281\n1\n  0\nDICTIONARY\n  5\nC\n330\nA\n100\nAcDbDictionary\n281\n1\n  0\nDICTIONARY\n  5\nD\n330\nA\n100\nAcDbDictionary\n281\n1\n  3\nModel\n350\n1A\n  3\nLayout1\n350\n1E\n  0\nDICTIONARY\n  5\nE\n330\nA\n100\nAcDbDictionary\n281\n1\n  3\nByBlock\n350\n1F\n  3\nByLayer\n350\n20\n  3\nGlobal\n350\n21\n  0\nDICTIONARY\n  5\nF\n330\nA\n100\nAcDbDictionary\n281\n1\n  3\nStandard\n350\n2C\n  0\nDICTIONARY\n  5\n10\n330\nA\n100\nAcDbDictionary\n281\n1\n  3\nStandard\n350\n22\n  0\nDICTIONARY\n  5\n11\n330\nA\n100\nAcDbDictionary\n281\n1\n  0\nACDBDICTIONARYWDFLT\n  5\n12\n330\nA\n100\nAcDbDictionary\n281\n1\n  3\nNormal\n350\n13\n100\nAcDbDictionaryWithDefault\n340\n13\n  0\nACDBPLACEHOLDER\n  5\n13\n330\n12\n  0\nDICTIONARY\n  5\n14\n330\nA\n100\nAcDbDictionary\n281\n1\n  0\nDICTIONARY\n  5\n15\n330\nA\n100\nAcDbDictionary\n281\n1\n  0\nDICTIONARY\n  5\n16\n330\nA\n100\nAcDbDictionary\n281\n1\n  0\nLAYOUT\n  5\n1A\n330\nD\n100\nAcDbPlotSettings\n  1\n\n  4\nA3\n  6\n\n 40\n7.5\n 41\n20.0\n 42\n7.5\n 43\n20.0\n 44\n420.0\n 45\n297.0\n 46\n0.0\n 47\n0.0\n 48\n0.0\n 49\n0.0\n140\n0.0\n141\n0.0\n142\n1.0\n143\n1.0\n 70\n1024\n 72\n1\n 73\n0\n 74\n5\n  7\n\n 75\n16\n 76\n0\n 77\n2\n 78\n300\n147\n1.0\n148\n0.0\n149\n0.0\n100\nAcDbLayout\n  1\nModel\n 70\n1\n 71\n0\n 10\n0.0\n 20\n0.0\n 11\n420.0\n 21\n297.0\n 12\n0.0\n 22\n0.0\n 32\n0.0\n 14\n1e+20\n 24\n1e+20\n 34\n1e+20\n 15\n-1e+20\n 25\n-1e+20\n 35\n-1e+20\n146\n0.0\n 13\n0.0\n 23\n0.0\n 33\n0.0\n 16\n1.0\n 26\n0.0\n 36\n0.0\n 17\n0.0\n 27\n1.0\n 37\n0.0\n 76\n1\n330\n17\n  0\nLAYOUT\n  5\n1E\n330\nD\n100\nAcDbPlotSettings\n  1\n\n  4\nA3\n  6\n\n 40\n7.5\n 41\n20.0\n 42\n7.5\n 43\n20.0\n 44\n420.0\n 45\n297.0\n 46\n0.0\n 47\n0.0\n 48\n0.0\n 49\n0.0\n140\n0.0\n141\n0.0\n142\n1.0\n143\n1.0\n 70\n0\n 72\n1\n 73\n0\n 74\n5\n  7\n\n 75\n16\n 76\n0\n 77\n2\n 78\n300\n147\n1.0\n148\n0.0\n149\n0.0\n100\nAcDbLayout\n  1\nLayout1\n 70\n1\n 71\n1\n 10\n0.0\n 20\n0.0\n 11\n420.0\n 21\n297.0\n 12\n0.0\n 22\n0.0\n 32\n0.0\n 14\n1e+20\n 24\n1e+20\n 34\n1e+20\n 15\n-1e+20\n 25\n-1e+20\n 35\n-1e+20\n146\n0.0\n 13\n0.0\n 23\n0.0\n 33\n0.0\n 16\n1.0\n 26\n0.0\n 36\n0.0\n 17\n0.0\n 27\n1.0\n 37\n0.0\n 76\n1\n330\n1B\n  0\nMATERIAL\n  5\n1F\n102\n{ACAD_REACTORS\n330\nE\n102\n}\n330\nE\n100\nAcDbMaterial\n  1\nByBlock\n  2\n\n 70\n0\n 40\n1.0\n 71\n1\n 41\n1.0\n 91\n-1023410177\n 42\n1.0\n 72\n1\n  3\n\n 73\n1\n 74\n1\n 75\n1\n 44\n0.5\n 73\n0\n 45\n1.0\n 46\n1.0\n 77\n1\n  4\n\n 78\n1\n 79\n1\n170\n1\n 48\n1.0\n171\n1\n  6\n\n172\n1\n173\n1\n174\n1\n140\n1.0\n141\n1.0\n175\n1\n  7\n\n176\n1\n177\n1\n178\n1\n143\n1.0\n179\n1\n  8\n\n270\n1\n271\n1\n272\n1\n145\n1.0\n146\n1.0\n273\n1\n  9\n\n274\n1\n275\n1\n276\n1\n 42\n1.0\n 72\n1\n  3\n\n 73\n1\n 74\n1\n 75\n1\n 94\n63\n  0\nMATERIAL\n  5\n20\n102\n{ACAD_REACTORS\n330\nE\n102\n}\n330\nE\n100\nAcDbMaterial\n  1\nByLayer\n  2\n\n 70\n0\n 40\n1.0\n 71\n1\n 41\n1.0\n 91\n-1023410177\n 42\n1.0\n 72\n1\n  3\n\n 73\n1\n 74\n1\n 75\n1\n 44\n0.5\n 73\n0\n 45\n1.0\n 46\n1.0\n 77\n1\n  4\n\n 78\n1\n 79\n1\n170\n1\n 48\n1.0\n171\n1\n  6\n\n172\n1\n173\n1\n174\n1\n140\n1.0\n141\n1.0\n175\n1\n  7\n\n176\n1\n177\n1\n178\n1\n143\n1.0\n179\n1\n  8\n\n270\n1\n271\n1\n272\n1\n145\n1.0\n146\n1.0\n273\n1\n  9\n\n274\n1\n275\n1\n276\n1\n 42\n1.0\n 72\n1\n  3\n\n 73\n1\n 74\n1\n 75\n1\n 94\n63\n  0\nMATERIAL\n  5\n21\n102\n{ACAD_REACTORS\n330\nE\n102\n}\n330\nE\n100\nAcDbMaterial\n  1\nGlobal\n  2\n\n 70\n0\n 40\n1.0\n 71\n1\n 41\n1.0\n 91\n-1023410177\n 42\n1.0\n 72\n1\n  3\n\n 73\n1\n 74\n1\n 75\n1\n 44\n0.5\n 73\n0\n 45\n1.0\n 46\n1.0\n 77\n1\n  4\n\n 78\n1\n 79\n1\n170\n1\n 48\n1.0\n171\n1\n  6\n\n172\n1\n173\n1\n174\n1\n140\n1.0\n141\n1.0\n175\n1\n  7\n\n176\n1\n177\n1\n178\n1\n143\n1.0\n179\n1\n  8\n\n270\n1\n271\n1\n272\n1\n145\n1.0\n146\n1.0\n273\n1\n  9\n\n274\n1\n275\n1\n276\n1\n 42\n1.0\n 72\n1\n  3\n\n 73\n1\n 74\n1\n 75\n1\n 94\n63\n  0\nMLINESTYLE\n  5\n22\n102\n{ACAD_REACTORS\n330\n10\n102\n}\n330\n10\n100\nAcDbMlineStyle\n  2\nStandard\n 70\n0\n  3\n\n 62\n256\n 51\n90.0\n 52\n90.0\n 71\n2\n 49\n0.5\n 62\n256\n  6\nBYLAYER\n 49\n-0.5\n 62\n256\n  6\nBYLAYER\n  0\nMLEADERSTYLE\n  5\n2C\n102\n{ACAD_REACTORS\n330\nF\n102\n}\n330\nF\n100\nAcDbMLeaderStyle\n179\n2\n170\n2\n171\n1\n172\n0\n 90\n2\n 40\n0.0\n 41\n0.0\n173\n1\n 91\n-1056964608\n 92\n-2\n290\n1\n 42\n2.0\n291\n1\n 43\n8.0\n  3\nStandard\n 44\n4.0\n300\n\n342\n29\n174\n1\n175\n1\n176\n0\n178\n1\n 93\n-1056964608\n 45\n4.0\n292\n0\n297\n0\n 46\n4.0\n 94\n-1056964608\n 47\n1.0\n 49\n1.0\n140\n1.0\n294\n1\n141\n0.0\n177\n0\n142\n1.0\n295\n0\n296\n0\n143\n3.75\n271\n0\n272\n9\n273\n9\n  0\nDICTIONARY\n  5\n2D\n330\nA\n100\nAcDbDictionary\n280\n1\n281\n1\n  3\nCREATED_BY_EZDXF\n350\n2E\n  3\nWRITTEN_BY_EZDXF\n350\n48\n  0\nDICTIONARYVAR\n  5\n2E\n330\n2D\n100\nDictionaryVariables\n280\n0\n  1\n1.4.5 @ 2026-11-13T07:36:02.699332+00:00\n  0\nRASTERVARIABLES\n  5\n3E\n102\n{ACAD_REACTORS\n330\nA\n102\n}\n330\nA\n100\nAcDbRasterVariables\n 90\n0\n 70\n0\n 71\n1\n 72\n3\n  0\nDICTIONARY\n  5\n3F\n330\nA\n100\nAcDbDictionary\n281\n1\n  3\n__IMGNAME__\n350\n40\n  0\nIMAGEDEF\n  5\n40\n102\n{ACAD_REACTORS\n330\n3F\n330\n42\n102\n}\n330\n3F\n100\nAcDbRasterImageDef\n 90\n0\n  1\n__IMGNAME__\n 10\n__W__\n 20\n__H__\n 11\n0.01\n 21\n0.01\n280\n1\n281\n0\n  0\nIMAGEDEF_REACTOR\n  5\n42\n330\n41\n100\nAcDbRasterImageDefReactor\n 90\n2\n330\n41\n  0\nDICTIONARYVAR\n  5\n48\n330\n2D\n100\nDictionaryVariables\n280\n0\n  1\n1.4.5 @ 2026-11-13T07:36:02.702361+00:00\n  0\nENDSEC\n  0\nEOF\n";
+"use strict";
+/* ================= 変状スケッチ（v1.19） =================
+   マーキングは「元の 360°画像の名前と、その画像の中での向き (u,v)」で保存し、オルソ上の位置は
+   位置合わせ結果から毎回計算する（見上げ・見下げ、範囲指定、傾き補正、合成のやり直しに追従）。
+   各頂点は基準画像 a（360°で描いた画像／その点の合成に使った画像）と、予備 b（次に近い画像）を持つ。 */
+const SK_KINDS=[
+  {id:'crack', name:'ひびわれ',   col:'#e5231b', aci:1,   line:true},
+  {id:'peel',  name:'剥離',       col:'#1e9a3c', aci:3},
+  {id:'rebar', name:'鉄筋露出',   col:'#ef7d1a', aci:30,  hatch:'v'},
+  {id:'efflo', name:'遊離石灰',   col:'#1e9bd7', aci:4,   dash:true},
+  {id:'leak',  name:'漏水',       col:'#c8197a', aci:6,   hatch:'d'},
+  {id:'other', name:'その他',     col:'#6b3fb4', aci:200},
+  {id:'uki',   name:'うき',       col:'#e5231b', aci:1,   hatch:'g'},
+  {id:'deform',name:'変形・欠損', col:'#1e9a3c', aci:3,   hatch:'h'},
+  {id:'corr',  name:'腐食',       col:'#ef7d1a', aci:30,  hatch:'x'},
+];
+const SKK=Object.fromEntries(SK_KINDS.map(k=>[k.id,k]));
+const SK_RED='#d0021b', SK_BLACK='#111111';
+const SK={items:[],key:null,undo:[],redo:[],sig:'',res:new Map(),camMap:null,kind:'crack',status:'new',tool:'draw',fdraw:false,sel:null,
+  v:{s:1,ox:0,oy:0},cw:0,ch:0,dpr:1,tiles:new Map(),imgRef:null,mem:new Map(),saveT:0,raf:0,penAt:0};
+const skOK=()=>!!(S.sol&&S.o&&S.o.mode==='slab'&&S.img&&S.img.rgb&&S.names);
+
+/* ---- 幾何：オルソ（位置合わせの座標 Wx,Wy［m］）⇔ 画像 j の正距円筒 (u,v) ---- */
+function skSolSig(){const cs=S.sol.cams;let a=0;
+  for(let k=0;k<cs.length;k++){const c=cs[k];a+=(k+1)*(c.a*1.13+c.b*2.31+c.tx*3.77+c.ty*5.93+(c.h0||0)*7.1+(c.gx||0)*11.3+(c.gy||0)*13.7+c.i*0.017);}
+  return cs.length+':'+a.toPrecision(15)+':'+S.o.h+':'+S.o.th;}
+const skName=j=>S.names[S.sol.cams[j].i];
+function skFwd(j,Wx,Wy){const c=S.sol.cams[j],s2=c.s*c.s,dx=Wx-c.tx,dy=Wy-c.ty,X=(c.a*dx+c.b*dy)/s2,Y=(c.a*dy-c.b*dx)/s2;
+  const hl=(c.h0||S.o.h)+(c.gx||0)*X+(c.gy||0)*Y; if(hl<0.05)return null; const th=Math.atan(Math.hypot(X,Y)/hl);
+  return {u:Math.atan2(Y,X)/TAU+0.5,v:th/Math.PI,th};}
+/* 画像 j の向き (u,v) の視線と床版平面（傾き込み）の交点。式で直接解く */
+function skInv(j,u,v){const c=S.sol.cams[j], lon=(u-0.5)*TAU, th=v*Math.PI; if(!(th<Math.PI/2-0.005))return null;
+  const st=Math.sin(th),dX=st*Math.cos(lon),dY=st*Math.sin(lon), den=Math.cos(th)-(c.gx||0)*dX-(c.gy||0)*dY; if(den<=1e-6)return null;
+  const t=(c.h0||S.o.h)/den, X=t*dX, Y=t*dY; return [c.tx+c.a*X-c.b*Y, c.ty+c.b*X+c.a*Y];}
+/* 合成と同じ規則（撮影位置が水平距離で最も近い画像）で、その点の担当画像と次の画像 */
+function skOwners(Wx,Wy){const cs=S.sol.cams,tth=Math.tan(S.o.th*D2R);let ia=-1,ib=-1,da=1e18,db=1e18,na=-1,nd=1e18;
+  for(let j=0;j<cs.length;j++){const c=cs[j],dx=Wx-c.tx,dy=Wy-c.ty,d2=dx*dx+dy*dy; if(d2<nd){nd=d2;na=j;}
+    if(d2>(c.s*(c.h0||S.o.h)*tth)**2)continue; if(d2<da){db=da;ib=ia;da=d2;ia=j;}else if(d2<db){db=d2;ib=j;}}
+  return [ia>=0?ia:na, ib];}
+function skPack(j,Wx,Wy){if(j==null||j<0)return null;const f=skFwd(j,Wx,Wy);return f?{k:skName(j),u:+f.u.toFixed(8),v:+f.v.toFixed(8)}:null;}
+function skAnchor(Wx,Wy,jDrawn){const [ia,ib]=skOwners(Wx,Wy);
+  if(jDrawn!=null){const jb=ia!==jDrawn?ia:ib;return {a:skPack(jDrawn,Wx,Wy),b:skPack(jb,Wx,Wy)};}
+  return {a:skPack(ia,Wx,Wy),b:skPack(ib,Wx,Wy)};}
+function skResolveItem(it){
+  const m=SK.camMap; let lost=false,dev=0,fromB=0; const w=[];
+  for(const p of it.pts){let P=null,Q=null;
+    if(p.a&&m.has(p.a.k))P=skInv(m.get(p.a.k),p.a.u,p.a.v);
+    if(p.b&&m.has(p.b.k))Q=skInv(m.get(p.b.k),p.b.u,p.b.v);
+    if(P&&Q)dev=Math.max(dev,Math.hypot(P[0]-Q[0],P[1]-Q[1]));
+    if(!P&&Q){P=Q;fromB++;}
+    if(!P){lost=true;break;} w.push(P);}
+  const r={w,lost,dev,fromB}; SK.res.set(it.id,r); return r;}
+function skResolveAll(force){
+  if(!S.sol||!S.names)return; const sig=skSolSig(); if(!force&&sig===SK.sig)return;
+  SK.sig=sig; SK.camMap=new Map(S.sol.cams.map((c,j)=>[S.names[c.i],j])); SK.res=new Map();
+  SK.items.forEach(skResolveItem);
+}
+/* 平面上の点列を簡略化（Douglas–Peucker、tol は m） */
+function skSimplify(P,tol){if(P.length<3)return P.slice();const keep=new Uint8Array(P.length);keep[0]=keep[P.length-1]=1;const st=[[0,P.length-1]];
+  while(st.length){const [a,b]=st.pop();const [ax,ay]=P[a],[bx,by]=P[b],L=Math.hypot(bx-ax,by-ay)||1e-12;let md=-1,mi=-1;
+    for(let i=a+1;i<b;i++){const d=Math.abs((bx-ax)*(ay-P[i][1])-(ax-P[i][0])*(by-ay))/L;if(d>md){md=d;mi=i;}}
+    if(md>tol){keep[mi]=1;st.push([a,mi],[mi,b]);}}
+  return P.filter((_,i)=>keep[i]);}
+function skDensify(P,closed,step){const Q=[];const n=P.length,m=closed?n:n-1;
+  for(let i=0;i<m;i++){const a=P[i],b=P[(i+1)%n],L=Math.hypot(b[0]-a[0],b[1]-a[1]),k=Math.max(1,Math.min(200,Math.ceil(L/step)));
+    for(let t=0;t<k;t++)Q.push([a[0]+(b[0]-a[0])*t/k,a[1]+(b[1]-a[1])*t/k]);}
+  Q.push(closed?P[0]:P[n-1]); return Q;}
+const skLen=w=>{let L=0;for(let i=1;i<w.length;i++)L+=Math.hypot(w[i][0]-w[i-1][0],w[i][1]-w[i-1][1]);return L;};
+const skArea=w=>{let A=0;for(let i=0;i<w.length;i++){const a=w[i],b=w[(i+1)%w.length];A+=a[0]*b[1]-b[0]*a[1];}return Math.abs(A)/2;};
+
+/* ---- 新しい変状を作る ---- */
+function skNewItem(world,jDrawn,src){
+  const K=SKK[SK.kind]; let P=world; if(!K.line){if(P.length<3)return null;}
+  else if(P.length<2)return null;
+  if(skLen(P)<0.005)return null;
+  const it={id:'m'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),kind:SK.kind,status:SK.status,label:'',width:'',memo:'',closed:!K.line,src,created:Date.now(),
+    pts:P.map(([x,y])=>skAnchor(x,y,jDrawn))};
+  if(it.pts.some(p=>!p.a))return null;
+  return it;}
+function skAdd(it){SK.items.push(it);SK.undo.push({t:'add',item:it});SK.redo=[];if(SK.camMap)skResolveItem(it);skSave();skUI();skReq();}
+function skDel(id){const i=SK.items.findIndex(x=>x.id===id);if(i<0)return;const it=SK.items[i];SK.items.splice(i,1);SK.undo.push({t:'del',item:it,idx:i});SK.redo=[];
+  if(SK.sel===id)skSelect(null);skSave();skUI();skReq();}
+const skAttrs=it=>({kind:it.kind,status:it.status,label:it.label,width:it.width,memo:it.memo,closed:it.closed});
+function skApplyOp(op,inv){
+  if(op.t==='add'){if(inv){const i=SK.items.findIndex(x=>x.id===op.item.id);if(i>=0)SK.items.splice(i,1);if(SK.sel===op.item.id)skSelect(null);}else{SK.items.push(op.item);skResolveItem(op.item);}}
+  else if(op.t==='del'){if(inv){SK.items.splice(Math.min(op.idx,SK.items.length),0,op.item);skResolveItem(op.item);}else{const i=SK.items.findIndex(x=>x.id===op.item.id);if(i>=0)SK.items.splice(i,1);}}
+  else if(op.t==='edit'){const it=SK.items.find(x=>x.id===op.id);if(it)Object.assign(it,inv?op.before:op.after);}
+  else if(op.t==='multi'){(inv?op.ops.slice().reverse():op.ops).forEach(o=>skApplyOp(o,inv));}
+}
+function skUndo(){const op=SK.undo.pop();if(!op)return;skApplyOp(op,true);SK.redo.push(op);skSave();skUI();skReq();if(!$('#pano').hidden)skPanoDraw();}
+function skRedo(){const op=SK.redo.pop();if(!op)return;skApplyOp(op,false);SK.undo.push(op);skSave();skUI();skReq();if(!$('#pano').hidden)skPanoDraw();}
+
+/* ---- 保存（端末内）：案件ごと。サンプルは画面を閉じるまでの一時保存 ---- */
+async function skLoad(key){
+  SK.key=key; SK.undo=[]; SK.redo=[]; SK.sel=null; SK.sig=''; SK.items=[];
+  if(key==='sample')SK.items=SK.mem.get('sample')||[];
+  else if(key){try{const r=await DB.get('sketches',key);SK.items=(r&&r.items)||[];}catch(e){console.error(e);}}
+  skAttrUI(); skUI(); skReq();
+}
+function skSave(){
+  if(!SK.key)return; if(SK.key==='sample'){SK.mem.set('sample',SK.items);return;}
+  clearTimeout(SK.saveT); const key=SK.key, items=SK.items;
+  SK.saveT=setTimeout(()=>{DB.put('sketches',{id:key,items:JSON.parse(JSON.stringify(items)),updated:Date.now()}).catch(e=>{console.error(e);log('変状の保存に失敗しました：'+(e&&e.message||e));});},250);
+}
+/* 合成をやり直す前の変状を、新しい合成に引き継ぐ（同じ名前の画像に描いたもの） */
+function skCarry(){return SK.items.length?{items:JSON.parse(JSON.stringify(SK.items))}:null;}
+async function skAfterPipeline(carry){
+  const key=S.projectId||(S.mode==='sample'?'sample':null);
+  if(carry&&key==='sample')SK.mem.delete('sample');
+  await skLoad(key);
+  if(carry&&key&&S.o&&S.o.mode==='slab'){
+    const names=new Set(S.names), ok=carry.items.filter(it=>it.pts.every(p=>(p.a&&names.has(p.a.k))||(p.b&&names.has(p.b.k))));
+    if(ok.length){SK.items=ok; SK.sig=''; skSave(); skUI(); skReq();
+      log(`前回の変状 ${ok.length} 件を新しい合成に引き継ぎました${ok.length<carry.items.length?`（${carry.items.length-ok.length} 件は対応する画像がないため引き継げません）`:''}。`);}
+  }
+}
+
+/* ---- 描画（オルソ画面・書き出し・360°画面で共通） ---- */
+function skHatchLines(ctx,pl,type,sp){
+  let x0=1e18,y0=1e18,x1=-1e18,y1=-1e18; pl.forEach(([x,y])=>{x0=Math.min(x0,x);y0=Math.min(y0,y);x1=Math.max(x1,x);y1=Math.max(y1,y);});
+  const cx=(x0+x1)/2,cy=(y0+y1)/2,R=Math.hypot(x1-x0,y1-y0)/2+sp, angs={v:[90],h:[0],d:[45],g:[0,90],x:[45,135]}[type]||[];
+  ctx.beginPath();
+  angs.forEach(a=>{const dx=Math.cos(a*D2R),dy=-Math.sin(a*D2R),nx=-dy,ny=dx;
+    for(let k=-Math.ceil(R/sp);k<=Math.ceil(R/sp);k++){const px=cx+nx*k*sp,py=cy+ny*k*sp;ctx.moveTo(px-dx*R,py-dy*R);ctx.lineTo(px+dx*R,py+dy*R);}});
+  ctx.stroke();
+}
+function skPath(ctx,pl,close){ctx.beginPath();pl.forEach(([x,y],i)=>i?ctx.lineTo(x,y):ctx.moveTo(x,y));if(close)ctx.closePath();}
+/* 1つの変状の形を描く。pieces：画面上の折れ線（360°画面では途中で切れることがある） */
+function skShape(ctx,K,pieces,st,closedWhole){
+  ctx.strokeStyle=K.col; ctx.lineWidth=st.lw; ctx.lineJoin='round'; ctx.lineCap='round';
+  if(K.line){pieces.forEach(pl=>{skPath(ctx,pl,false);ctx.stroke();});return;}
+  if(closedWhole&&K.hatch){const pl=pieces[0];ctx.save();skPath(ctx,pl,true);ctx.clip();ctx.lineWidth=Math.max(1,st.lw*0.55);skHatchLines(ctx,pl,K.hatch,st.hs);ctx.restore();ctx.lineWidth=st.lw;}
+  if(K.dash)ctx.setLineDash([st.lw*2.6,st.lw*1.8]);
+  pieces.forEach(pl=>{skPath(ctx,pl,closedWhole);ctx.stroke();}); ctx.setLineDash([]);
+}
+function skLabel(it){const a=[];if(it.label)a.push(it.label);if(SKK[it.kind].line&&it.width!==''&&it.width!=null)a.push(`w=${it.width}mm`);return a.join(' ');}
+function skPaint(ctx,proj,st){
+  SK.items.forEach(it=>{const r=SK.res.get(it.id); if(!r||r.lost)return; const K=SKK[it.kind]; if(!K)return;
+    const pr=proj(it,r); if(!pr||!pr.pieces.length)return; const pieces=pr.pieces.filter(p=>p.length>1); if(!pieces.length)return;
+    ctx.save();
+    if(st.sel===it.id){ctx.save();ctx.strokeStyle='rgba(255,214,0,.95)';ctx.lineWidth=st.lw*3.4;ctx.lineJoin='round';ctx.lineCap='round';pieces.forEach(pl=>{skPath(ctx,pl,pr.whole&&!K.line);ctx.stroke();});ctx.restore();}
+    if(st.shapes!==false)skShape(ctx,K,pieces,st,pr.whole);
+    if(st.labels!==false){const t=skLabel(it); if(t){let x=-1e18,y=1e18;
+        if(K.line){const pl=pieces[0],m=pl[Math.floor(pl.length/2)];x=m[0]+st.lw*2;y=m[1]-st.lw*2;}
+        else pieces.forEach(pl=>pl.forEach(([px,py])=>{if(px>x)x=px;if(py<y)y=py;}));
+        ctx.font=`bold ${overlayFont(st.fs)}`; ctx.textBaseline='bottom'; ctx.lineJoin='round';
+        ctx.lineWidth=st.fs*0.28; ctx.strokeStyle='rgba(255,255,255,.92)'; ctx.strokeText(t,x+st.fs*0.15,y);
+        ctx.fillStyle=it.status==='old'?SK_BLACK:SK_RED; ctx.fillText(t,x+st.fs*0.15,y);}}
+    ctx.restore();});
+}
+/* 凡例（使っている種類だけ）。x,y：左上。u：1行の高さの目安（px） */
+function skLegendSize(ctx,u,kinds){ctx.font=overlayFont(u*0.62);const nw=Math.max(...kinds.map(K=>ctx.measureText(K.name).width));
+  ctx.font=overlayFont(u*0.5);const n1='黒字：前回点検で確認された変状',n2='赤字：今回点検で確認した変状または進行が認められる変状';
+  const tw=Math.max(u*3.2+nw,ctx.measureText(n2).width)+u*0.9; return {w:tw,h:u*(1.3+kinds.length*1.05+1.5),n1,n2};}
+function skLegendDraw(ctx,x,y,u,kinds){
+  const L=skLegendSize(ctx,u,kinds);
+  ctx.save(); ctx.fillStyle='rgba(255,255,255,.93)'; ctx.fillRect(x,y,L.w,L.h); ctx.strokeStyle='#222'; ctx.lineWidth=Math.max(1,u*0.04); ctx.strokeRect(x,y,L.w,L.h);
+  ctx.fillStyle='#111'; ctx.font=`bold ${overlayFont(u*0.6)}`; ctx.textBaseline='middle'; ctx.fillText('凡例',x+u*0.45,y+u*0.6);
+  kinds.forEach((K,i)=>{const cy=y+u*(1.45+i*1.05), sx=x+u*0.45, sw=u*2.3, sh=u*0.72;
+    let pl; if(K.line)pl=[[sx,cy+sh*0.3],[sx+sw*0.3,cy-sh*0.35],[sx+sw*0.55,cy+sh*0.2],[sx+sw*0.8,cy-sh*0.3],[sx+sw,cy+sh*0.1]];
+    else{pl=[];for(let k=0;k<16;k++){const t=k/16*TAU;pl.push([sx+sw/2+Math.cos(t)*sw/2,cy+Math.sin(t)*sh/2]);}}
+    skShape(ctx,K,[pl],{lw:Math.max(1.2,u*0.07),hs:u*0.16},!K.line);
+    ctx.fillStyle='#111'; ctx.font=overlayFont(u*0.62); ctx.fillText(K.name,sx+sw+u*0.4,cy);});
+  const ny=y+u*(1.45+kinds.length*1.05); ctx.font=overlayFont(u*0.5); ctx.fillStyle=SK_BLACK; ctx.fillText(L.n1,x+u*0.45,ny+u*0.1); ctx.fillStyle=SK_RED; ctx.fillText(L.n2,x+u*0.45,ny+u*0.75);
+  ctx.restore(); return L;}
+const skKindsUsed=()=>SK_KINDS.filter(K=>SK.items.some(it=>it.kind===K.id&&SK.res.get(it.id)&&!SK.res.get(it.id).lost));
+/* 書き出し画像への焼き込み（W,H：出力画像の画素数、f：縮小率） */
+function skBurn(ctx,W,H,f,fs,o){
+  if(!skOK()||!SK.items.length)return; skResolveAll();
+  const lw=o.lw||Math.max(2,Math.min(W,H)/900), img=S.img;
+  const proj=(it,r)=>({pieces:[r.w.map(([x,y])=>{const p=toOut(img,x,y);return [(p[0]+0.5)/f,(p[1]+0.5)/f];})],whole:true});
+  skPaint(ctx,proj,{lw,hs:lw*5,fs,shapes:o.shapes,labels:o.labels});
+  if(o.legend){const ks=skKindsUsed(); if(ks.length){const u=fs*1.15, L=skLegendSize(ctx,u,ks); skLegendDraw(ctx,W-L.w-fs*0.8,fs*0.8,u,ks);}}
+}
+
+/* ================= スケッチ画面（オルソ） ================= */
+const SKT=512;
+const skPVF=()=>Math.max(1,Math.ceil(Math.max(S.img.W,S.img.H)/3200));
+function skClearTiles(){SK.tiles.forEach(c=>{c.width=c.height=0;});SK.tiles.clear();}
+function skImgChanged(){skClearTiles();SK.imgRef=null;SK.sig='';if(!$('#panel-sketch').hidden)skShow();}
+function skMakeTile(f,tx,ty){
+  const img=S.img,{W,H,rgb,cov}=img,x0=tx*SKT*f,y0=ty*SKT*f,w=Math.min(SKT,Math.ceil((W-x0)/f)),h=Math.min(SKT,Math.ceil((H-y0)/f));
+  const id=new ImageData(w,h),d=id.data;
+  for(let r=0;r<h;r++){const sy0=y0+r*f;
+    for(let c=0;c<w;c++){const sx0=x0+c*f,q=(r*w+c)*4;let R=0,G=0,B=0,n=0;
+      for(let dy=0;dy<f;dy++){const sy=sy0+dy;if(sy>=H)break;for(let dx=0;dx<f;dx++){const sx=sx0+dx;if(sx>=W)break;const p=sy*W+sx;
+        if((cov[p>>3]>>(p&7))&1){R+=rgb[p*3];G+=rgb[p*3+1];B+=rgb[p*3+2];n++;}}}
+      if(n){d[q]=R/n;d[q+1]=G/n;d[q+2]=B/n;}else{d[q]=BG[0];d[q+1]=BG[1];d[q+2]=BG[2];} d[q+3]=255;}}
+  const cv=document.createElement('canvas');cv.width=w;cv.height=h;cv.getContext('2d').putImageData(id,0,0);
+  SK.tiles.set(f+'/'+tx+'/'+ty,cv);
+  while(SK.tiles.size>110){const k=SK.tiles.keys().next().value,o=SK.tiles.get(k);o.width=o.height=0;SK.tiles.delete(k);}
+  return cv;}
+function skResize(){const cv=$('#sk-cv'),st=$('#sk-stage'),dpr=Math.min(window.devicePixelRatio||1,2),w=st.clientWidth,h=st.clientHeight;
+  if(!w||!h)return false; const W=Math.round(w*dpr),H=Math.round(h*dpr); if(cv.width!==W||cv.height!==H){cv.width=W;cv.height=H;}
+  SK.cw=w;SK.ch=h;SK.dpr=dpr;return true;}
+const skFitS=()=>Math.min(SK.cw/S.img.W,SK.ch/S.img.H)*0.98;
+function skFit(){const s=skFitS();SK.v={s,ox:(S.img.W-SK.cw/s)/2,oy:(S.img.H-SK.ch/s)/2};skReq();}
+function skZoomAt(x,y,k){const v=SK.v,ns=Math.max(skFitS()*0.5,Math.min(8,v.s*k)),p=v.ox+x/v.s,q=v.oy+y/v.s;SK.v={s:ns,ox:p-x/ns,oy:q-y/ns};skReq();}
+function skReq(){if(SK.raf)return;SK.raf=requestAnimationFrame(()=>{SK.raf=0;skRender();});}
+const skW2S=(Wx,Wy)=>{const o=toOut(S.img,Wx,Wy);return [(o[0]+0.5-SK.v.ox)*SK.v.s,(o[1]+0.5-SK.v.oy)*SK.v.s];};
+const skS2W=(x,y)=>toWorld(S.img,SK.v.ox+x/SK.v.s-0.5,SK.v.oy+y/SK.v.s-0.5);
+function skRender(){
+  if($('#panel-sketch').hidden||!skResize())return;
+  const cv=$('#sk-cv'),ctx=cv.getContext('2d'),dpr=SK.dpr;
+  ctx.setTransform(1,0,0,1,0,0); ctx.fillStyle='#cfd3d4'; ctx.fillRect(0,0,cv.width,cv.height);
+  if(!skOK())return;
+  const img=S.img,{s,ox,oy}=SK.v,PVf=skPVF();
+  ctx.setTransform(dpr*s,0,0,dpr*s,-ox*s*dpr,-oy*s*dpr); ctx.imageSmoothingEnabled=true;
+  ctx.drawImage(PV,0,0,PV.width,PV.height,0,0,PV.width*PVf,PV.height*PVf);
+  const need=1/(s*dpr); let pending=0;
+  if(need<PVf*0.7){let f=1;while(f*2<=need&&f*2<PVf)f*=2;
+    const span=SKT*f,p0=Math.max(0,ox),q0=Math.max(0,oy),p1=Math.min(img.W,ox+SK.cw/s),q1=Math.min(img.H,oy+SK.ch/s),t0=performance.now();
+    ctx.imageSmoothingEnabled=need>0.6;
+    for(let ty=Math.floor(q0/span);ty*span<q1;ty++)for(let tx=Math.floor(p0/span);tx*span<p1;tx++){
+      const key=f+'/'+tx+'/'+ty;let t=SK.tiles.get(key);
+      if(t){SK.tiles.delete(key);SK.tiles.set(key,t);}else if(performance.now()-t0<40)t=skMakeTile(f,tx,ty);else{pending++;continue;}
+      ctx.drawImage(t,0,0,t.width,t.height,tx*span,ty*span,t.width*f,t.height*f);}}
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  skResolveAll();
+  skPaint(ctx,(it,r)=>({pieces:[r.w.map(([x,y])=>skW2S(x,y))],whole:true}),{lw:2.4,hs:7,fs:13,sel:SK.sel});
+  if(SKO.draw&&SKO.draw.pts.length>1){const K=SKK[SK.kind];ctx.save();ctx.strokeStyle=K.col;ctx.lineWidth=2.4;ctx.lineJoin='round';ctx.lineCap='round';skPath(ctx,SKO.draw.pts,false);ctx.stroke();ctx.restore();}
+  if(pending)skReq();
+}
+/* 当たり判定（画面座標、px） */
+function skHit(x,y,tol){
+  let best=null,bd=tol;
+  for(let n=SK.items.length-1;n>=0;n--){const it=SK.items[n],r=SK.res.get(it.id);if(!r||r.lost)continue;
+    const P=r.w.map(([a,b])=>skW2S(a,b)),closed=!SKK[it.kind].line,m=closed?P.length:P.length-1;
+    for(let i=0;i<m;i++){const a=P[i],b=P[(i+1)%P.length],dx=b[0]-a[0],dy=b[1]-a[1],L2=dx*dx+dy*dy||1e-9,t=Math.max(0,Math.min(1,((x-a[0])*dx+(y-a[1])*dy)/L2)),d=Math.hypot(a[0]+t*dx-x,a[1]+t*dy-y);
+      if(d<bd){bd=d;best=it;}}
+    if(closed&&!best){let ins=false;for(let i=0,j=P.length-1;i<P.length;j=i++){const [xi,yi]=P[i],[xj,yj]=P[j];if(((yi>y)!==(yj>y))&&(x<(xj-xi)*(y-yi)/(yj-yi)+xi))ins=!ins;}if(ins)return it;}
+    if(best&&bd<tol*0.5)return best;}
+  return best;}
+/* 操作：ペンは描く（「指・マウスで描く」なら指・マウスも）、指は移動・2本指で拡大・長押しで360°画像 */
+const SKO={pts:new Map(),pinch:null,lp:null,draw:null,erase:null};
+function skXY(e){const r=$('#sk-cv').getBoundingClientRect();return [e.clientX-r.left,e.clientY-r.top];}
+function skToolDown(e,xy){
+  if(SK.tool==='draw'){SKO.draw={id:e.pointerId,pts:[xy],pen:e.pointerType==='pen'};}
+  else if(SK.tool==='erase'){SKO.erase={id:e.pointerId,ops:[]};skEraseAt(xy);}
+  else{const it=skHit(xy[0],xy[1],14);skSelect(it?it.id:null);SKO.erase={id:e.pointerId,ops:null,sel:true};}
+}
+function skEraseAt(xy){const it=skHit(xy[0],xy[1],12);if(!it)return;const i=SK.items.indexOf(it);SK.items.splice(i,1);SKO.erase.ops.push({t:'del',item:it,idx:i});if(SK.sel===it.id)skSelect(null);skReq();}
+function skFinishOrtho(){
+  const d=SKO.draw;SKO.draw=null; if(!d||d.pts.length<2){skReq();return;}
+  const world=d.pts.map(([x,y])=>skS2W(x,y)), tol=Math.max(0.0015,0.5/SK.v.s*S.img.G);
+  let P=skSimplify(world,tol); const K=SKK[SK.kind];
+  if(!K.line&&P.length>3&&Math.hypot(P[0][0]-P[P.length-1][0],P[0][1]-P[P.length-1][1])<tol*3)P.pop();
+  const it=skNewItem(P,null,'ortho'); if(it)skAdd(it); else skReq();
+}
+function skLongPress(xy){
+  const W=skS2W(xy[0],xy[1]),[ia]=skOwners(W[0],W[1]); if(ia<0)return;
+  SKO.pts.clear(); SKO.pinch=null; panoOpen(ia,{x:W[0],y:W[1]});
+}
+function skBindCanvas(){
+  const cv=$('#sk-cv');
+  cv.addEventListener('pointerdown',e=>{
+    if(!skOK())return; e.preventDefault(); try{cv.setPointerCapture(e.pointerId)}catch(_){}
+    const xy=skXY(e), pen=e.pointerType==='pen';
+    if(pen)SK.penAt=Date.now();
+    if(!pen&&e.pointerType==='touch'&&(SKO.draw&&SKO.draw.pen))return;          // ペンで描いている間の手のひら
+    if(pen||(SK.fdraw&&SKO.pts.size===0&&!SKO.draw)){if(SKO.draw||SKO.erase)return; clearTimeout(SKO.lp); skToolDown(e,xy); skReq(); return;}
+    if(SKO.draw&&!SKO.draw.pen){SKO.draw=null;}                                     // 指で描いている途中に2本目→描くのをやめて拡大へ
+    if(SKO.erase&&!pen){SKO.erase=null;}
+    SKO.pts.set(e.pointerId,{x:xy[0],y:xy[1],x0:xy[0],y0:xy[1]});
+    clearTimeout(SKO.lp);
+    if(SKO.pts.size===1&&e.pointerType!=='mouse'||SKO.pts.size===1&&e.button===0){const id=e.pointerId;SKO.lp=setTimeout(()=>{const p=SKO.pts.get(id);if(p&&SKO.pts.size===1&&Math.hypot(p.x-p.x0,p.y-p.y0)<10)skLongPress([p.x,p.y]);},550);}
+    if(SKO.pts.size===2){const a=[...SKO.pts.values()];SKO.pinch={d:Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y),mx:(a[0].x+a[1].x)/2,my:(a[0].y+a[1].y)/2,v:{...SK.v}};}
+    skReq();
+  });
+  cv.addEventListener('pointermove',e=>{
+    const xy=skXY(e);
+    if(SKO.draw&&SKO.draw.id===e.pointerId){const evs=e.getCoalescedEvents?e.getCoalescedEvents():[e];
+      evs.forEach(ev=>{const p=skXY(ev),l=SKO.draw.pts[SKO.draw.pts.length-1];if(Math.hypot(p[0]-l[0],p[1]-l[1])>=1.2)SKO.draw.pts.push(p);});skReq();return;}
+    if(SKO.erase&&SKO.erase.id===e.pointerId){if(SKO.erase.ops)skEraseAt(xy);return;}
+    const p=SKO.pts.get(e.pointerId); if(!p)return;
+    const dx=xy[0]-p.x,dy=xy[1]-p.y; p.x=xy[0]; p.y=xy[1];
+    if(Math.hypot(p.x-p.x0,p.y-p.y0)>=10)clearTimeout(SKO.lp);
+    if(SKO.pts.size>=2&&SKO.pinch){const a=[...SKO.pts.values()],d=Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y),mx=(a[0].x+a[1].x)/2,my=(a[0].y+a[1].y)/2,P=SKO.pinch;
+      const ns=Math.max(skFitS()*0.5,Math.min(8,P.v.s*d/Math.max(8,P.d))),ip=P.v.ox+P.mx/P.v.s,iq=P.v.oy+P.my/P.v.s; SK.v={s:ns,ox:ip-mx/ns,oy:iq-my/ns}; skReq(); return;}
+    if(SKO.pts.size===1){SK.v.ox-=dx/SK.v.s;SK.v.oy-=dy/SK.v.s;skReq();}
+  });
+  const up=e=>{
+    if(SKO.draw&&SKO.draw.id===e.pointerId){if(e.type==='pointercancel'&&!SKO.draw.pen){SKO.draw=null;skReq();}else skFinishOrtho();return;}
+    if(SKO.erase&&SKO.erase.id===e.pointerId){const ops=SKO.erase.ops;SKO.erase=null;if(ops&&ops.length){SK.undo.push(ops.length===1?ops[0]:{t:'multi',ops});SK.redo=[];skSave();skUI();}return;}
+    SKO.pts.delete(e.pointerId); clearTimeout(SKO.lp); if(SKO.pts.size<2)SKO.pinch=null;
+    if(SKO.pts.size===1){const a=[...SKO.pts.values()][0];a.x0=a.x;a.y0=a.y;}
+  };
+  cv.addEventListener('pointerup',up); cv.addEventListener('pointercancel',up);
+  cv.addEventListener('wheel',e=>{if(!skOK())return;e.preventDefault();const xy=skXY(e);skZoomAt(xy[0],xy[1],e.deltaY>0?1/1.15:1.15);},{passive:false});
+  cv.addEventListener('contextmenu',e=>e.preventDefault());
+  ['gesturestart','gesturechange'].forEach(t=>cv.addEventListener(t,e=>e.preventDefault()));
+}
+
+/* ---- 画面の部品 ---- */
+function skSwatch(K,w,h){w=w||28;h=h||16;
+  if(K.line)return `<svg viewBox="0 0 ${w} ${h}" aria-hidden="true"><path d="M2 ${h-4} L${w*0.3} ${h*0.3} L${w*0.5} ${h*0.65} L${w*0.72} ${h*0.2} L${w-2} ${h*0.55}" fill="none" stroke="${K.col}" stroke-width="2" stroke-linejoin="round"/></svg>`;
+  const id='skh-'+K.id+'-'+w, ang={v:[90],h:[0],d:[45],g:[0,90],x:[45,135]}[K.hatch]||[];
+  let lines='';ang.forEach(a=>{for(let k=-8;k<=8;k++){const c=Math.cos(a*D2R),s=-Math.sin(a*D2R),nx=-s,ny=c,px=w/2+nx*k*3,py=h/2+ny*k*3;lines+=`<line x1="${px-c*30}" y1="${py-s*30}" x2="${px+c*30}" y2="${py+s*30}"/>`;}});
+  return `<svg viewBox="0 0 ${w} ${h}" aria-hidden="true"><defs><clipPath id="${id}"><rect x="2" y="2" width="${w-4}" height="${h-4}" rx="${(h-4)/2}"/></clipPath></defs>`+
+    (lines?`<g clip-path="url(#${id})" stroke="${K.col}" stroke-width="1">${lines}</g>`:'')+
+    `<rect x="2" y="2" width="${w-4}" height="${h-4}" rx="${(h-4)/2}" fill="none" stroke="${K.col}" stroke-width="1.6"${K.dash?' stroke-dasharray="3 2"':''}/></svg>`;}
+function skBuildUI(){
+  $('#sk-kinds').innerHTML=SK_KINDS.map(K=>`<button class="skk" data-k="${K.id}" aria-pressed="${K.id===SK.kind}">${skSwatch(K)}${K.name}</button>`).join('');
+  document.querySelectorAll('#sk-kinds .skk').forEach(b=>b.addEventListener('click',()=>skSetKind(b.dataset.k)));
+  const opts=SK_KINDS.map(K=>`<option value="${K.id}">${K.name}</option>`).join('');
+  $('#ska-kind').innerHTML=opts; $('#pano-skind').innerHTML=opts;
+  document.querySelectorAll('[data-skst]').forEach(b=>b.addEventListener('click',()=>skSetStatus(b.dataset.skst)));
+  document.querySelectorAll('[data-sktool]').forEach(b=>b.addEventListener('click',()=>{SK.tool=b.dataset.sktool;document.querySelectorAll('[data-sktool]').forEach(x=>x.setAttribute('aria-pressed',x===b));if(SK.tool!=='select')skSelect(null);skHint();}));
+  $('#sk-fdraw').addEventListener('change',e=>{SK.fdraw=e.target.checked;skHint();});
+  $('#sk-undo').addEventListener('click',skUndo); $('#sk-redo').addEventListener('click',skRedo);
+  $('#sk-fit').addEventListener('click',()=>{if(skOK())skFit();});
+  $('#sk-zin').addEventListener('click',()=>{if(skOK())skZoomAt(SK.cw/2,SK.ch/2,1.5);});
+  $('#sk-zout').addEventListener('click',()=>{if(skOK())skZoomAt(SK.cw/2,SK.ch/2,1/1.5);});
+  $('#pano-skind').addEventListener('change',e=>skSetKind(e.target.value));
+  $('#pano-sst').addEventListener('change',e=>skSetStatus(e.target.value));
+  $('#pano-sundo').addEventListener('click',skUndo);
+  // 属性の編集
+  const edit=(f)=>{const it=SK.items.find(x=>x.id===SK.sel);if(!it)return;const before=skAttrs(it);f(it);const after=skAttrs(it);
+    if(JSON.stringify(before)===JSON.stringify(after))return;SK.undo.push({t:'edit',id:it.id,before,after});SK.redo=[];skSave();skAttrUI();skUI();skReq();};
+  $('#ska-kind').addEventListener('change',e=>edit(it=>{it.kind=e.target.value;it.closed=!SKK[it.kind].line;if(SKK[it.kind].line)it.closed=false;}));
+  $('#ska-st').addEventListener('change',e=>edit(it=>{it.status=e.target.value;}));
+  $('#ska-label').addEventListener('change',e=>edit(it=>{it.label=e.target.value.trim();}));
+  $('#ska-width').addEventListener('change',e=>edit(it=>{it.width=e.target.value===''?'':String(+e.target.value);}));
+  $('#ska-memo').addEventListener('change',e=>edit(it=>{it.memo=e.target.value.trim();}));
+  $('#ska-del').addEventListener('click',()=>{if(SK.sel)skDel(SK.sel);});
+  $('#ska-close').addEventListener('click',()=>skSelect(null));
+  $('#sk-lostdel').addEventListener('click',()=>{const lost=SK.items.filter(it=>{const r=SK.res.get(it.id);return r&&r.lost;});if(!lost.length)return;
+    const ops=lost.map(it=>({t:'del',item:it,idx:SK.items.indexOf(it)})).sort((a,b)=>b.idx-a.idx);ops.forEach(o=>SK.items.splice(o.idx,1));
+    SK.undo.push({t:'multi',ops});SK.redo=[];skSave();skUI();skReq();});
+  // 書き出し
+  $('#sk-xjpg').addEventListener('click',()=>task(async()=>{if(!S.img)return;log('変状図の JPEG を作成しています…');await sleep();
+    const b=await exportJPEG({grid:$('#x-grid').checked,sk:true});readyExport(b,`${baseName()}_変状図.jpg`);log(`JPEG 作成完了（${fmt(b.size/1048576,1)} MB）`);}));
+  $('#sk-xpdf').addEventListener('click',()=>task(async()=>{if(!S.img)return;$('#x-paper').value=$('#sk-paper').value;log('変状図の PDF を作成しています…');await sleep();
+    const {blob,scale}=await exportPDF({sk:true});readyExport(blob,`${baseName()}_変状図_${$('#x-paper').value}.pdf`);log(`PDF 作成完了（縮尺 1:${scale}）`);}));
+  $('#sk-xdxf').addEventListener('click',()=>task(async()=>{if(!S.img)return;const r=await exportDXFZip($('#sk-dxfu').value);readyExport(r.blob,r.name);}));
+  $('#sk-share').addEventListener('click',()=>$('#x-share').click());
+  $('#x-dxf').addEventListener('click',()=>task(async()=>{if(!S.img)return;const r=await exportDXFZip('mm');readyExport(r.blob,r.name);}));
+  $('#sk-dl').addEventListener('click',e=>{const ex=S.exported;if(ex)pcSave(e,ex.blob,ex.name);});
+  if(!MOBILE){$('#sk-share').hidden=true;$('#sk-dl').classList.add('primary');$('#sk-dl').textContent='ダウンロード（PC に保存）';}
+  skBindCanvas();
+  window.addEventListener('resize',()=>{if(!$('#panel-sketch').hidden)skReq();});
+  skHint();
+}
+function skSetKind(k){SK.kind=k;document.querySelectorAll('#sk-kinds .skk').forEach(b=>b.setAttribute('aria-pressed',b.dataset.k===k));$('#pano-skind').value=k;
+  if(SK.tool!=='draw')document.querySelector('[data-sktool="draw"]').click();}
+function skSetStatus(s){SK.status=s;document.querySelectorAll('[data-skst]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.skst===s));$('#pano-sst').value=s;}
+function skHint(){const t={draw:'Apple Pencil でなぞる（ひびわれ）・囲む（その他）と記入します。',erase:'Apple Pencil で消したい変状をなぞると消えます。',select:'Apple Pencil で変状をタップすると、番号・ひび幅などを編集できます。'}[SK.tool];
+  $('#sk-hint').innerHTML=(SK.fdraw?t.replace('Apple Pencil で','指・マウスで'):t)+' 指1本で移動、2本指で拡大・縮小、<b>長押し</b>で元の360°画像を開きます（360°画像の上でも Apple Pencil で記入できます）。';}
+function skSelect(id){SK.sel=id;skAttrUI();skReq();
+  document.querySelectorAll('#sk-list tbody tr').forEach(tr=>tr.classList.toggle('sel',tr.dataset.id===id));}
+function skAttrUI(){
+  const it=SK.items.find(x=>x.id===SK.sel); $('#sk-attr').hidden=!it; if(!it)return;
+  $('#ska-kind').value=it.kind; $('#ska-st').value=it.status; $('#ska-label').value=it.label||''; $('#ska-width').value=it.width||''; $('#ska-memo').value=it.memo||'';
+  $('#ska-wrow').hidden=!SKK[it.kind].line;
+  const r=SK.res.get(it.id),sf=S.scaleFix||1; let info='';
+  if(r&&!r.lost){info=SKK[it.kind].line?`長さ ${fmt(skLen(r.w)*sf,2)} m`:`面積 ${fmt(skArea(r.w)*sf*sf,3)} m²（周長 ${fmt(skLen(r.w.concat([r.w[0]]))*sf,2)} m）`;
+    info+=`・記入した画面：${it.src==='360'?'360°画像':'オルソ'}・基準画像 ${it.pts[0].a.k}`;
+    if(r.dev>0.05)info+=`・<b>画像間の位置の食い違い 約 ${fmt(r.dev*100,0)} cm</b>`;}
+  $('#ska-info').innerHTML=info;}
+function skSizeText(it,r){const sf=S.scaleFix||1;return SKK[it.kind].line?`${fmt(skLen(r.w)*sf,2)} m`:`${fmt(skArea(r.w)*sf*sf,3)} m²`;}
+function skUI(){
+  if(!$('#sk-sum'))return;
+  if(S.sol&&S.names)skResolveAll();
+  const live=SK.items.filter(it=>{const r=SK.res.get(it.id);return r&&!r.lost;}), lost=SK.items.filter(it=>{const r=SK.res.get(it.id);return r&&r.lost;});
+  const sf=S.scaleFix||1, cr=live.filter(it=>SKK[it.kind].line), crL=cr.reduce((s,it)=>s+skLen(SK.res.get(it.id).w),0)*sf;
+  const ar=live.filter(it=>!SKK[it.kind].line), arA=ar.reduce((s,it)=>s+skArea(SK.res.get(it.id).w),0)*sf*sf;
+  $('#sk-sum').textContent=SK.items.length?`変状 ${live.length} 件（ひびわれ ${cr.length} 本・延長 ${fmt(crL,2)} m／面状の変状 ${ar.length} 件・面積 ${fmt(arA,2)} m²）`:'まだ変状は記入されていません。';
+  $('#sk-list tbody').innerHTML=live.map((it,n)=>{const r=SK.res.get(it.id),K=SKK[it.kind];
+    return `<tr data-id="${it.id}"${it.id===SK.sel?' class="sel"':''}><td>${n+1}</td><td style="text-align:left">${skSwatch(K,22,12)} ${K.name}</td><td style="color:${it.status==='old'?SK_BLACK:SK_RED}">${it.status==='old'?'前回':'今回'}</td><td>${esc(it.label||'')}</td><td class="num">${skSizeText(it,r)}</td><td class="num">${K.line&&it.width!==''?esc(it.width)+' mm':''}</td><td>${r.dev>0.05?'<span class="chip warn">食い違い '+fmt(r.dev*100,0)+' cm</span>':''}${r.fromB?'<span class="chip warn">予備画像から復元</span>':''}</td></tr>`;}).join('');
+  document.querySelectorAll('#sk-list tbody tr').forEach(tr=>tr.addEventListener('click',()=>{const id=tr.dataset.id;if(SK.tool!=='select')document.querySelector('[data-sktool="select"]').click();skSelect(id);skCenter(id);}));
+  $('#sk-listwrap').hidden=!live.length;
+  $('#sk-lost').hidden=!lost.length; $('#sk-lostn').textContent=lost.length;
+  $('#sk-undo').disabled=!SK.undo.length; $('#sk-redo').disabled=!SK.redo.length; $('#pano-sundo').disabled=!SK.undo.length;
+}
+function skCenter(id){const r=SK.res.get(id);if(!r||r.lost||!skOK())return;let x0=1e18,y0=1e18,x1=-1e18,y1=-1e18;
+  r.w.forEach(([a,b])=>{const o=toOut(S.img,a,b);x0=Math.min(x0,o[0]);y0=Math.min(y0,o[1]);x1=Math.max(x1,o[0]);y1=Math.max(y1,o[1]);});
+  const s=Math.max(SK.v.s,Math.min(2,Math.min(SK.cw/(x1-x0+40),SK.ch/(y1-y0+40))));SK.v={s,ox:(x0+x1)/2-SK.cw/2/s,oy:(y0+y1)/2-SK.ch/2/s};skReq();}
+function skShow(){
+  const msg=!S.img?'「オルソ合成」で合成するか、「保存データ」から案件を開くと、ここで変状を記入できます。'
+    :!(S.o&&S.o.mode==='slab')?'変状スケッチは、現在は「床版下面」の案件で使えます（橋台・壁面、橋脚は今後対応します）。':'';
+  $('#sk-empty').textContent=msg; $('#sk-empty').hidden=!msg; $('#sk-tools').classList.toggle('dis',!!msg);
+  if(msg){skReq();return;}
+  if(!skResize())return;
+  if(SK.imgRef!==S.img){skClearTiles();SK.imgRef=S.img;skFit();}
+  skResolveAll(); skUI(); skAttrUI(); skReq();
+}
+
+/* ================= 360°画面での記入と表示 ================= */
+const SKQ={cur:null};
+function skPanoXY(e){const gl=$('#pano-gl'),r=gl.getBoundingClientRect();return [(e.clientX-r.left)*gl.clientWidth/Math.max(1,r.width),(e.clientY-r.top)*gl.clientHeight/Math.max(1,r.height)];}
+function skPanoUV(x,y){const gl=$('#pano-gl'),w=gl.clientWidth,h=gl.clientHeight,tan=panoTanV(),asp=w/h,mir=PANO.mir?-1:1;
+  const nx=(x/w*2-1)*mir,ny=1-y/h*2,d=v3.norm(v3.add(v3.add(v3.mul(PANO.R,nx*asp*tan),v3.mul(PANO.U,ny*tan)),PANO.F));
+  return {u:Math.atan2(d[0],-d[2])/TAU+0.5,v:Math.acos(Math.max(-1,Math.min(1,d[1])))/Math.PI};}
+SKQ.down=(e,cv)=>{
+  if(!skOK()||PANO.j<0||!PANO.ovW)return false;
+  const pen=e.pointerType==='pen'; if(!(pen||$('#pano-sfd').checked))return false;
+  if(SKQ.cur)return true; try{cv.setPointerCapture(e.pointerId)}catch(_){}
+  SKQ.cur={id:e.pointerId,j:PANO.j,pts:[skPanoXY(e)]}; skPanoDraw(); return true;};
+SKQ.move=e=>{if(!SKQ.cur||e.pointerId!==SKQ.cur.id)return false;
+  const evs=e.getCoalescedEvents?e.getCoalescedEvents():[e]; evs.forEach(ev=>{const p=skPanoXY(ev),l=SKQ.cur.pts[SKQ.cur.pts.length-1];if(Math.hypot(p[0]-l[0],p[1]-l[1])>=1.2)SKQ.cur.pts.push(p);});
+  skPanoDraw(); return true;};
+SKQ.up=e=>{if(!SKQ.cur||e.pointerId!==SKQ.cur.id)return false; const c=SKQ.cur; SKQ.cur=null;
+  if(c.j!==PANO.j||c.pts.length<2){skPanoDraw();return true;}
+  let thMax=0; const world=[];
+  c.pts.forEach(([x,y])=>{const uv=skPanoUV(x,y);thMax=Math.max(thMax,uv.v*180);const w=skInv(c.j,uv.u,uv.v);if(w)world.push(w);});
+  if(world.length<2){skPanoNote('床版の平面に当たらない向きのため、記入できませんでした。');skPanoDraw();return true;}
+  let P=skSimplify(world,0.0015); const K=SKK[SK.kind];
+  if(!K.line&&P.length>3&&Math.hypot(P[0][0]-P[P.length-1][0],P[0][1]-P[P.length-1][1])<0.005)P.pop();
+  const it=skNewItem(P,c.j,'360');
+  if(it){skAdd(it); if(thMax>40)skPanoNote(`斜めから見た位置（天頂から ${Math.round(thMax)}°）で記入しました。床版面の凹凸の分だけ位置がずれることがあります。長押しで開き直した画像で記入すると正確です。`);}
+  skPanoDraw(); return true;};
+let skNoteT=0; function skPanoNote(t){const n=$('#pano-note');n.textContent=t;clearTimeout(skNoteT);skNoteT=setTimeout(()=>{if(n.textContent===t)n.textContent='';},6000);}
+function skPanoDraw(){
+  const cv=$('#pano-sk'); if(!cv)return; const gl=$('#pano-gl'),w=gl.clientWidth,h=gl.clientHeight,dpr=Math.min(window.devicePixelRatio||1,2);
+  if(cv.width!==Math.round(w*dpr)||cv.height!==Math.round(h*dpr)){cv.width=Math.round(w*dpr);cv.height=Math.round(h*dpr);}
+  const ctx=cv.getContext('2d'); ctx.setTransform(1,0,0,1,0,0); ctx.clearRect(0,0,cv.width,cv.height);
+  const on=skOK()&&PANO.j>=0&&!!PANO.ovW&&!$('#pano').hidden; $('#pano-skbar').hidden=!(skOK());
+  if(!on)return; ctx.setTransform(dpr,0,0,dpr,0,0); skResolveAll();
+  const j=PANO.j,tan=panoTanV(),asp=w/h,mir=PANO.mir?-1:1,R=PANO.R,U=PANO.U,F=PANO.F;
+  const toScr=(Wx,Wy)=>{const f=skFwd(j,Wx,Wy);if(!f||f.th>1.55)return null;const d=uvDir(f.u,f.v),z=d[0]*F[0]+d[1]*F[1]+d[2]*F[2];if(z<0.05)return null;
+    const nx=(d[0]*R[0]+d[1]*R[1]+d[2]*R[2])/z/(asp*tan)*mir,ny=(d[0]*U[0]+d[1]*U[1]+d[2]*U[2])/z/tan; if(Math.abs(nx)>12||Math.abs(ny)>12)return null;
+    return [(nx*0.5+0.5)*w,(0.5-ny*0.5)*h];};
+  const proj=(it,r)=>{const closed=!SKK[it.kind].line,Q=skDensify(r.w,closed,0.02),pieces=[];let cur=[];
+    Q.forEach(([x,y])=>{const p=toScr(x,y);if(p)cur.push(p);else{if(cur.length>1)pieces.push(cur);cur=[];}});
+    if(cur.length>1)pieces.push(cur); const whole=pieces.length===1&&pieces[0].length===Q.length;
+    if(whole&&closed)pieces[0].pop(); return {pieces,whole};};
+  skPaint(ctx,proj,{lw:2.6,hs:8,fs:14,sel:SK.sel});
+  if(SKQ.cur&&SKQ.cur.pts.length>1){ctx.save();ctx.strokeStyle=SKK[SK.kind].col;ctx.lineWidth=2.6;ctx.lineJoin='round';ctx.lineCap='round';skPath(ctx,SKQ.cur.pts,false);ctx.stroke();ctx.restore();}
+}
+
+/* ================= 合成結果の画像保存（案件を開く時間の短縮） ================= */
+function orthoSig(){
+  const o=S.o||{}, c=(S.sol&&S.sol.cams||[]).map(c=>[c.i,c.a,c.b,c.tx,c.ty,c.h0||0,c.gx||0,c.gy||0]);
+  return JSON.stringify({v:1,m:o.mode,h:o.h,th:o.th,q:o.maxW,g:o.gain,seam:o.seam,pd:o.pd,pw:o.pw,pt:o.pt,phis:o.phis||null,face:S.faceSel||0,
+    cams:c,gains:S.gains?[...S.gains]:null,crop:S.crop||null,gsd:currentGsd(),nm:S.names});}
+async function orthoCacheSave(){
+  const img=S.img, id=S.projectId; if(!id||!img||!img.rgb)return; const sig=orthoSig(); if(S.orthoSig===id+'|'+sig)return;
+  const t0=performance.now(), {W,H,rgb,cov}=img, T=2048;
+  log('合成結果を画像として保存しています（次回からすぐに開けます）…'); await sleep();
+  await DB.delRange('orthos',id+'/',id+'/￿');
+  const cv=document.createElement('canvas'),ctx=cv.getContext('2d'); let bytes=0;
+  for(let ty=0;ty*T<H;ty++)for(let tx=0;tx*T<W;tx++){
+    const x0=tx*T,y0=ty*T,w=Math.min(T,W-x0),h=Math.min(T,H-y0),id2=new ImageData(w,h),d=id2.data;
+    for(let y=0;y<h;y++){let p=(y0+y)*W+x0,q=y*w*4;for(let x=0;x<w;x++,p++,q+=4){if((cov[p>>3]>>(p&7))&1){d[q]=rgb[p*3];d[q+1]=rgb[p*3+1];d[q+2]=rgb[p*3+2];}else{d[q]=BG[0];d[q+1]=BG[1];d[q+2]=BG[2];}d[q+3]=255;}}
+    cv.width=w;cv.height=h;ctx.putImageData(id2,0,0);
+    const b=await new Promise(r=>cv.toBlob(r,'image/jpeg',0.92)); if(!b)throw new Error('合成結果を画像にできませんでした');
+    bytes+=b.size; await DB.put('orthos',b,`${id}/t/${tx}_${ty}`); await sleep();}
+  cv.width=cv.height=1;
+  await DB.put('orthos',new Blob([cov]),id+'/cov');
+  const props={}; Object.keys(img).forEach(k=>{if(k!=='rgb'&&k!=='cov')props[k]=img[k];});
+  await DB.put('orthos',{sig,props,W,H,T,view:{plan:!!(S.view&&S.view.plan),rot:!!(S.view&&S.view.rot)}},id+'/meta');
+  S.orthoSig=id+'|'+sig; log(`合成結果を保存しました（${fmt((bytes+cov.length)/1048576,1)} MB、${fmt((performance.now()-t0)/1000,1)} 秒）`);
+}
+async function orthoCacheLoad(id){
+  let meta=null; try{meta=await DB.get('orthos',id+'/meta');}catch(e){return false;}
+  if(!meta||meta.sig!==orthoSig())return false;
+  const t0=performance.now(),{W,H,T}=meta; log('保存した合成結果を読み込んでいます…'); await sleep();
+  const cb=await DB.get('orthos',id+'/cov'); if(!cb)return false;
+  const cov=new Uint8Array(await cb.arrayBuffer()), rgb=new Uint8ClampedArray(W*H*3);
+  const cv=document.createElement('canvas'),ctx=cv.getContext('2d',{willReadFrequently:true}), nT=Math.ceil(W/T)*Math.ceil(H/T); let k=0;
+  for(let ty=0;ty*T<H;ty++)for(let tx=0;tx*T<W;tx++){
+    const b=await DB.get('orthos',`${id}/t/${tx}_${ty}`); if(!b){cv.width=cv.height=1;return false;}
+    const bmp=await createImageBitmap(b),w=bmp.width,h=bmp.height; cv.width=w;cv.height=h;ctx.drawImage(bmp,0,0);bmp.close&&bmp.close();
+    const d=ctx.getImageData(0,0,w,h).data,x0=tx*T,y0=ty*T;
+    for(let y=0;y<h;y++){let p=((y0+y)*W+x0)*3,q=y*w*4;for(let x=0;x<w;x++,q+=4){rgb[p++]=d[q];rgb[p++]=d[q+1];rgb[p++]=d[q+2];}}
+    prog(++k/nT); await sleep();}
+  cv.width=cv.height=1;
+  const img={...meta.props,rgb,cov};
+  if(meta.view&&S.view){if(!!meta.view.rot!==!!S.view.rot){flipImg(img,true);flipImg(img,false);} if(!!meta.view.plan!==!!S.view.plan)flipImg(img,false);}
+  S.img=img; S.orthoSig=id+'|'+meta.sig; S.measure=[]; S.lvPts=[]; S.exported=null; $('#export-ready').hidden=true; $('#sk-ready').hidden=true; setLevel(0);
+  prog(1); buildPreview(); log(`保存した合成結果を読み込みました（合成し直していません・${fmt((performance.now()-t0)/1000,1)} 秒）`);
+  return true;
+}
+
+/* ================= DXF（背景画像付き）＋ ZIP ================= */
+const CRCT=(()=>{const t=new Uint32Array(256);for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0;}return t;})();
+function crc32(u8){let c=0xFFFFFFFF;for(let i=0;i<u8.length;i++)c=CRCT[(c^u8[i])&255]^(c>>>8);return (c^0xFFFFFFFF)>>>0;}
+function makeZip(files){
+  const enc=new TextEncoder(),parts=[],cen=[];let off=0;const d=new Date();
+  const tm=(d.getHours()<<11)|(d.getMinutes()<<5)|(d.getSeconds()>>1), dt=((d.getFullYear()-1980)<<9)|((d.getMonth()+1)<<5)|d.getDate();
+  files.forEach(f=>{const nm=enc.encode(f.name),data=f.data,crc=crc32(data);
+    const h=new DataView(new ArrayBuffer(30));h.setUint32(0,0x04034b50,true);h.setUint16(4,20,true);h.setUint16(6,0x0800,true);h.setUint16(8,0,true);h.setUint16(10,tm,true);h.setUint16(12,dt,true);
+    h.setUint32(14,crc,true);h.setUint32(18,data.length,true);h.setUint32(22,data.length,true);h.setUint16(26,nm.length,true);h.setUint16(28,0,true);
+    parts.push(h.buffer,nm,data);
+    const c=new DataView(new ArrayBuffer(46));c.setUint32(0,0x02014b50,true);c.setUint16(4,20,true);c.setUint16(6,20,true);c.setUint16(8,0x0800,true);c.setUint16(10,0,true);c.setUint16(12,tm,true);c.setUint16(14,dt,true);
+    c.setUint32(16,crc,true);c.setUint32(20,data.length,true);c.setUint32(24,data.length,true);c.setUint16(28,nm.length,true);c.setUint32(42,off,true);
+    cen.push(c.buffer,nm); off+=30+nm.length+data.length;});
+  const csz=cen.reduce((s,b)=>s+(b.byteLength!=null?b.byteLength:b.length),0), e=new DataView(new ArrayBuffer(22));
+  e.setUint32(0,0x06054b50,true);e.setUint16(8,files.length,true);e.setUint16(10,files.length,true);e.setUint32(12,csz,true);e.setUint32(16,off,true);
+  return new Blob([...parts,...cen,e.buffer],{type:'application/zip'});
+}
+function dxfScale(){const img=S.img,G=Geff(),realW=img.W*G*1000,realH=img.H*G*1000,areaW=420-20-8,areaH=297-20-22-8;
+  return SCALES.find(s=>realW/s<=areaW&&realH/s<=areaH)||Math.ceil(Math.max(realW/areaW,realH/areaH));}
+async function exportDXFZip(unit){
+  const img=S.img,{W,H}=img,Gmm=Geff()*1000,k=unit==='m'?Gmm/1000:Gmm,uk=unit==='m'?0.001:1;
+  log('DXF（背景画像付き）を作成しています…'); await sleep();
+  skResolveAll();
+  const jpg=new Uint8Array(await (await exportJPEG({plain:true})).arrayBuffer());
+  const base=baseName()+faceSuffix(), dd=(info().date||'').replace(/-/g,''), imgName=`ortho_bg${dd?'_'+dd:''}.jpg`, n=dxfScale();
+  const th=2.5*n*uk, sp=1.5*n*uk, lts=0.8*n*uk, F=v=>(Math.round(v*10000)/10000).toString();
+  let hd=0x100; const H_=()=>(hd++).toString(16).toUpperCase(); let E='';
+  const ent=(type,layer,extra)=>`0\n${type}\n5\n${H_()}\n330\n17\n100\nAcDbEntity\n8\n${layer}\n${extra||''}`;
+  const X=p=>p*k, Y=q=>(H-q)*k;
+  const poly=(layer,pts,closed,dash)=>{let s=ent('LWPOLYLINE',layer,dash?`6\nDASHED\n48\n${F(lts)}\n`:'')+`100\nAcDbPolyline\n90\n${pts.length}\n70\n${closed?1:0}\n43\n0.0\n`;
+    pts.forEach(([x,y])=>{s+=`10\n${F(x)}\n20\n${F(y)}\n`;});return s;};
+  const hatch=(layer,pts,type)=>{const L={v:[90],h:[0],d:[45],g:[0,90],x:[45,135]}[type];const name={v:'LINE',h:'LINE',d:'ANSI31',g:'NET',x:'ANSI37'}[type];
+    let s=ent('HATCH',layer)+`100\nAcDbHatch\n10\n0.0\n20\n0.0\n30\n0.0\n210\n0.0\n220\n0.0\n230\n1.0\n2\n${name}\n70\n0\n71\n0\n91\n1\n92\n3\n72\n0\n73\n1\n93\n${pts.length}\n`;
+    pts.forEach(([x,y])=>{s+=`10\n${F(x)}\n20\n${F(y)}\n`;});
+    s+=`97\n0\n75\n1\n76\n1\n52\n${type==='v'?'90.0':'0.0'}\n41\n${F(sp/3.175)}\n77\n0\n78\n${L.length}\n`;
+    L.forEach(a=>{const r=a*D2R;s+=`53\n${a}.0\n43\n0.0\n44\n0.0\n45\n${F(-Math.sin(r)*sp)}\n46\n${F(Math.cos(r)*sp)}\n79\n0\n`;});
+    return s+'98\n0\n';};
+  const text=(layer,x,y,t,hgt)=>ent('TEXT',layer)+`100\nAcDbText\n10\n${F(x)}\n20\n${F(y)}\n30\n0.0\n40\n${F(hgt||th)}\n1\n${String(t).replace(/[\r\n]+/g,' ')}\n7\nJP\n100\nAcDbText\n`;
+  let cnt=0;
+  SK.items.forEach(it=>{const r=SK.res.get(it.id);if(!r||r.lost)return;const K=SKK[it.kind],layer='変状_'+K.name;
+    const pts=r.w.map(([a,b])=>{const o=toOut(img,a,b);return [X(o[0]+0.5),Y(o[1]+0.5)];}); cnt++;
+    E+=poly(layer,pts,!K.line,!!K.dash);
+    if(!K.line&&K.hatch)E+=hatch(layer,pts,K.hatch);
+    const t=skLabel(it); if(t){let x,y;if(K.line){const m=pts[Math.floor(pts.length/2)];x=m[0]+th*0.4;y=m[1]+th*0.4;}else{x=Math.max(...pts.map(p=>p[0]))+th*0.3;y=Math.max(...pts.map(p=>p[1]))+th*0.3;}
+      E+=text(it.status==='old'?'文字_前回':'文字_今回',x,y,t);}
+  });
+  // 凡例（図の右側）
+  const ks=skKindsUsed(); if(ks.length){const lx=W*k+th*4; let ly=H*k-th*2; E+=text('凡例',lx,ly,'凡例',th*1.2); ly-=th*2.4;
+    ks.forEach(K=>{const layer='変状_'+K.name,sw=th*4,sh=th*1.4; let pts;
+      if(K.line)pts=[[lx,ly-sh*0.8],[lx+sw*0.3,ly-sh*0.1],[lx+sw*0.55,ly-sh*0.7],[lx+sw*0.8,ly-sh*0.15],[lx+sw,ly-sh*0.6]];
+      else{pts=[];for(let q=0;q<16;q++){const t=q/16*TAU;pts.push([lx+sw/2+Math.cos(t)*sw/2,ly-sh/2+Math.sin(t)*sh/2]);}}
+      E+=poly(layer,pts,!K.line,!!K.dash); if(!K.line&&K.hatch)E+=hatch(layer,pts,K.hatch);
+      E+=text('凡例',lx+sw+th,ly-sh*0.75,K.name); ly-=th*2.2;});
+    E+=text('文字_前回',lx,ly-th,'黒字：前回点検で確認された変状',th*0.8); E+=text('文字_今回',lx,ly-th*2.4,'赤字：今回点検で確認した変状または進行が認められる変状',th*0.8);}
+  const dxf=DXF_TPL.replace('__SEED__',(hd+1).toString(16).toUpperCase()).replace('__ENTITIES__',E.replace(/\n$/,''))
+    .split('__IMGNAME__').join(imgName).split('__PX__').join(F(k)).split('__W5__').join(F(W-0.5)).split('__H5__').join(F(H-0.5)).split('__W__').join(String(W)).split('__H__').join(String(H));
+  const dxfName=`${base}_変状図.dxf`;
+  const txt=['変状図（DXF）と背景画像の使い方','',
+    `1. この ZIP を展開し、「${dxfName}」と「${imgName}」を同じフォルダに置いたまま DXF を開いてください。`,
+    '2. AutoCAD・BricsCAD・IJCAD などでは、背景のオルソ画像が自動で表示されます。表示されないときは、イメージ管理（外部参照）で画像のパスを同じフォルダの JPEG に指定し直してください。',
+    '3. 背景画像が表示されない CAD では、DXF を開いたあと、JPEG を次の条件で配置してください（変状の線とぴったり重なります）。',
+    '   ・挿入点（画像の左下）　X = 0、Y = 0',
+    `   ・画像の大きさ　幅 ${F(W*k)} ${unit}、高さ ${F(H*k)} ${unit}（${W} × ${H} 画素）`,
+    `   ・1画素の大きさ　${F(k)} ${unit}`,'   ・回転　0°','',
+    `図面単位：${unit}／形式：AutoCAD 2010 DXF（文字コード UTF-8）`,
+    `縮尺の目安：1:${n}（A3 に収まる縮尺。文字の高さ ${F(th)} ${unit} = 用紙上 2.5 mm）`,
+    `画素寸法：${fmt(Gmm,2)} mm/px${S.scaleFix&&S.scaleFix!==1?'（縮尺補正済み）':''}`,
+    `図の種類：${viewName()}`,
+    `画層：背景画像／${SK_KINDS.map(K=>'変状_'+K.name).join('／')}／文字_前回（黒）／文字_今回（赤）／凡例`,
+    `変状：${cnt} 件`].join('\r\n');
+  const enc=new TextEncoder(), zip=makeZip([{name:dxfName,data:enc.encode(dxf)},{name:imgName,data:jpg},{name:'配置方法.txt',data:new Uint8Array([0xEF,0xBB,0xBF,...enc.encode(txt)])}]);
+  log(`DXF 作成完了：変状 ${cnt} 件・縮尺の目安 1:${n}・単位 ${unit}（ZIP ${fmt(zip.size/1048576,1)} MB）`);
+  return {blob:zip,name:`${base}_変状図_DXF.zip`};
+}
+/* PDF：変状をベクターで描く命令（座標：mm→pt） */
+function skPdfOps(ix,iy,iw,ih,mm){
+  if(!skOK()||!SK.items.length)return ''; skResolveAll();
+  const img=S.img,P=x=>(x*mm).toFixed(2),pt=([a,b])=>{const o=toOut(img,a,b),p=o[0]+0.5,q=o[1]+0.5;return [ix+p/img.W*iw,iy+ih-q/img.H*ih];};
+  const rgb=h=>[1,3,5].map(i=>(parseInt(h.slice(i,i+2),16)/255).toFixed(3)).join(' ');
+  const path=(Q,close)=>Q.map(([x,y],i)=>`${P(x)} ${P(y)} ${i?'l':'m'}`).join(' ')+(close?' h':'');
+  let s='q 1 J 1 j\n';
+  SK.items.forEach(it=>{const r=SK.res.get(it.id);if(!r||r.lost)return;const K=SKK[it.kind],Q=r.w.map(pt);
+    s+=`${rgb(K.col)} RG ${(0.35*mm).toFixed(2)} w\n`;
+    if(K.line){s+=path(Q,false)+' S\n';return;}
+    if(K.hatch){let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;Q.forEach(([x,y])=>{x0=Math.min(x0,x);y0=Math.min(y0,y);x1=Math.max(x1,x);y1=Math.max(y1,y);});
+      const cx=(x0+x1)/2,cy=(y0+y1)/2,R=Math.hypot(x1-x0,y1-y0)/2+1.2,sp=1.1,angs={v:[90],h:[0],d:[45],g:[0,90],x:[45,135]}[K.hatch];
+      s+=`q ${path(Q,true)} W n ${(0.2*mm).toFixed(2)} w\n`;
+      angs.forEach(a=>{const dx=Math.cos(a*D2R),dy=Math.sin(a*D2R),nx=-dy,ny=dx;for(let k=-Math.ceil(R/sp);k<=Math.ceil(R/sp);k++){const px=cx+nx*k*sp,py=cy+ny*k*sp;s+=`${P(px-dx*R)} ${P(py-dy*R)} m ${P(px+dx*R)} ${P(py+dy*R)} l S\n`;}});
+      s+='Q\n';}
+    s+=(K.dash?`[${(1.2*mm).toFixed(2)} ${(0.8*mm).toFixed(2)}] 0 d `:'')+path(Q,true)+' S [] 0 d\n';});
+  return s+'Q\n';
+}
+function skPdfLegend(){const ks=skKindsUsed();if(!ks.length)return null;
+  const dpmm=300/25.4,u=4.2*dpmm,c=document.createElement('canvas'),x=c.getContext('2d'),L=skLegendSize(x,u,ks);
+  c.width=Math.ceil(L.w);c.height=Math.ceil(L.h);const t=c.getContext('2d');t.fillStyle='#fff';t.fillRect(0,0,c.width,c.height);skLegendDraw(t,0,0,u,ks);
+  return {cv:c,wmm:c.width/dpmm,hmm:c.height/dpmm};}
+
+/* ---- オルソ合成タブの表示に変状を重ねる（SVG） ---- */
+function skOverlaySVG(u){
+  if(!$('#v-sk')||!$('#v-sk').checked||!skOK()||!SK.items.length)return ''; skResolveAll(); let s='';
+  SK.items.forEach(it=>{const r=SK.res.get(it.id);if(!r||r.lost)return;const K=SKK[it.kind];
+    const pts=r.w.map(([a,b])=>{const o=toOut(S.img,a,b);return `${(o[0]+0.5).toFixed(1)},${(o[1]+0.5).toFixed(1)}`;}).join(' ');
+    s+=K.line?`<polyline points="${pts}" fill="none" stroke="${K.col}" stroke-width="${u*0.45}" stroke-linejoin="round"/>`
+      :`<polygon points="${pts}" fill="${K.col}" fill-opacity=".22" stroke="${K.col}" stroke-width="${u*0.4}"${K.dash?` stroke-dasharray="${u*1.2} ${u*0.8}"`:''}/>`;});
+  return s;}
+
+skBuildUI();
 </script>
 </body>
 </html>
