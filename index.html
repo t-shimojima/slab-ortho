@@ -276,7 +276,7 @@ input[type=text],input[type=date]{font:inherit;font-size:15px;width:100%;padding
 <header class="top">
   <div class="brand">
     <h1>床版下面オルソ</h1>
-    <p>DJI Avata 360 の 360° 静止画から、床版下面の平面オルソ画像を端末内で合成します（v1.23）</p>
+    <p>DJI Avata 360 の 360° 静止画から、床版下面の平面オルソ画像を端末内で合成します（v1.25）</p>
     <div class="offline" id="offline"><i></i><span>オフライン対応を確認中…</span></div>
   </div>
   <nav class="tabs" role="tablist">
@@ -598,6 +598,10 @@ input[type=text],input[type=date]{font:inherit;font-size:15px;width:100%;padding
 <section class="panel" id="panel-data" hidden>
   <h2>保存データ</h2>
   <p class="lead">合成した案件は、元画像・位置合わせ結果・設定と一緒にこの iPad 内に保存されます。開き直すと位置合わせをやり直さずに再出力できます。<span class="num" id="storage"></span></p>
+  <div class="box" style="margin-bottom:14px"><h3>別の端末と受け渡す</h3>
+    <p class="hint" style="margin:0 0 10px">各案件の「書き出し…」で .slabortho ファイルを作り、社内PCの共有フォルダや SD カードに保存します。受け取った側は「ファイルを読み込む」で取り込みます。PC で描いた変状は「スケッチのみ」で書き出して iPad に戻せます（同じ案件に統合されます）。</p>
+    <div style="display:flex;align-items:center;flex-wrap:wrap;gap:8px"><button class="btn" id="imp-btn" data-busy="any">ファイルを読み込む…</button><input type="file" id="imp-file" hidden></div>
+    <div class="grade-res" id="imp-box" hidden></div><div class="grade-res" id="exp-box" hidden></div></div>
   <div id="projects"><div class="empty">読み込み中…</div></div>
 </section>
 
@@ -2821,6 +2825,7 @@ function gradeResUI(){
 async function renderCurrent(){
   gradeResUI();
   const t0=performance.now();
+  if(S.reduced&&S.mode==='project')log('注意：縮小した360°画像から合成しています（「閲覧・スケッチ版」）。画質を保つには「完全版」を読み込んでください。');
   S.img=null; S.measure=[]; S.lvPts=[]; S.exported=null; $('#export-ready').hidden=true; $('#sk-ready').hidden=true; setBusy(true); setLevel(0);
   const img=isPier(S.o.mode)?await renderPier(S.faces[S.faceSel],S.o,S.getSrc,S.crop,currentGsd(),S.names)
            :S.o.mode==='wall'?await renderWall(S.sol,S.o,S.getSrc,S.gains,S.view,S.crop,currentGsd(),S.names)
@@ -2841,7 +2846,7 @@ async function runPipeline(n,names,getSrc,yaws,truth,alts){
 }
 $('#o-run').addEventListener('click',()=>task(async()=>{
   if(!S.files.length)return; logEl.textContent='';
-  const files=S.files; S.mode='files'; S.projectId=null; S.blobs=null; S.pick=null;
+  const files=S.files; S.mode='files'; S.projectId=null; S.uid=null; S.reduced=false; S.imported=null; S.blobs=null; S.pick=null;
   const yaws=await Promise.all(files.map(readYaw)), noses=await Promise.all(files.map(readNose)); S.noses=noses;
   if(yaws.some(v=>v!=null)) log(`360°画像の向き（XMP）：${yaws.map(v=>v==null?'—':fmt(v,1)+'°').join(', ')}`);
   { const d=yaws.map((y,k)=>y!=null&&noses[k]!=null?angDiff(noses[k],y):null).filter(v=>v!=null);
@@ -2852,7 +2857,7 @@ $('#o-run').addEventListener('click',()=>task(async()=>{
   await runPipeline(files.length,files.map(f=>f.name),k=>openFile(files[k]),yaws,null,alts);
 }));
 $('#o-sample').addEventListener('click',()=>task(async()=>{
-  logEl.textContent=''; S.files=[]; S.ctimes=null; S.blobs=null; S.pick=null; S.noses=null; S.absAlts=null; $('#o-files').value=''; S.mode='sample'; S.projectId=null;
+  logEl.textContent=''; S.files=[]; S.ctimes=null; S.blobs=null; S.pick=null; S.noses=null; S.absAlts=null; $('#o-files').value=''; S.mode='sample'; S.projectId=null; S.uid=null; S.reduced=false; S.imported=null;
   $('#o-mode').value='slab'; modeUI();  // サンプルは床版の模擬データ
   log('サンプル：12 m × 7.5 m の模擬床版を h = 3.0 m から 2コース×4枚 撮影した 360° 画像を生成します');
   $('#o-h').value='3.0'; if(!$('#i-bridge').value){setInfo({bridge:'サンプル橋',span:'第1径間',date:new Date().toISOString().slice(0,10),origin:'left'});}
@@ -3038,6 +3043,7 @@ const DB=(()=>{let dbp=null;
     put:(store,val,key)=>tx(store,'readwrite',s=>s.put(val,key)),
     get:(store,key)=>tx(store,'readonly',s=>s.get(key)),
     all:(store)=>tx(store,'readonly',s=>s.getAll()),
+    keys:(store,range)=>tx(store,'readonly',s=>s.getAllKeys(range)),
     del:async(store,key)=>tx(store,'readwrite',s=>s.delete(key)),
     delRange:async(store,lo,hi)=>tx(store,'readwrite',s=>s.delete(IDBKeyRange.bound(lo,hi))),
   };})();
@@ -3052,7 +3058,8 @@ async function saveProject(withImages){
       log('元画像を端末内に保存しています…');await sleep();
       for(let k=0;k<S.files.length;k++)await DB.put('images',S.files[k],id+'/'+String(k).padStart(3,'0'));
     }
-    const rec={id,updated:Date.now(),info:info(),o:S.o,names:S.names,yaws:S.yaws,sol:S.sol,gains:S.gains?[...S.gains]:null,srcInfo:S.srcInfo,autoG:S.autoG,
+    if(isNew||!S.uid)S.uid=newUid(); S.rev=(isNew?0:(S.rev||0))+1;
+    const rec={id,uid:S.uid,rev:S.rev,wallDir:S.wallDir||null,reduced:!!S.reduced,imported:S.imported||null,updated:Date.now(),info:info(),o:S.o,names:S.names,yaws:S.yaws,sol:S.sol,gains:S.gains?[...S.gains]:null,srcInfo:S.srcInfo,autoG:S.autoG,
       view:S.view,crop:S.crop,scaleFix:S.scaleFix,faces:S.faces?S.faces.map(f=>({...f,gains:f.gains?[...f.gains]:null})):null,faceSel:S.faceSel||0,gsdSel:$('#o-gsd').value,thumbs:S.thumbs,thumb,nImg:S.names.length};
     await DB.put('projects',rec);S.dirty=false;
     try{await orthoCacheSave();}catch(e){console.error(e);log('合成結果の画像保存に失敗しました：'+(e&&e.message||e)+'（次に開くときは合成し直します）');}
@@ -3071,7 +3078,9 @@ async function openProject(id){
   if(blobs.some(b=>!b))throw new Error('元画像が保存されていないため開けません');
   Object.assign(S,{mode:'project',projectId:id,files:[],names:rec.names,yaws:rec.yaws,sol:rec.sol,gains:rec.gains?new Map(rec.gains):null,o:rec.o,srcInfo:rec.srcInfo,autoG:rec.autoG,
     view:rec.view||{plan:false,rot:false},crop:rec.crop,scaleFix:rec.scaleFix||1,
-    faces:rec.faces?rec.faces.map(f=>({...f,gains:f.gains?new Map(f.gains):null})):null,faceSel:rec.faceSel||0,thumbs:rec.thumbs||[],blobs,pick:null,getSrc:k=>openFile(blobs[k])});
+    faces:rec.faces?rec.faces.map(f=>({...f,gains:f.gains?new Map(f.gains):null})):null,faceSel:rec.faceSel||0,thumbs:rec.thumbs||[],blobs,pick:null,getSrc:k=>openFile(blobs[k]),
+    uid:rec.uid||null,rev:rec.rev||0,reduced:!!rec.reduced,imported:rec.imported||null,wallDir:rec.wallDir||null}); wdStatus();
+  if(rec.reduced)log('この案件は「閲覧・スケッチ版」として取り込んだため、360°画像が縮小されています。保存済みの合成結果はそのまま使えますが、画素寸法や範囲を変えて合成し直すと画質が下がります。');
   $('#thumbs').innerHTML='';(rec.names||[]).forEach((n,k)=>{const used=rec.sol.cams.find(c=>c.i===k);showThumb(k,n,S.thumbs[k]||'',used?'<span class="chip ok">使用</span>':'<span class="chip bad">除外</span>');});
   $('#thumb-note').textContent=`${rec.sol.cams.length}/${rec.nImg} 枚を使用`;
   if(S.faces){const f=S.faces[S.faceSel];Object.assign(S,{sol:f.sol,gains:f.gains,marks:f.marks});}else S.marks=null;
@@ -3089,12 +3098,15 @@ async function refreshProjects(){
   else box.innerHTML=list.map(r=>`<div class="proj" data-id="${r.id}">
       <img src="${r.thumb||''}" alt="">
       <div class="meta"><div class="pn">${esc(r.info.bridge||'（名称なし）')} <span class="muted">${esc(r.info.span||'')}</span></div>
-      <div class="muted num">撮影日 ${esc(r.info.date||'—')}・${r.nImg} 枚・h ${r.o.h} m・更新 ${new Date(r.updated).toLocaleString('ja-JP')}</div>
-      <div class="acts"><button class="btn small primary" data-open>開く</button><button class="btn small" data-del>削除</button>
+      <div class="muted num">撮影日 ${esc(r.info.date||'—')}・${r.nImg} 枚・h ${r.o.h} m・更新 ${new Date(r.updated).toLocaleString('ja-JP')}${r.imported?'・取り込み':''}${r.reduced?'・縮小画像':''}</div>
+      <div class="acts"><button class="btn small primary" data-open>開く</button><button class="btn small" data-exp>書き出し…</button><button class="btn small" data-del>削除</button>
+      <span class="expsel" hidden><select data-kind style="width:auto;min-height:34px;font-size:13px"><option value="full">完全版（360°画像は原本）</option><option value="view">閲覧・スケッチ版（360°画像を縮小）</option><option value="sketch">スケッチのみ</option></select> <button class="btn small primary" data-exp-go>作成</button></span>
       <span class="confirm" hidden>削除しますか？ <button class="btn small danger" data-del-yes>削除する</button><button class="btn small" data-del-no>やめる</button></span></div></div></div>`).join('');
   box.querySelectorAll('.proj').forEach(el=>{const id=el.dataset.id;
     el.querySelector('[data-open]').addEventListener('click',()=>task(()=>openProject(id)));
     el.querySelector('[data-del]').addEventListener('click',()=>{el.querySelector('.confirm').hidden=false;});
+    el.querySelector('[data-exp]').addEventListener('click',()=>{const s=el.querySelector('.expsel');s.hidden=!s.hidden;});
+    el.querySelector('[data-exp-go]').addEventListener('click',()=>{const kind=el.querySelector('[data-kind]').value;task(async()=>{const ex=await exportProject(id,kind);pkgReady(ex);});});
     el.querySelector('[data-del-no]').addEventListener('click',()=>{el.querySelector('.confirm').hidden=true;});
     el.querySelector('[data-del-yes]').addEventListener('click',async()=>{await DB.del('projects',id);await DB.delRange('images',id+'/',id+'/\uffff');try{await DB.delRange('orthos',id+'/',id+'/\uffff');await DB.del('sketches',id);}catch(e){}if(SK.key===id)await skLoad(null);if(S.projectId===id)S.projectId=null;refreshProjects();});
   });
@@ -3730,22 +3742,45 @@ const skLWmm=it=>+(it.lw||SK.opt.lw||SK_LW0), skHWmm=it=>+(it.hw||SK.opt.hw||SK_
 const skNoPref=()=>{try{return localStorage.getItem('sk-showno')!=='0';}catch(e){return true;}};
 const SK={items:[],key:null,undo:[],redo:[],sig:'',res:new Map(),camMap:null,kind:'crack',tool:'draw',prevTool:'draw',shape:'free',opt:{},msel:new Set(),view:skViewPref(),showNo:skNoPref(),fdraw:false,sel:null,
   v:{s:1,ox:0,oy:0},cw:0,ch:0,dpr:1,tiles:new Map(),imgRef:null,mem:new Map(),saveT:0,raf:0,penAt:0};
-const skOK=()=>!!(S.sol&&S.o&&S.o.mode==='slab'&&S.img&&S.img.rgb&&S.names);
+/* v1.25：床版下面に加えて、橋台・壁面でも記入できる（座標の計算だけがモードで変わる。保存の形は共通） */
+const skModeOK=m=>m==='slab'||m==='wall';
+const skWall=()=>!!(S.o&&S.o.mode==='wall');
+const skSurf=()=>skWall()?'壁面':'床版';
+const skOK=()=>!!(S.sol&&S.o&&skModeOK(S.o.mode)&&S.img&&S.img.rgb&&S.names);
+const skWrap=a=>{a%=TAU;return a>Math.PI?a-TAU:a<-Math.PI?a+TAU:a;};
 
 /* ---- 幾何：オルソ（位置合わせの座標 Wx,Wy［m］）⇔ 画像 j の正距円筒 (u,v) ---- */
 function skSolSig(){const cs=S.sol.cams;let a=0;
   for(let k=0;k<cs.length;k++){const c=cs[k];a+=(k+1)*(c.a*1.13+c.b*2.31+c.tx*3.77+c.ty*5.93+(c.h0||0)*7.1+(c.gx||0)*11.3+(c.gy||0)*13.7+c.i*0.017);}
-  return cs.length+':'+a.toPrecision(15)+':'+S.o.h+':'+S.o.th;}
+  const ph=S.o.phis?S.o.phis.reduce((p,v,k)=>p+(k+1)*v,0).toPrecision(12):'';
+  return cs.length+':'+a.toPrecision(15)+':'+S.o.h+':'+S.o.th+':'+S.o.mode+':'+(S.o.seam!=null?S.o.seam:'')+':'+ph;}
 const skName=j=>S.names[S.sol.cams[j].i];
 function skFwd(j,Wx,Wy){const c=S.sol.cams[j],s2=c.s*c.s,dx=Wx-c.tx,dy=Wy-c.ty,X=(c.a*dx+c.b*dy)/s2,Y=(c.a*dy-c.b*dx)/s2;
+  if(skWall()){ // 壁面：カメラから壁まで離隔 D、X＝水平、Y＝上向き（renderWall と同じ式）。th は壁の法線からの角度
+    const D=S.o.h, lon=Math.atan2(X,D), lat=Math.atan2(Y,Math.hypot(D,X)), th=Math.acos(D/Math.sqrt(D*D+X*X+Y*Y));
+    return {u:((((S.o.phis[c.i]+lon)/TAU+0.5)%1)+1)%1,v:0.5-lat/Math.PI,th};}
   const hl=(c.h0||S.o.h)+(c.gx||0)*X+(c.gy||0)*Y; if(hl<0.05)return null; const th=Math.atan(Math.hypot(X,Y)/hl);
   return {u:Math.atan2(Y,X)/TAU+0.5,v:th/Math.PI,th};}
 /* 画像 j の向き (u,v) の視線と床版平面（傾き込み）の交点。式で直接解く */
-function skInv(j,u,v){const c=S.sol.cams[j], lon=(u-0.5)*TAU, th=v*Math.PI; if(!(th<Math.PI/2-0.005))return null;
+function skInv(j,u,v){const c=S.sol.cams[j];
+  if(skWall()){ // 壁面：正面からの経度差・緯度から、壁の平面上の点を直接求める
+    const D=S.o.h, lon=skWrap((u-0.5)*TAU-S.o.phis[c.i]), lat=(0.5-v)*Math.PI; if(!(Math.abs(lon)<Math.PI/2-0.02&&Math.abs(lat)<Math.PI/2-0.02))return null;
+    const X=D*Math.tan(lon), Y=Math.hypot(D,X)*Math.tan(lat); if(Math.hypot(X,Y)>D*12)return null;
+    return [c.tx+c.a*X-c.b*Y, c.ty+c.b*X+c.a*Y];}
+  const lon=(u-0.5)*TAU, th=v*Math.PI; if(!(th<Math.PI/2-0.005))return null;
   const st=Math.sin(th),dX=st*Math.cos(lon),dY=st*Math.sin(lon), den=Math.cos(th)-(c.gx||0)*dX-(c.gy||0)*dY; if(den<=1e-6)return null;
   const t=(c.h0||S.o.h)/den, X=t*dX, Y=t*dY; return [c.tx+c.a*X-c.b*Y, c.ty+c.b*X+c.a*Y];}
 /* 合成と同じ規則（撮影位置が水平距離で最も近い画像）で、その点の担当画像と次の画像 */
 function skOwners(Wx,Wy){const cs=S.sol.cams,tth=Math.tan(S.o.th*D2R);let ia=-1,ib=-1,da=1e18,db=1e18,na=-1,nd=1e18;
+  if(skWall()){ // 壁面：renderWall と同じ規則（水平線付近の除外・入射角の上限・除外帯の近くは減点）
+    const D=S.o.h, seam=(S.o.seam!=null?S.o.seam:15)*D2R, pref=WALL_SEAM_PREF*D2R, maxA=Math.min(S.o.th,60)*D2R;
+    for(let j=0;j<cs.length;j++){const c=cs[j],s2=c.s*c.s,dx=Wx-c.tx,dy=Wy-c.ty,X=(c.a*dx+c.b*dy)/s2,Y=(c.a*dy-c.b*dx)/s2;
+      const r2=D*D+X*X, lat=Math.atan2(Y,Math.sqrt(r2)), ang=Math.acos(D/Math.sqrt(r2+Y*Y)), al=Math.abs(lat);
+      if(ang/D2R<nd){nd=ang/D2R;na=j;}
+      if(al<seam||ang>maxA)continue;
+      const sc=ang/D2R+(al<pref?30*(1-(al-seam)/(pref-seam)):0);
+      if(sc<da){db=da;ib=ia;da=sc;ia=j;}else if(sc<db){db=sc;ib=j;}}
+    return [ia>=0?ia:na, ib];}
   for(let j=0;j<cs.length;j++){const c=cs[j],dx=Wx-c.tx,dy=Wy-c.ty,d2=dx*dx+dy*dy; if(d2<nd){nd=d2;na=j;}
     if(d2>(c.s*(c.h0||S.o.h)*tth)**2)continue; if(d2<da){db=da;ib=ia;da=d2;ia=j;}else if(d2<db){db=d2;ib=j;}}
   return [ia>=0?ia:na, ib];}
@@ -3806,15 +3841,22 @@ function skUndo(){const op=SK.undo.pop();if(!op)return;skApplyOp(op,true);skSave
 
 /* ---- 保存（端末内）：案件ごと。サンプルは画面を閉じるまでの一時保存 ---- */
 async function skLoad(key){
-  SK.key=key; SK.undo=[]; SK.redo=[]; SK.sel=null; SK.sig=''; SK.items=[]; SK.opt={}; SK.msel=new Set();
+  SK.key=key; SK.undo=[]; SK.redo=[]; SK.sel=null; SK.sig=''; SK.items=[]; SK.opt={}; SK.gone={}; SK.msel=new Set();
   if(key==='sample'){const m=SK.mem.get('sample');if(m){SK.items=m.items||[];SK.opt=m.opt||{};}}
-  else if(key){try{const r=await DB.get('sketches',key);SK.items=(r&&r.items)||[];SK.opt=(r&&r.opt)||{};}catch(e){console.error(e);}}
+  else if(key){try{const r=await DB.get('sketches',key);SK.items=(r&&r.items)||[];SK.opt=(r&&r.opt)||{};SK.gone=(r&&r.gone)||{};}catch(e){console.error(e);}}
+  SK.snap=new Map(SK.items.map(it=>[it.id,skJ(it)]));
   skAttrUI(); skUI(); skReq();
 }
+/* 書き出し・統合用（v1.24）：変状ごとの更新日時（updated）と、消した変状の記録（gone：ID→日時） */
+const skJ=it=>{const {updated,...r}=it;return JSON.stringify(r);};
+function skTrack(){if(!SK.snap)SK.snap=new Map(); if(!SK.gone)SK.gone={}; const now=Date.now(), cur=new Set();
+  for(const it of SK.items){cur.add(it.id); const j=skJ(it);
+    if(SK.snap.get(it.id)!==j||!it.updated){if(SK.snap.get(it.id)!==j||SK.gone[it.id])it.updated=now; else it.updated=it.updated||it.created||now; SK.snap.set(it.id,j); delete SK.gone[it.id];}}
+  for(const id of [...SK.snap.keys()])if(!cur.has(id)){SK.gone[id]=now; SK.snap.delete(id);}}
 function skSave(){
   if(!SK.key)return; if(SK.key==='sample'){SK.mem.set('sample',{items:SK.items,opt:SK.opt});return;}
-  clearTimeout(SK.saveT); const key=SK.key, items=SK.items, opt=SK.opt;
-  SK.saveT=setTimeout(()=>{DB.put('sketches',{id:key,items:JSON.parse(JSON.stringify(items)),opt:{...opt},updated:Date.now()}).catch(e=>{console.error(e);log('変状の保存に失敗しました：'+(e&&e.message||e));});},250);
+  clearTimeout(SK.saveT); skTrack(); const key=SK.key, items=SK.items, opt=SK.opt, gone=SK.gone;
+  SK.saveT=setTimeout(()=>{DB.put('sketches',{id:key,items:JSON.parse(JSON.stringify(items)),opt:{...opt},gone:{...gone},updated:Date.now()}).catch(e=>{console.error(e);log('変状の保存に失敗しました：'+(e&&e.message||e));});},250);
 }
 /* 合成をやり直す前の変状を、新しい合成に引き継ぐ（同じ名前の画像に描いたもの） */
 function skCarry(){return SK.items.length?{items:JSON.parse(JSON.stringify(SK.items))}:null;}
@@ -3822,7 +3864,7 @@ async function skAfterPipeline(carry){
   const key=S.projectId||(S.mode==='sample'?'sample':null);
   if(carry&&key==='sample')SK.mem.delete('sample');
   await skLoad(key);
-  if(carry&&key&&S.o&&S.o.mode==='slab'){
+  if(carry&&key&&S.o&&skModeOK(S.o.mode)){
     const names=new Set(S.names), ok=carry.items.filter(it=>it.pts.every(p=>(p.a&&names.has(p.a.k))||(p.b&&names.has(p.b.k))));
     if(ok.length){SK.items=ok; SK.sig=''; skSave(); skUI(); skReq();
       log(`前回の変状 ${ok.length} 件を新しい合成に引き継ぎました${ok.length<carry.items.length?`（${carry.items.length-ok.length} 件は対応する画像がないため引き継げません）`:''}。`);}
@@ -4176,7 +4218,7 @@ function skCenter(id){const r=SK.res.get(id);if(!r||r.lost||!skOK())return;let x
   const s=Math.max(SK.v.s,Math.min(2,Math.min(SK.cw/(x1-x0+40),SK.ch/(y1-y0+40))));SK.v={s,ox:(x0+x1)/2-SK.cw/2/s,oy:(y0+y1)/2-SK.ch/2/s};skReq();}
 function skShow(){
   const msg=!S.img?'「オルソ合成」で合成するか、「保存データ」から案件を開くと、ここで変状を記入できます。'
-    :!(S.o&&S.o.mode==='slab')?'変状スケッチは、現在は「床版下面」の案件で使えます（橋台・壁面、橋脚は今後対応します）。':'';
+    :!(S.o&&skModeOK(S.o.mode))?'変状スケッチは、現在は「床版下面」と「橋台・壁面」の案件で使えます（橋脚は今後対応します）。':'';
   $('#sk-empty').textContent=msg; $('#sk-empty').hidden=!msg; $('#sk-tools').classList.toggle('dis',!!msg);
   if(msg){skReq();return;}
   if(!skResize())return;
@@ -4218,17 +4260,20 @@ SKQ.move=e=>{if(!SKQ.cur||e.pointerId!==SKQ.cur.id)return false;
   skPanoDraw(); return true;};
 SKQ.up=e=>{if(!SKQ.cur||e.pointerId!==SKQ.cur.id)return false; const c=SKQ.cur; SKQ.cur=null;
   if(c.j!==PANO.j||c.pts.length<2){skPanoDraw();return true;}
-  if(c.rect){const P=skPanoRect(c);if(!P){skPanoNote('床版の平面に当たらない向きのため、記入できませんでした。');skPanoDraw();return true;}
+  if(c.rect){const P=skPanoRect(c);if(!P){skPanoNote(`${skSurf()}の平面に当たらない向きのため、記入できませんでした。`);skPanoDraw();return true;}
     const it=skNewItem(P,c.j,'360');if(it)skAdd(it);skPanoDraw();return true;}
   let thMax=0; const world=[];
-  c.pts.forEach(([x,y])=>{const uv=skPanoUV(x,y);thMax=Math.max(thMax,uv.v*180);const w=skInv(c.j,uv.u,uv.v);if(w)world.push(w);});
-  if(world.length<2){skPanoNote('床版の平面に当たらない向きのため、記入できませんでした。');skPanoDraw();return true;}
+  c.pts.forEach(([x,y])=>{const uv=skPanoUV(x,y);thMax=Math.max(thMax,skObl(c.j,uv.u,uv.v));const w=skInv(c.j,uv.u,uv.v);if(w)world.push(w);});
+  if(world.length<2){skPanoNote(`${skSurf()}の平面に当たらない向きのため、記入できませんでした。`);skPanoDraw();return true;}
   let P=skSimplify(world,0.0015); const K=SKK[SK.kind];
   if(!K.line&&P.length>3&&Math.hypot(P[0][0]-P[P.length-1][0],P[0][1]-P[P.length-1][1])<0.005)P.pop();
   const it=skNewItem(P,c.j,'360');
-  if(it){skAdd(it); if(thMax>40)skPanoNote(`斜めから見た位置（天頂から ${Math.round(thMax)}°）で記入しました。床版面の凹凸の分だけ位置がずれることがあります。長押しで開き直した画像で記入すると正確です。`);}
+  if(it){skAdd(it); if(thMax>40)skPanoNote(skWall()?`斜めから見た位置（壁の正面から ${Math.round(thMax)}°）で記入しました。壁面の凹凸の分だけ位置がずれることがあります。長押しで開き直した画像で記入すると正確です。`:`斜めから見た位置（天頂から ${Math.round(thMax)}°）で記入しました。床版面の凹凸の分だけ位置がずれることがあります。長押しで開き直した画像で記入すると正確です。`);}
   skPanoDraw(); return true;};
-/* 360°画面の矩形：ドラッグした2点を床版上に移し、オルソの縦横に沿った長方形にする */
+/* 360°画面で記入した向きの斜め具合（度）。床版：天頂から、壁面：壁の正面（法線）から */
+function skObl(j,u,v){if(!skWall())return v*180; const lon=skWrap((u-0.5)*TAU-S.o.phis[S.sol.cams[j].i]), lat=(0.5-v)*Math.PI;
+  return Math.acos(Math.max(-1,Math.min(1,Math.cos(lat)*Math.cos(lon))))/D2R;}
+/* 360°画面の矩形：ドラッグした2点を床版（壁面）上に移し、オルソの縦横に沿った長方形にする */
 function skPanoRect(c){const [p,q]=c.pts.map(([x,y])=>{const uv=skPanoUV(x,y);return skInv(c.j,uv.u,uv.v);});if(!p||!q)return null;
   const a=toOut(S.img,p[0],p[1]),b=toOut(S.img,q[0],q[1]);if(Math.abs(a[0]-b[0])<2||Math.abs(a[1]-b[1])<2)return null;
   return [[a[0],a[1]],[b[0],a[1]],[b[0],b[1]],[a[0],b[1]]].map(([x,y])=>toWorld(S.img,x,y));}
@@ -4420,6 +4465,192 @@ function skOverlaySVG(u){
   return s;}
 
 skBuildUI();
+</script>
+<script>
+"use strict";
+/* ================= 案件の書き出し・読み込み（v1.24） =================
+   .slabortho ＝ 無圧縮 zip。manifest.json / project.json / sketches.json / preview.jpg / images/ / ortho/
+   種別：full（360°画像は原本）・view（360°画像を長辺 4096px に縮小、オルソ同梱）・sketch（変状だけ） */
+const PKG={fmt:'slabortho-pkg',ver:1,app:'1.25',reduceW:4096};
+const PKG_KIND={full:'完全版',view:'閲覧・スケッチ版',sketch:'スケッチのみ'};
+const newUid=()=>{try{if(crypto.randomUUID)return crypto.randomUUID();}catch(e){}
+  const b=crypto.getRandomValues(new Uint8Array(16));b[6]=b[6]&15|64;b[8]=b[8]&63|128;const h=[...b].map(x=>x.toString(16).padStart(2,'0')).join('');
+  return `${h.slice(0,8)}-${h.slice(8,12)}-${h.slice(12,16)}-${h.slice(16,20)}-${h.slice(20)}`;};
+
+/* ---- zip（無圧縮・UTF-8 名・4GB まで） ---- */
+const CRC_T=(()=>{const t=new Uint32Array(256);for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0;}return t;})();
+function crc32Up(c,u8){for(let i=0;i<u8.length;i++)c=CRC_T[(c^u8[i])&255]^(c>>>8);return c;}
+async function crcOfBlob(b){let c=0xFFFFFFFF;const CH=8<<20;for(let p=0;p<b.size;p+=CH){c=crc32Up(c,new Uint8Array(await b.slice(p,p+CH).arrayBuffer()));await sleep();}return (c^0xFFFFFFFF)>>>0;}
+function dosTime(d){return {t:(d.getHours()<<11)|(d.getMinutes()<<5)|(d.getSeconds()>>1),d:((d.getFullYear()-1980)<<9)|((d.getMonth()+1)<<5)|d.getDate()};}
+async function zipBuild(entries,onProg){
+  const enc=new TextEncoder(),parts=[],cd=[],now=dosTime(new Date());let off=0;
+  for(let i=0;i<entries.length;i++){const e=entries[i],nm=enc.encode(e.name),b=e.blob,crc=e.crc!=null?e.crc:await crcOfBlob(b);e.crc=crc;
+    if(off+b.size+30+nm.length>0xFFFFFFFF)throw new Error('書き出しが 4GB を超えるため作成できません（「閲覧・スケッチ版」をお試しください）');
+    const h=new DataView(new ArrayBuffer(30));h.setUint32(0,0x04034b50,true);h.setUint16(4,20,true);h.setUint16(6,0x0800,true);h.setUint16(8,0,true);
+    h.setUint16(10,now.t,true);h.setUint16(12,now.d,true);h.setUint32(14,crc,true);h.setUint32(18,b.size,true);h.setUint32(22,b.size,true);h.setUint16(26,nm.length,true);h.setUint16(28,0,true);
+    parts.push(h.buffer,nm,b);
+    const c=new DataView(new ArrayBuffer(46));c.setUint32(0,0x02014b50,true);c.setUint16(4,20,true);c.setUint16(6,20,true);c.setUint16(8,0x0800,true);c.setUint16(10,0,true);
+    c.setUint16(12,now.t,true);c.setUint16(14,now.d,true);c.setUint32(16,crc,true);c.setUint32(20,b.size,true);c.setUint32(24,b.size,true);c.setUint16(28,nm.length,true);c.setUint32(42,off,true);
+    cd.push(c.buffer,nm); off+=30+nm.length+b.size; onProg&&onProg((i+1)/entries.length);}
+  const cdSize=cd.reduce((s,x)=>s+x.byteLength,0);
+  const z=new DataView(new ArrayBuffer(22));z.setUint32(0,0x06054b50,true);z.setUint16(8,entries.length,true);z.setUint16(10,entries.length,true);z.setUint32(12,cdSize,true);z.setUint32(16,off,true);
+  return new Blob([...parts,...cd,z.buffer],{type:'application/octet-stream'});
+}
+async function zipRead(file){
+  const tailN=Math.min(file.size,65557),tail=new DataView(await file.slice(file.size-tailN).arrayBuffer());let p=-1;
+  for(let i=tailN-22;i>=0;i--)if(tail.getUint32(i,true)===0x06054b50){p=i;break;}
+  if(p<0)throw new Error('床版オルソの書き出しファイルではありません（zip として読めません）');
+  const n=tail.getUint16(p+10,true),cdSize=tail.getUint32(p+12,true),cdOff=tail.getUint32(p+16,true);
+  const cd=new DataView(await file.slice(cdOff,cdOff+cdSize).arrayBuffer()),dec=new TextDecoder(),out=new Map();let q=0;
+  for(let k=0;k<n;k++){if(cd.getUint32(q,true)!==0x02014b50)throw new Error('ファイルが壊れています（目次）');
+    const method=cd.getUint16(q+10,true),crc=cd.getUint32(q+16,true),cs=cd.getUint32(q+20,true),nl=cd.getUint16(q+28,true),xl=cd.getUint16(q+30,true),cl=cd.getUint16(q+32,true),lo=cd.getUint32(q+42,true);
+    const name=dec.decode(new Uint8Array(cd.buffer,q+46,nl)); q+=46+nl+xl+cl;
+    out.set(name,{name,method,crc,size:cs,lo});}
+  const blobOf=async e=>{if(e.method!==0)throw new Error(`圧縮されたファイルには対応していません（${e.name}）。アプリで書き出したファイルをそのまま使ってください`);
+    const h=new DataView(await file.slice(e.lo,e.lo+30).arrayBuffer());if(h.getUint32(0,true)!==0x04034b50)throw new Error('ファイルが壊れています（'+e.name+'）');
+    const st=e.lo+30+h.getUint16(26,true)+h.getUint16(28,true);return file.slice(st,st+e.size);};
+  /* 読み出し＋破損チェック（CRC） */
+  const get=async(name,type)=>{const e=out.get(name);if(!e)return null;const buf=await (await blobOf(e)).arrayBuffer();
+    if(((crc32Up(0xFFFFFFFF,new Uint8Array(buf))^0xFFFFFFFF)>>>0)!==e.crc)throw new Error(`ファイルが壊れています（${name}）。書き出し・コピーをやり直してください`);
+    return new Blob([buf],{type:type||''});};
+  return {names:[...out.keys()],has:n=>out.has(n),get,json:async n=>{const b=await get(n);return b?JSON.parse(await b.text()):null;}};
+}
+
+/* ---- 変状の統合：同じ ID は更新日時が新しい方、削除の記録（gone）が新しければ消す ---- */
+function skMerge(a,b){
+  const ts=it=>it.updated||it.created||0, gone={...(a.gone||{})};
+  for(const [k,t] of Object.entries(b.gone||{}))gone[k]=Math.max(gone[k]||0,t);
+  const m=new Map((a.items||[]).map(it=>[it.id,it]));let add=0,upd=0,del=0;
+  for(const it of b.items||[]){const c=m.get(it.id);if(!c){m.set(it.id,it);add++;}else if(ts(it)>ts(c)){m.set(it.id,it);upd++;}}
+  for(const [id,it] of [...m]){if(gone[id]&&gone[id]>=ts(it)){m.delete(id);if((a.items||[]).some(x=>x.id===id))del++;}}
+  const opt=(b.updated||0)>(a.updated||0)?{...(a.opt||{}),...(b.opt||{})}:{...(b.opt||{}),...(a.opt||{})};
+  return {items:[...m.values()],opt,gone,updated:Date.now(),stat:{add,upd,del}};
+}
+
+/* ---- 書き出し ---- */
+const pkgSafe=s=>String(s||'').replace(/[\\/:*?"<>|\s]+/g,'_').replace(/^_+|_+$/g,'').slice(0,40);
+async function reduceImage(blob,maxW){
+  const src=await openFile(blob); try{ if(src.W<=maxW)return blob;
+    const W=maxW,H=Math.round(src.H*maxW/src.W),c=document.createElement('canvas');c.width=W;c.height=H;
+    const x=c.getContext('2d');x.imageSmoothingQuality='high';x.drawImage(src.el,0,0,src.W,src.H,0,0,W,H);
+    const b=await new Promise(r=>c.toBlob(r,'image/jpeg',0.9));c.width=c.height=1;if(!b)throw new Error('画像を縮小できませんでした');return b;
+  }finally{src.close&&src.close();}
+}
+async function exportProject(id,kind){
+  if(SK.key===id){clearTimeout(SK.saveT);await skFlush();}
+  const rec=await DB.get('projects',id);if(!rec)throw new Error('案件が見つかりません');
+  if(!rec.uid){rec.uid=newUid();rec.rev=rec.rev||1;await DB.put('projects',rec);}
+  const sk=(await DB.get('sketches',id))||{id,items:[],opt:{},gone:{}};
+  log(`書き出しを作成しています：${rec.info.bridge||'（名称なし）'} ${rec.info.span||''}（${PKG_KIND[kind]}）`);await sleep();
+  const J=o=>new Blob([JSON.stringify(o)],{type:'application/json'}), E=[];
+  const proj={...rec};delete proj.thumb;
+  E.push({name:'project.json',blob:J(proj)});
+  E.push({name:'sketches.json',blob:J({items:sk.items||[],opt:sk.opt||{},gone:sk.gone||{},updated:sk.updated||0})});
+  if(rec.thumb){try{E.push({name:'preview.jpg',blob:await (await fetch(rec.thumb)).blob()});}catch(e){}}
+  let reduced=false;
+  if(kind!=='sketch'){
+    for(let k=0;k<rec.nImg;k++){let b=await DB.get('images',id+'/'+String(k).padStart(3,'0'));if(!b)throw new Error(`元画像 ${k+1} が保存されていません`);
+      const nm=String(k).padStart(3,'0')+'_'+pkgSafe((rec.names[k]||'img').replace(/\.[^.]+$/,''))+'.jpg';
+      if(kind==='view'||rec.reduced){const r=await reduceImage(b,PKG.reduceW);if(r!==b||rec.reduced)reduced=true;b=r;}
+      E.push({name:'images/'+nm,blob:b});prog((k+1)/rec.nImg*0.5);
+      $('#prog-label').textContent=`360°画像 ${k+1}/${rec.nImg}`;await sleep();}
+    const keys=await DB.keys('orthos',IDBKeyRange.bound(id+'/',id+'/￿'));
+    for(const key of keys){const v=await DB.get('orthos',key),rel=key.slice(id.length+1);
+      if(rel==='meta')E.push({name:'ortho/meta.json',blob:J(v)});
+      else if(rel==='cov')E.push({name:'ortho/cov.bin',blob:v});
+      else E.push({name:'ortho/'+rel+'.jpg',blob:v});}
+    if(kind==='view'&&!keys.length)throw new Error('合成結果が保存されていません。案件を開いて「案件を上書き保存」してから書き出してください');
+  }
+  if(reduced){proj.reduced=true;E[0].blob=J(proj);}
+  const man={format:PKG.fmt,formatVersion:PKG.ver,app:PKG.app,kind,exportedAt:new Date().toISOString(),device:MOBILE?'tablet':'pc',
+    project:{uid:rec.uid,rev:rec.rev||1,id,bridge:rec.info.bridge||'',span:rec.info.span||'',date:rec.info.date||'',nImg:rec.nImg,mode:rec.o&&rec.o.mode},
+    images:{count:kind==='sketch'?0:rec.nImg,reduced,maxW:reduced?PKG.reduceW:null},ortho:E.some(e=>e.name==='ortho/meta.json'),sketches:(sk.items||[]).length,files:[]};
+  log('ファイルにまとめています…');
+  const body=E;  // manifest は先頭に置く（files にはサイズと CRC を記録）
+  for(let i=0;i<body.length;i++){body[i].crc=await crcOfBlob(body[i].blob);prog(0.5+0.5*(i+1)/body.length);}
+  man.files=body.map(e=>({name:e.name,size:e.blob.size,crc:e.crc}));
+  const blob=await zipBuild([{name:'manifest.json',blob:J(man)},...body]);
+  const d=new Date(),ds=`${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
+  const name=`${pkgSafe(rec.info.bridge)||'案件'}${rec.info.span?'_'+pkgSafe(rec.info.span):''}_${PKG_KIND[kind]}_${ds}.slabortho`;
+  log(`書き出しを作成しました：${name}（${fmt(blob.size/1048576,1)} MB${reduced?'・360°画像は長辺 '+PKG.reduceW+'px に縮小':''}）`);
+  return {blob,name,kind,id};
+}
+async function skFlush(){if(!SK.key||SK.key==='sample')return;skTrack();await DB.put('sketches',{id:SK.key,items:JSON.parse(JSON.stringify(SK.items)),opt:{...SK.opt},gone:{...SK.gone},updated:Date.now()});}
+
+/* ---- 読み込み ---- */
+function pkgAsk(html,choices){return new Promise(res=>{const box=$('#imp-box');box.hidden=false;
+  box.innerHTML=`<div>${html}</div><div style="display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-top:10px">${choices.map((c,i)=>`<button class="btn small${i===0?' primary':''}" data-c="${c[0]}">${esc(c[1])}</button>`).join('')}</div>`;
+  box.querySelectorAll('[data-c]').forEach(b=>b.addEventListener('click',()=>{box.hidden=true;box.innerHTML='';res(b.dataset.c);}));});}
+async function importPackage(file){
+  log(`読み込んでいます：${file.name}（${fmt(file.size/1048576,1)} MB）`);await sleep();
+  const z=await zipRead(file),man=await z.json('manifest.json');
+  if(!man||man.format!==PKG.fmt)throw new Error('床版オルソの書き出しファイルではありません');
+  if(man.formatVersion>PKG.ver)throw new Error(`新しい形式（${man.formatVersion}）のファイルです。アプリを最新版に更新してから読み込んでください（このアプリ v${PKG.app}）`);
+  const sk=(await z.json('sketches.json'))||{items:[],opt:{},gone:{}};
+  const all=await DB.all('projects'),local=all.find(r=>r.uid&&r.uid===man.project.uid);
+  const label=`${esc(man.project.bridge||'（名称なし）')} ${esc(man.project.span||'')}（${PKG_KIND[man.kind]||man.kind}・${new Date(man.exportedAt).toLocaleString('ja-JP')} 書き出し）`;
+  let mode='new';
+  if(man.kind==='sketch'){
+    if(!local)throw new Error('このスケッチの元になる案件がこの端末にありません。先に「完全版」か「閲覧・スケッチ版」を読み込んでください');
+    mode=await pkgAsk(`${label}<br>この端末の案件「${esc(local.info.bridge||'')} ${esc(local.info.span||'')}」に変状スケッチを統合します。`,[['merge','統合する'],['cancel','やめる']]);
+  }else if(local){
+    mode=await pkgAsk(`${label}<br>同じ案件がこの端末にあります（更新 ${new Date(local.updated).toLocaleString('ja-JP')}）。どうしますか？`,
+      [['merge','スケッチだけ統合'],['over','上書きする'],['new','別の案件として取り込む'],['cancel','やめる']]);
+  }
+  if(mode==='cancel'){log('読み込みをやめました');return;}
+  if(mode==='merge'){
+    if(SK.key===local.id){clearTimeout(SK.saveT);await skFlush();}
+    const cur=(await DB.get('sketches',local.id))||{items:[],opt:{},gone:{}};
+    const names=new Set(local.names||[]),r=skMerge(cur,sk);
+    const lost=r.items.filter(it=>(it.pts||[]).some(p=>p.a&&p.a.k!=null&&!names.has(p.a.k))).length;
+    await DB.put('sketches',{id:local.id,items:r.items,opt:r.opt,gone:r.gone,updated:r.updated});
+    if(SK.key===local.id)await skLoad(local.id);
+    log(`変状スケッチを統合しました：追加 ${r.stat.add}・更新 ${r.stat.upd}・削除 ${r.stat.del}（合計 ${r.items.length} 件）${lost?`。画像名が合わない変状が ${lost} 件あります（位置不明として残しています）`:''}`);
+    refreshProjects();return;}
+  /* 案件ごと取り込む（上書き／新規） */
+  const proj=await z.json('project.json');if(!proj)throw new Error('案件データ（project.json）がありません');
+  const imgs=z.names.filter(n=>n.startsWith('images/')).sort();
+  if(imgs.length!==proj.nImg)throw new Error(`360°画像の数が合いません（${imgs.length}/${proj.nImg} 枚）`);
+  const id=mode==='over'?local.id:'p'+Date.now();
+  if(mode==='over'){if(SK.key===id)await skLoad(null);await DB.del('projects',id);await DB.delRange('images',id+'/',id+'/￿');await DB.delRange('orthos',id+'/',id+'/￿');await DB.del('sketches',id);
+    if(S.projectId===id)S.projectId=null;}
+  if(navigator.storage&&navigator.storage.persist)navigator.storage.persist().catch(()=>{});
+  for(let k=0;k<imgs.length;k++){const b=await z.get(imgs[k],'image/jpeg');await DB.put('images',b,id+'/'+String(k).padStart(3,'0'));
+    prog((k+1)/imgs.length*0.8);$('#prog-label').textContent=`360°画像 ${k+1}/${imgs.length}`;await sleep();}
+  const om=await z.json('ortho/meta.json');
+  if(om){for(const n of z.names.filter(n=>n.startsWith('ortho/t/'))){await DB.put('orthos',await z.get(n,'image/jpeg'),id+'/'+n.slice(6).replace(/\.jpg$/,''));}
+    await DB.put('orthos',await z.get('ortho/cov.bin'),id+'/cov');await DB.put('orthos',om,id+'/meta');}
+  let thumb='';const pv=await z.get('preview.jpg','image/jpeg');
+  if(pv)thumb=await new Promise(r=>{const fr=new FileReader();fr.onload=()=>r(fr.result);fr.onerror=()=>r('');fr.readAsDataURL(pv);});
+  const rec={...proj,id,thumb,updated:Date.now(),uid:mode==='new'&&local?newUid():proj.uid,reduced:!!(proj.reduced||man.images&&man.images.reduced),
+    imported:{at:Date.now(),kind:man.kind,file:file.name,from:man.device}};
+  await DB.put('projects',rec);
+  await DB.put('sketches',{id,items:sk.items||[],opt:sk.opt||{},gone:sk.gone||{},updated:Date.now()});
+  prog(1);
+  log(`案件を取り込みました：${rec.info.bridge||'（名称なし）'} ${rec.info.span||''}（${rec.nImg} 枚・変状 ${(sk.items||[]).length} 件${rec.reduced?'・縮小した360°画像':''}）。「開く」で表示できます`);
+  refreshProjects();
+}
+
+/* ---- 画面 ---- */
+let pkgOut=null;
+function pkgReady(ex){pkgOut=ex;const box=$('#exp-box');box.hidden=false;
+  box.innerHTML=`<div><b>${esc(ex.name)}</b>（${fmt(ex.blob.size/1048576,1)} MB）</div>
+    <div style="display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-top:10px">${MOBILE?'<button class="btn small primary" id="exp-share">共有（「ファイル」に保存）</button>':''}<button class="btn small${MOBILE?'':' primary'}" id="exp-dl">${MOBILE?'ダウンロード':'保存先を選んで保存'}</button><button class="btn small" id="exp-close">閉じる</button></div>
+    <p class="hint">${MOBILE?'「共有」→「\"ファイル\"に保存」で、社内PCの共有フォルダ（「サーバへ接続」で登録）や SD カードを選びます。共有できないときは「ダウンロード」で「ダウンロード」フォルダーに保存し、「ファイル」アプリで移してください。':'保存先を選べないブラウザーでは「ダウンロード」フォルダーに保存されます。'}</p>`;
+  const dl=()=>{const a=document.createElement('a');a.href=URL.createObjectURL(ex.blob);a.download=ex.name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},60000);};
+  const sh=$('#exp-share');
+  if(sh)sh.addEventListener('click',async()=>{const f=new File([ex.blob],ex.name,{type:'application/octet-stream'});
+    try{if(navigator.canShare&&navigator.canShare({files:[f]})){await navigator.share({files:[f],title:ex.name});return;}}catch(e){if(e&&e.name==='AbortError')return;log('共有できませんでした（'+(e&&e.message||e)+'）。「ダウンロード」をお試しください');return;}
+    dl();});
+  $('#exp-dl').addEventListener('click',async()=>{
+    if(!MOBILE&&window.showSaveFilePicker){try{const h=await showSaveFilePicker({suggestedName:ex.name,types:[{description:'床版オルソ 書き出し',accept:{'application/octet-stream':['.slabortho']}}]});
+      const w=await h.createWritable();await w.write(ex.blob);await w.close();log(`保存しました：${h.name}`);return;}catch(e){if(e&&e.name==='AbortError')return;}}
+    dl();});
+  $('#exp-close').addEventListener('click',()=>{box.hidden=true;box.innerHTML='';pkgOut=null;});
+  box.scrollIntoView({block:'nearest'});
+}
+$('#imp-btn').addEventListener('click',()=>{if(!busy)$('#imp-file').click();});
+$('#imp-file').addEventListener('change',()=>{const f=$('#imp-file').files[0];$('#imp-file').value='';if(f)task(()=>importPackage(f));});
 </script>
 </body>
 </html>
