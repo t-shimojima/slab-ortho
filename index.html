@@ -276,7 +276,7 @@ input[type=text],input[type=date]{font:inherit;font-size:15px;width:100%;padding
 <header class="top">
   <div class="brand">
     <h1>床版下面オルソ</h1>
-    <p>DJI Avata 360 の 360° 静止画から、床版下面の平面オルソ画像を端末内で合成します（v1.22）</p>
+    <p>DJI Avata 360 の 360° 静止画から、床版下面の平面オルソ画像を端末内で合成します（v1.23）</p>
     <div class="offline" id="offline"><i></i><span>オフライン対応を確認中…</span></div>
   </div>
   <nav class="tabs" role="tablist">
@@ -424,7 +424,7 @@ input[type=text],input[type=date]{font:inherit;font-size:15px;width:100%;padding
       <div class="sec">画像と設定</div>
       <div class="field"><label for="o-mode">撮影対象</label>
         <select id="o-mode"><option value="slab">床版下面（上向き）</option><option value="wall">橋台・壁面（横向き）</option><option value="pier-round">円柱橋脚</option><option value="pier-oval">小判型橋脚</option><option value="pier-rect">矩形橋脚</option></select></div>
-      <div class="pair" id="pier-row-round" hidden><div class="field"><label for="o-pd">柱の直径</label><div class="row"><input type="number" id="o-pd" min="0.5" max="15" step="0.1" value="5.0"><span class="unit">m</span></div></div><div class="field"></div></div>
+      <div class="pair" id="pier-row-round" hidden><div class="field"><label for="o-pd">柱の直径</label><div class="row"><input type="number" id="o-pd" min="0.5" max="15" step="0.01" value="5.0"><span class="unit">m</span></div></div><div class="field"><label for="o-pdm">直径の決め方</label><select id="o-pdm"><option value="manual">手入力（図面の値）</option><option value="auto">画像から自動推定</option></select></div></div>
       <div class="pair" id="pier-row-oval" hidden><div class="field"><label for="o-pw">幅（長手方向）</label><div class="row"><input type="number" id="o-pw" min="1" max="20" step="0.1" value="7.0"><span class="unit">m</span></div></div><div class="field"><label for="o-pt">厚さ</label><div class="row"><input type="number" id="o-pt" min="0.5" max="8" step="0.1" value="2.5"><span class="unit">m</span></div></div></div>
       <div class="field">
         <label for="o-files">360° 画像（複数まとめて選べます）</label>
@@ -1889,7 +1889,8 @@ async function alignJointsRound(sol,R,Dk,phis,courses,courseOf,getSrc){
     // 片方のコースの読み込みを済ませたら、もう使わない画像は解放する
     [...bands.keys()].forEach(k=>{if(courseOf[k]!==B.g)bands.delete(k);});
     // 画像ごと（その画像の高さ ±0.9 m の範囲）に、隣のコースとの上下のずれを求める（コースの中でも縮尺の誤差でずれ方が変わるため）
-    const M=Math.round(0.35/st);
+    // 探す範囲は ±0.25 m。打設高さの都合で目地の間隔が短い所があっても、隣の目地に取り違えないよう狭くし、2番目に似た位置との差も確かめる
+    const M=Math.round(0.25/st);
     for(const c of A.cams){const i0=Math.max(0,Math.round((c.ty-0.9-y0)/st)), i1=Math.min(PA.length,Math.round((c.ty+0.9-y0)/st));
       const wn=sh=>{let ab=0,aa=0,b2=0,n=0;for(let i=i0;i<i1;i++){const j=i+sh;if(j<0||j>=PB.length)continue;const a=PA[i],b=PB[j];if(isNaN(a)||isNaN(b))continue;ab+=a*b;aa+=a*a;b2+=b*b;n++;}return n<150||aa<=0||b2<=0?-1:ab/Math.sqrt(aa*b2);};
       let bb=-1,bsh=0,sec=-1; const sc=[]; for(let sh=-M;sh<=M;sh++){const v=wn(sh);sc.push(v);if(v>bb){bb=v;bsh=sh;}}
@@ -1911,6 +1912,18 @@ async function alignJointsRound(sol,R,Dk,phis,courses,courseOf,getSrc){
   const mu=u.reduce((a,b)=>a+b,0)/u.length; let mx=0;
   all.forEach((c,q)=>{const sh=u[q]-mu; c.ty+=sh; mx=Math.max(mx,Math.abs(sh));});
   log(`  横目地に合わせて画像ごとの上下位置を補正しました（${meas.length} か所で照合、最大 ${fmt(mx*100,0)} cm）`);
+}
+/* 円柱：画像の左右に写る柱の輪郭（上下に長く続く縦の境目）を探す。lon はパノラマ正面からの角度（度）、f は境目が見つかった行の割合。
+   柱の輪郭は 360° 画像では必ず真っすぐな縦線になるため、多くの行で同じ位置に境目が出る所を選ぶ */
+function pierEdges(band){
+  const cols=band.w,out=[0,0,0],lats=[];for(let la=-8;la>=-50;la-=1.5)lats.push(la);for(let la=8;la<=40;la+=1.5)lats.push(la);
+  const d=Math.max(2,Math.round(cols/400)), lonOf=x=>((x+0.5)/cols-0.5)*band.lonSpan, cnt=new Float32Array(cols);
+  for(const la of lats){const row=new Float32Array(cols);for(let x=0;x<cols;x++){sampleWall(band,lonOf(x),la*D2R,out);row[x]=(out[0]+out[1]+out[2])/3;}
+    const g=new Float32Array(cols);for(let x=d;x<cols-d;x++)g[x]=Math.abs(row[x+d]-row[x-d]);
+    const srt=Array.from(g).sort((a,b)=>b-a), th=Math.max(15,srt[Math.floor(cols*0.03)]);
+    for(let x=0;x<cols;x++)if(g[x]>=th){for(let q=-d;q<=d;q++)if(x+q>=0&&x+q<cols)cnt[x+q]+=1;}}
+  const pick=(a,b)=>{let bx=-1,bv=0;for(let x=0;x<cols;x++){const lo=lonOf(x)/D2R;if(lo<a||lo>b)continue;if(cnt[x]>bv){bv=cnt[x];bx=x;}}return bx<0?null:{lon:lonOf(bx)/D2R,f:bv/lats.length};};
+  return {l:pick(-72,-15),r:pick(15,72)};
 }
 /* 全体の流れ：コース分け → 面ごとに位置合わせ → 高度計で縮尺・離隔を補正 */
 async function registerPier(n,names,getSrc,yaws,alts){
@@ -1951,33 +1964,68 @@ async function registerPier(n,names,getSrc,yaws,alts){
   }
   const D0=o.h, faces=[];
   if(round){
-    const R=o.pd/2; if(!(R>0.2))throw new Error('柱の直径を入力してください。');
+    let R=o.pd/2; if(!(R>0.2)){if(o.pdAuto)R=2.5;else throw new Error('柱の直径を入力してください。');}
     // コースの周方向の位置（撮影順に機首方位の変化を積み上げる）で、隣り合うコースだけを組み合わせる
     const ang=[0]; for(let g=1;g<courses.length;g++)ang.push(ang[g-1]+angDiff(noses[courses[g][0]],noses[courses[g-1][0]]));
     const pairOK=(i,j)=>Math.abs(ang[courseOf[i]]-ang[courseOf[j]])<=100;
     // 機首を柱の中心に向けて撮る前提。画像の向きが機首に追従しない場合は、画像内の機首の方向を中心とする
     const phis=noses.map((v,k)=>angDiff(v,panoW[k])*D2R), shape=()=>({type:'cyl',R});
     if(locked)log('注意：360°画像の向きが機首に追従していないため、各画像の機首の方向を柱の中心として扱います。');
+    // 柱の左右の輪郭から、各コースの「柱の中心の方向」と「見かけの半幅」を測る。
+    // 中心の方向は機首の向きのずれを直すのに、見かけの半幅（sin＝半径÷(半径＋離隔)）は離隔と直径の確認に使う
+    log('柱の輪郭から、中心の方向と見かけの幅を測っています…');
+    const aim=noses.slice(), halfC=new Array(courses.length).fill(null), aimC=new Array(courses.length).fill(null);
+    for(let g=0;g<courses.length;g++){const cs=[],hs=[];
+      for(const k of courses[g]){const src=await getSrc(k); const band=getWallBand(src,phis[k],1536); src.close&&src.close();
+        const e=pierEdges(band); if(!e.l||!e.r||e.l.f<1.2||e.r.f<1.2)continue; const h=(e.r.lon-e.l.lon)/2; if(h<20||h>58)continue;
+        cs.push((e.l.lon+e.r.lon)/2); hs.push(h);}
+      if(cs.length<2)continue; cs.sort((a,b)=>a-b); hs.sort((a,b)=>a-b);
+      const mc=cs[cs.length>>1], near=cs.filter(v=>Math.abs(v-mc)<=2.5).length; if(near*2<cs.length)continue;
+      aimC[g]=mc; halfC[g]=hs[hs.length>>1];
+      courses[g].forEach(k=>{phis[k]+=mc*D2R; aim[k]=noses[k]+mc;});}
+    {const okA=aimC.filter(v=>v!=null);
+     if(okA.length)log(`機首の向きのずれ（柱の輪郭から測定）：${courses.map((c,g)=>`C${g+1} ${aimC[g]==null?'—':(aimC[g]>=0?'+':'')+fmt(aimC[g],1)+'°'}`).join('、')}。各画像の柱の中心の方向を補正しました。`);
+     else log('柱の輪郭が見つからないため、機首の向きを柱の中心として扱います。');}
     let loose=true; // 離隔が未確定の間は縮尺の誤差を見込んで広めに探す
-    const pred=(i,j)=>{if(alts[i]==null||alts[j]==null)return null;const dx=R*angDiff(noses[j],noses[i])*D2R, dy=alts[i]-alts[j];
+    const pred=(i,j)=>{if(alts[i]==null||alts[j]==null)return null;const dx=R*angDiff(aim[j],aim[i])*D2R, dy=alts[i]-alts[j];
       if(!sameSeg(i,j)){const cd=crossDy(i,j); return cd==null?{dx,dy:0,wx:0.5+0.8*Math.abs(dx),wy:4}:{dx,dy:cd,wx:0.5+0.8*Math.abs(dx),wy:1.5+0.8*Math.abs(cd)};}
       // 離隔が未確定の間も、遠くの背景（ずれが小さい）を拾わないよう、高さの差の 0.45〜2 倍の範囲だけを探す
       return loose?{dx,dy:1.25*dy,wx:0.5+0.8*Math.abs(dx),wy:0.15+0.8*Math.abs(dy)}:{dx,dy,wx:0.5+0.35*Math.abs(dx),wy:0.4+0.25*Math.abs(dy)};};
     // 1) コースごとに（上下の画像だけで）位置合わせし、高度計からそのコースの離隔を求める
     //    コースごとに離隔が違うと画像の縮尺がそろわず、隣のコースと結び付かないため
     let Dk=new Array(n).fill(D0);
-    const Dc=new Array(courses.length).fill(null);
-    for(let g=0;g<courses.length;g++){
-      const list=courses[g]; if(list.length<2)continue;
-      const r1=await pierRegister(list,names,getSrc,phis,Dk,shape,()=>true,`C${g+1}：`,pred);
-      if(!r1)continue; const cal=pierAltCalib(r1.sol,alts,courseOf,Dk); if(cal&&cal.Dt.has(g))Dc[g]=cal.Dt.get(g);
+    let Dc=new Array(courses.length).fill(null);
+    const perCourse=async()=>{Dk=new Array(n).fill(D0); Dc=new Array(courses.length).fill(null);
+      for(let g=0;g<courses.length;g++){
+        const list=courses[g]; if(list.length<2)continue;
+        const r1=await pierRegister(list,names,getSrc,phis,Dk,shape,()=>true,`C${g+1}：`,pred);
+        if(!r1)continue; const cal=pierAltCalib(r1.sol,alts,courseOf,Dk); if(cal&&cal.Dt.has(g))Dc[g]=cal.Dt.get(g);
+      }
+      log(`離隔（高度計から推定）：${courses.map((c,g)=>`C${g+1} ${Dc[g]!=null?fmt(Dc[g],2)+'m':'—'}`).join('、')}`);};
+    // 直径の推定：見かけの半幅 α と高度計からの離隔 D から、半径 = D·sinα/(1−sinα)（コースごとの値の中央値）
+    const estR=()=>{const Rs=[];courses.forEach((c,g)=>{if(Dc[g]==null||halfC[g]==null)return;const sn=Math.sin(halfC[g]*D2R);Rs.push(Dc[g]*sn/(1-sn));});
+      if(Rs.length<3)return null; Rs.sort((a,b)=>a-b); return {R:Rs[Rs.length>>1],n:Rs.length};};
+    await perCourse();
+    let est=estR();
+    if(o.pdAuto){
+      if(!est)throw new Error('柱の輪郭または高度の変化が足りず、直径を推定できませんでした。「手入力」で直径を入れてください。');
+      // 位置合わせは仮の直径で円筒に投影しているため、推定値が仮の値と違えば、推定値でもう一度コースごとの離隔を求め直す
+      for(let it=0;it<2&&Math.abs(est.R/R-1)>0.02;it++){
+        log(`直径を ${fmt(2*R,2)} m → ${fmt(2*est.R,2)} m として、もう一度推定します…`); R=est.R; await perCourse(); const e2=estR(); if(!e2)break; est=e2;}
+      R=est.R; o.pd=Math.round(2*R*100)/100; $('#o-pd').value=o.pd.toFixed(2);
+      log(`柱の直径（画像から自動推定）：${fmt(2*R,2)} m（${est.n} コースの中央値）。この直径で合成します。`);
+    }else if(est){
+      log(`画像から推定した柱の直径：約 ${fmt(2*est.R,2)} m（入力値 ${fmt(2*R,2)} m、${est.n} コースの中央値）${Math.abs(est.R/R-1)>0.08?'。入力値と 8% 以上違います。図面の直径を確認するか、「画像から自動推定」を試してください':''}`);
     }
+    // 離隔の確認：入力した直径と見かけの半幅からも離隔が求まる（D = R/sinα − R）。高度計からの値が 10% 以上外れるコース・求まらないコースはこちらを使う
+    {const fixed=[];courses.forEach((c,g)=>{if(halfC[g]==null)return;const Ds=R/Math.sin(halfC[g]*D2R)-R;if(!(Ds>0.3&&Ds<8))return;
+       if(Dc[g]==null||Math.abs(Dc[g]/Ds-1)>0.10){fixed.push(`C${g+1} ${Dc[g]==null?'—':fmt(Dc[g],2)}→${fmt(Ds,2)}m`);Dc[g]=Ds;}});
+     if(fixed.length)log(`離隔を柱の見かけの幅から補正：${fixed.join('、')}`);}
     const ok=Dc.filter(v=>v!=null), avg=ok.length?ok.reduce((p,q)=>p+q,0)/ok.length:D0;
     Dk=Dk.map((d,k)=>Dc[courseOf[k]]!=null?Dc[courseOf[k]]:avg);
-    log(`離隔（コースごとに推定）：${courses.map((c,g)=>`C${g+1} ${Dc[g]!=null?fmt(Dc[g],2)+'m':'—'}`).join('、')}`);
     loose=false;
     // 2) 推定した離隔で全体を位置合わせし、全体の縮尺をもう一度高度計で合わせる
-    const reg=await pierRegister([...Array(n).keys()],names,getSrc,phis,Dk,shape,pairOK,'全体：',pred,(i,j)=>{if(alts[i]==null||alts[j]==null)return null; const dy=sameSeg(i,j)?alts[i]-alts[j]:crossDy(i,j); return dy==null?null:{dx:R*angDiff(noses[j],noses[i])*D2R,dy};});
+    const reg=await pierRegister([...Array(n).keys()],names,getSrc,phis,Dk,shape,pairOK,'全体：',pred,(i,j)=>{if(alts[i]==null||alts[j]==null)return null; const dy=sameSeg(i,j)?alts[i]-alts[j]:crossDy(i,j); return dy==null?null:{dx:R*angDiff(aim[j],aim[i])*D2R,dy};});
     if(!reg) throw new Error('画像同士の位置合わせができませんでした。コースの間隔（30°以内）を確認してください。');
     const cal=pierAltCalib(reg.sol,alts,courseOf,Dk);
     const Dt=Dk.slice(); if(cal){cal.Dt.forEach((v,g)=>courses[g].forEach(k=>Dt[k]=v));}
@@ -2537,7 +2585,7 @@ function readOpts(){
   const h=Math.max(0.3,+$('#o-h').value||3), th=Math.max(30,Math.min(75,+$('#o-theta').value||55));
   const grade=$('#o-mode').value==='slab'?Math.max(0,Math.min(20,+$('#o-grade').value||0))/100*(+$('#o-gdir').value||1):0;
   const gmode=$('#o-mode').value==='slab'?$('#o-gmode').value:'manual';
-  return {h,th,grade:gmode==='manual'?grade:0,gmode,maxW:+$('#o-q').value,gain:$('#o-gain').value==='1',mode:$('#o-mode').value,seam:+$('#o-seam').value,pd:+$('#o-pd').value,pw:+$('#o-pw').value,pt:+$('#o-pt').value};
+  return {h,th,grade:gmode==='manual'?grade:0,gmode,maxW:+$('#o-q').value,gain:$('#o-gain').value==='1',mode:$('#o-mode').value,seam:+$('#o-seam').value,pd:+$('#o-pd').value,pdAuto:$('#o-pdm').value==='auto',pw:+$('#o-pw').value,pt:+$('#o-pt').value};
 }
 function currentGsd(){const v=$('#o-gsd').value;return v==='auto'?S.autoG:(+v)/1000}
 /* 縦断勾配：橋軸方向（撮影位置の並びの主方向）に沿って床版下面の高さが変わるとして、各画像の離隔と傾きを求める */
@@ -3016,7 +3064,7 @@ $('#p-save').addEventListener('click',()=>task(()=>saveProject(false)));
 async function openProject(id){
   const rec=await DB.get('projects',id); if(!rec)throw new Error('案件が見つかりません');
   showTab('ortho'); logEl.textContent=''; log(`案件を開きます：${rec.info.bridge||'（名称なし）'} ${rec.info.span||''}`);
-  setInfo(rec.info); if(isPier(rec.o.mode)){$('#o-pd').value=rec.o.pd||'';$('#o-pw').value=rec.o.pw||'';$('#o-pt').value=rec.o.pt||'';}
+  setInfo(rec.info); if(isPier(rec.o.mode)){$('#o-pd').value=rec.o.pd||'';$('#o-pdm').value=rec.o.pdAuto?'auto':'manual';$('#o-pw').value=rec.o.pw||'';$('#o-pt').value=rec.o.pt||'';}
   $('#o-mode').value=rec.o.mode||'slab'; if(rec.o.mode==='wall')$('#o-seam').value=String(rec.o.seam!=null?rec.o.seam:15); modeUI(); $('#o-h').value=rec.o.h; $('#o-theta').value=rec.o.th; $('#o-q').value=String(rec.o.maxW); $('#o-gain').value=rec.o.gain?'1':'0';
   $('#o-gsd').value=rec.gsdSel||'auto'; markView(rec.view&&rec.view.plan?'down':'up');
   const blobs=[];for(let k=0;k<rec.nImg;k++)blobs.push(await DB.get('images',id+'/'+String(k).padStart(3,'0')));
@@ -3564,7 +3612,8 @@ const HELP=[
  {sel:'#i-origin',at:'field',t:'起点・終点の表示',b:()=>{const m=curMode();const w=m==='wall'?'上流側・下流側':isPier(m)?'左岸側・右岸側':'起点側・終点側';return `図の左右のどちらが${w}かを、図の端に書き込みます。分からないときは「表示しない」のままで構いません。`;}},
  // 撮影対象と寸法
  {sel:'#o-mode',at:'field',t:'撮影対象',b:'写したものと撮り方に合わせて選びます。<br>・<b>床版下面</b>：真上を向いて、桁の下を飛びながら撮った床版の裏面<br>・<b>橋台・壁面</b>：平らな壁に沿って横に飛んで撮った面<br>・<b>円柱・小判型・矩形橋脚</b>：柱の面に向かって、高さを変えながら撮った面<br>選び間違えると合成に失敗します（例：橋脚を「橋台・壁面」で合成すると、背景を写してしまいます）。'},
- {sel:'#o-pd',at:'field',t:'柱の直径',b:'図面の直径を入れます。展開図の横幅（周の長さ）と縮尺の基準になります。'},
+ {sel:'#o-pd',at:'field',t:'柱の直径',b:'図面の直径を入れます。展開図の横幅（周の長さ）と縮尺の基準になります。「画像から自動推定」のときは目安の値（分からなければ初期値のまま）で構いません。合成後、推定した直径に書き換わります。'},
+ {sel:'#o-pdm',at:'field',t:'直径の決め方',b:'<b>手入力</b>：入力した直径で合成します（図面がある場合）。<br><b>画像から自動推定</b>：柱の左右の輪郭の見かけの幅と、高度計から求めた離隔から直径を求めて合成します。図面がない場合に使います。誤差はおおむね数%です（明石大橋で 5.45 m／実際 5.5 m）。'},
  {sel:'#o-pw',at:'field',t:'幅（長手方向）',b:'柱の長い方向の外寸を、図面の値で入れます。1つの面だけを合成するときは、その面の横幅を入れます。'},
  {sel:'#o-pt',at:'field',t:'厚さ',b:'柱の短い方向の外寸（図面の値）です。小判型では両端の半円の直径です。'},
  {sel:'#o-files',at:'field',t:'360° 画像',b:'ドローンの 360°静止画（DJI_…_D.JPG）を選びます。何枚でも同時に選べ、撮影時刻の順に自動で並びます。<br>「ブラウズ」→「<b>ファイルを選択</b>」から選んでください（「写真ライブラリ」からだと縮小されることがあります）。選んだ後の取り込みには、120MP の画像 1 枚につき 1 秒ほどかかります。'},
