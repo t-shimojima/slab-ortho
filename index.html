@@ -206,11 +206,21 @@ input[type=text],input[type=date]{font:inherit;font-size:15px;width:100%;padding
 /* ---- 処理中の表示 ---- */
 .progress{height:8px}
 #prog-label{font-size:12px;color:var(--muted);min-height:1.4em;margin:2px 0 4px;font-variant-numeric:tabular-nums}
+.grade-res{margin-top:10px;padding:10px 12px;border-radius:10px;background:var(--surface2);font-size:14px;line-height:1.7}
+.grade-res b.v{font-size:17px;font-variant-numeric:tabular-nums}
+.grade-res .sub{font-size:12px;color:var(--muted)}
 #busy-pill{position:fixed;left:50%;bottom:max(14px,env(safe-area-inset-bottom));transform:translateX(-50%);z-index:900;display:flex;align-items:center;gap:10px;max-width:calc(100vw - 24px);background:var(--ink);color:var(--surface);border-radius:999px;padding:8px 16px;font-size:13px;box-shadow:0 6px 20px rgba(0,0,0,.25);font-variant-numeric:tabular-nums}
 #busy-pill .t{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:56vw}
 .spin{width:16px;height:16px;flex:0 0 16px;border-radius:50%;border:2.5px solid currentColor;border-right-color:transparent;animation:spin .8s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 #load-ov{position:fixed;inset:0;z-index:950;background:rgba(10,16,20,.45);display:flex;align-items:center;justify-content:center;padding:16px}
+/* 写真の選択画面（iPad ではボタン付近に出る吹き出し）に隠れないよう、ボタンと反対側の上部に出す */
+#load-ov.side-r{justify-content:flex-end;align-items:flex-start;padding-top:max(56px,env(safe-area-inset-top))}
+#load-ov.side-l{justify-content:flex-start;align-items:flex-start;padding-top:max(56px,env(safe-area-inset-top))}
+#ld-strip{position:fixed;left:0;right:0;top:0;z-index:960;height:max(30px,calc(env(safe-area-inset-top) + 26px));background:var(--accent);color:#fff;font-size:13px;display:flex;align-items:flex-end;justify-content:center;gap:10px;padding:0 12px 5px;overflow:hidden}
+#ld-strip .bar{position:absolute;left:0;bottom:0;height:4px;width:100%;background:rgba(255,255,255,.25)}
+#ld-strip .bar i{position:absolute;top:0;bottom:0;left:0;background:#fff}
+#ld-strip .bar.ind i{width:35%;animation:ind 1.3s ease-in-out infinite}
 #load-ov .card{background:var(--surface);color:var(--ink);border-radius:14px;padding:18px 20px;width:min(420px,100%);box-shadow:0 12px 40px rgba(0,0,0,.3)}
 #load-ov h4{margin:0 0 6px;font-size:16px;display:flex;align-items:center;gap:10px}
 #load-ov .bar{height:10px;border-radius:5px;background:var(--surface2);overflow:hidden;margin:12px 0 6px;position:relative}
@@ -234,6 +244,7 @@ input[type=text],input[type=date]{font:inherit;font-size:15px;width:100%;padding
 #sk-empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:24px;text-align:center;color:#3a4246;background:#e3e6e7;line-height:1.7}
 .sk-zoom{position:absolute;right:8px;top:8px;display:flex;flex-direction:column;gap:6px}
 .sk-zoom .btn{min-width:44px;background:rgba(249,250,249,.92)}
+.sk-zoom .btn.sk-unsel{background:#e6f6fe;border-color:#00aaff;color:#00577f;font-size:12px;line-height:1.25;padding:4px 6px}
 .sk-cols{display:grid;grid-template-columns:1.5fr 1fr;gap:14px;margin-top:14px;align-items:start}
 @media (max-width:900px){.sk-cols{grid-template-columns:1fr}}
 #sk-list{min-width:0;font-size:13px}
@@ -265,7 +276,7 @@ input[type=text],input[type=date]{font:inherit;font-size:15px;width:100%;padding
 <header class="top">
   <div class="brand">
     <h1>床版下面オルソ</h1>
-    <p>DJI Avata 360 の 360° 静止画から、床版下面の平面オルソ画像を端末内で合成します（v1.21）</p>
+    <p>DJI Avata 360 の 360° 静止画から、床版下面の平面オルソ画像を端末内で合成します（v1.22）</p>
     <div class="offline" id="offline"><i></i><span>オフライン対応を確認中…</span></div>
   </div>
   <nav class="tabs" role="tablist">
@@ -425,10 +436,13 @@ input[type=text],input[type=date]{font:inherit;font-size:15px;width:100%;padding
         <div class="field"><label for="o-theta" id="o-theta-lbl">使用する天頂角</label><div class="row"><input type="number" id="o-theta" min="35" max="70" step="1" value="55"><span class="unit">°</span></div></div>
       </div>
       <div id="grade-row" style="display:grid;gap:8px">
-        <div class="pair">
+        <div class="field"><label for="o-gmode">床版の勾配</label>
+          <select id="o-gmode"><option value="manual">手入力</option><option value="auto1">自動推定（縦断のみ補正）</option><option value="auto2" selected>自動推定（縦断＋横断を補正）</option></select></div>
+        <div class="pair" id="grade-manual">
           <div class="field"><label for="o-grade">縦断勾配</label><div class="row"><input type="number" id="o-grade" min="0" max="20" step="0.1" value="0"><span class="unit">%</span></div></div>
           <div class="field"><label for="o-gdir">勾配の向き</label><select id="o-gdir"><option value="1">画像1から離れるほど床版が高い</option><option value="-1">画像1から離れるほど床版が低い</option></select></div>
         </div>
+        <p class="hint" id="grade-auto-hint" hidden>重なった画像同士のずれ方から、床版の傾き（縦断・横断）を推定して合成します。離隔 h は「画像1（最初に選んだ画像）を撮った位置での離隔」です。推定した勾配は合成結果の下に表示します（次回の目安になります）。手入力のときも、参考として推定値を表示します。</p>
         <p class="hint" id="grade-hint">0% のときは従来どおり、離隔 h が一定として合成します。勾配を入れると、離隔 h は「画像1（最初に選んだ画像）を撮った位置での離隔」として扱い、床版下面を傾いた平面として合成します（機体の高度も使って各画像の離隔を計算）。</p>
       </div>
       <div class="pair">
@@ -446,6 +460,7 @@ input[type=text],input[type=date]{font:inherit;font-size:15px;width:100%;padding
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn primary" id="o-run" data-busy="need-files" disabled>合成を実行</button>
         <button class="btn" id="o-sample" data-busy="">サンプルで試す</button>
+        <select id="o-sgrade" aria-label="サンプルの勾配" style="font-size:14px"><option value="0,0">サンプル：勾配なし</option><option value="3,0">サンプル：縦断 3%</option><option value="3,2">サンプル：縦断 3%＋横断 2%</option><option value="-5,0">サンプル：縦断 −5%</option></select>
       </div>
       <div>
         <div id="prog-label"></div><div class="progress"><div id="prog"></div></div>
@@ -467,6 +482,7 @@ input[type=text],input[type=date]{font:inherit;font-size:15px;width:100%;padding
         </div>
         <div class="viewer" id="viewer"><div class="empty" id="viewer-empty">画像を選んで「合成を実行」を押すか、「サンプルで試す」で動作を確認できます。保存した案件は「保存データ」から開けます。</div>
           <div class="guide" id="guide" hidden></div><div class="inner" id="inner" hidden><canvas id="pv"></canvas><svg id="overlay"></svg></div></div>
+        <div class="grade-res" id="grade-res" hidden></div>
         <p class="hint" id="pano-hint">撮影位置のマークをタップ、またはひび割れなど気になる箇所を<b>長押し</b>すると、元の360°画像で確認・切り出しできます。</p>
         <div class="toolbar" style="margin-top:10px">
           <span class="seg"><button data-tool="measure" aria-pressed="true">距離を測る</button><button data-tool="crop" aria-pressed="false">範囲を指定</button><button data-tool="level" aria-pressed="false">傾きを補正</button></span>
@@ -536,7 +552,7 @@ input[type=text],input[type=date]{font:inherit;font-size:15px;width:100%;padding
       </div>
     </div>
     <div class="sk-stage" id="sk-stage"><canvas id="sk-cv"></canvas>
-      <div class="sk-zoom"><button class="btn small" id="sk-zin" aria-label="拡大">＋</button><button class="btn small" id="sk-zout" aria-label="縮小">－</button><button class="btn small" id="sk-fit">全体</button></div>
+      <div class="sk-zoom"><button class="btn small" id="sk-zin" aria-label="拡大">＋</button><button class="btn small" id="sk-zout" aria-label="縮小">－</button><button class="btn small" id="sk-fit">全体</button><button class="btn small sk-unsel" id="sk-unsel" hidden>選択解除<br><span id="sk-unsel-n">0</span> 件</button></div>
       <div id="sk-empty"></div></div>
     <p class="hint" id="sk-hint"></p>
     <div class="box sk-wbox" id="sk-wbox">
@@ -547,7 +563,7 @@ input[type=text],input[type=date]{font:inherit;font-size:15px;width:100%;padding
         <button class="btn small" id="skw-sel" disabled>選択した変状に適用（<span id="skw-n">0</span> 件）</button>
         <button class="btn small" id="skw-clr" disabled>選択を解除</button>
       </div>
-      <p class="hint" style="margin-bottom:0">太さは A3 などに出力したときの用紙上の太さです（標準：線 0.35 mm・ハッチング 0.20 mm）。「すべての変状に適用」は、この案件でこれから描く変状にも使われます。変状は「選ぶ」ボタンで図をタップするか、一覧のチェックで選べます。1 つだけ変えるときは一覧の行をタップします。</p>
+      <p class="hint" style="margin-bottom:0">太さは A3 などに出力したときの用紙上の太さです（標準：線 0.35 mm・ハッチング 0.20 mm）。「すべての変状に適用」は、この案件でこれから描く変状にも使われます。変状は「選ぶ」ボタンで図をタップするか、一覧のチェックで選べます。解除は「選択を解除」、図の右上の「選択解除」、または「選ぶ」で何もない所をタップします。1 つだけ変えるときは一覧の行をタップします。</p>
     </div>
     <div class="box" id="sk-attr" hidden style="margin-top:10px;background:var(--surface2)">
       <div class="row">
@@ -718,6 +734,7 @@ input[type=text],input[type=date]{font:inherit;font-size:15px;width:100%;padding
 </div>
 <div id="help-pop" role="dialog" hidden><button class="x" aria-label="閉じる">×</button><b id="help-t"></b><div id="help-b"></div></div>
 <div id="busy-pill" hidden><span class="spin"></span><span class="t" id="busy-t">処理中</span><span id="busy-n"></span></div>
+<div id="ld-strip" hidden aria-hidden="true"><span id="ld-strip-t">画像を取り込んでいます</span><span id="ld-strip-n">0:00</span><div class="bar ind" id="ld-strip-bar"><i></i></div></div>
 <div id="load-ov" hidden><div class="card" role="dialog" aria-live="polite">
   <h4><span class="spin" style="color:var(--accent)"></span><span id="ld-title">画像を取り込んでいます</span></h4>
   <div class="bar ind" id="ld-bar"><i></i></div>
@@ -1171,10 +1188,11 @@ function makeSlabTexture(Lx,Ly,g){
 function synthEquirect(T,cam,W,H,thMaxDeg){
   const rows=Math.ceil(H*thMaxDeg/180),cv=document.createElement('canvas');cv.width=W;cv.height=rows;
   const ctx=cv.getContext('2d'),img=ctx.createImageData(W,rows),d=img.data,td=T.data;
-  const cs=Math.cos(cam.yaw),sn=Math.sin(cam.yaw);
-  for(let r=0;r<rows;r++){const th=(r+0.5)/H*Math.PI,rho=cam.h*Math.tan(th);
-    for(let c=0;c<W;c++){const lon=((c+0.5)/W-0.5)*TAU,X=rho*Math.cos(lon),Y=rho*Math.sin(lon);
-      const wx=cam.x+cs*X-sn*Y,wy=cam.y+sn*X+cs*Y,fx=wx/T.g-0.5,fy=(T.Ly-wy)/T.g-0.5,q=(r*W+c)*4;
+  const cs=Math.cos(cam.yaw),sn=Math.sin(cam.yaw), G=cam.G||[0,0];
+  for(let r=0;r<rows;r++){const th=(r+0.5)/H*Math.PI,tt=Math.tan(th);
+    for(let c=0;c<W;c++){const lon=((c+0.5)/W-0.5)*TAU,dwx=cs*Math.cos(lon)-sn*Math.sin(lon),dwy=sn*Math.cos(lon)+cs*Math.sin(lon);
+      const den=1-tt*(G[0]*dwx+G[1]*dwy), rho=den>0.05?cam.h*tt/den:1e9;   // 勾配付きサンプル：傾いた床版面との交点
+      const wx=cam.x+rho*dwx,wy=cam.y+rho*dwy,fx=wx/T.g-0.5,fy=(T.Ly-wy)/T.g-0.5,q=(r*W+c)*4;
       if(fx<0||fy<0||fx>=T.w-1||fy>=T.h-1||th>1.45){const v=48+18*Math.cos(lon*3);d[q]=v;d[q+1]=v+2;d[q+2]=v+5;d[q+3]=255;continue;}
       const ix=fx|0,iy=fy|0,tx=fx-ix,ty=fy-iy,i0=(iy*T.w+ix)*4,i1=i0+4,i2=i0+T.w*4,i3=i2+4;
       const shade=cam.gain*(1-0.25*Math.sin(th)**2);
@@ -2154,8 +2172,9 @@ function modeUI(){const m=$('#o-mode').value, w=m==='wall', p=isPier(m), side=w|
   $('#lbl-origin').textContent=nm[0]+'の表示';
   const op=$('#i-origin').options; op[1].textContent='左が'+nm[1]; op[2].textContent='右が'+nm[1];
   if(typeof drawOverlay==='function'&&S.img)drawOverlay();
-  $('#lbl-h').textContent=w?'離隔 D（壁面まで）':p?'離隔 D（表面まで）':(+$('#o-grade').value>0?'離隔 h（画像1の位置）':'離隔 h（床版まで）');
+  $('#lbl-h').textContent=w?'離隔 D（壁面まで）':p?'離隔 D（表面まで）':((+$('#o-grade').value>0||$('#o-gmode').value!=='manual')?'離隔 h（画像1の位置）':'離隔 h（床版まで）');
   $('#grade-row').hidden=m!=='slab';
+  {const au=$('#o-gmode').value!=='manual'; $('#grade-manual').hidden=au; $('#grade-hint').hidden=au; $('#grade-auto-hint').hidden=!au;}
   $('#o-theta-lbl').textContent=side?'使う視野角（正面から）':'使用する天頂角';
   $('#o-level-row').hidden=side; $('#view-seg').hidden=side; $('#wall-row').hidden=!w;
   $('#pier-row-round').hidden=m!=='pier-round'; $('#pier-row-oval').hidden=m!=='pier-oval'&&m!=='pier-rect';
@@ -2164,6 +2183,8 @@ function modeUI(){const m=$('#o-mode').value, w=m==='wall', p=isPier(m), side=w|
 }
 $('#o-mode').addEventListener('change',modeUI);
 $('#o-grade').addEventListener('input',modeUI);
+$('#o-gmode').addEventListener('change',()=>{modeUI();try{localStorage.setItem('slabortho-gmode',$('#o-gmode').value)}catch(e){}});
+try{const g=localStorage.getItem('slabortho-gmode');if(g)$('#o-gmode').value=g;}catch(e){}
 try{const m=localStorage.getItem('slabortho-mode');if(m)$('#o-mode').value=m;}catch(e){}
 /* ---- 撮影時刻：EXIF の DateTimeOriginal（＋1/100秒）→ XMP の CreateDate → ファイル名の日時 の順に読む ----
    写真アプリ経由で選ぶと、ファイル名（IMG_xxxx）や渡される順番が撮影順と一致しないため、撮影時刻で並べ直す */
@@ -2204,11 +2225,17 @@ const hhmmss=t=>{const d=new Date(t);return `${String(d.getUTCHours()).padStart(
    選択画面を開いた時点から表示し、change・cancel・「閉じる」で消す */
 const LD={on:false,t0:0,timer:null};
 function ldShow(){ LD.on=true; LD.t0=performance.now(); $('#ld-title').textContent='画像を取り込んでいます'; $('#ld-bar').classList.add('ind'); $('#ld-bar i').style.width='';
-  $('#ld-close').hidden=false; $('#ld-num').textContent='経過 0:00'; $('#load-ov').hidden=false;
-  clearInterval(LD.timer); LD.timer=setInterval(()=>{ if(LD.on&&!LD.count)$('#ld-num').textContent=`経過 ${mmss((performance.now()-LD.t0)/1000)}`; },500); }
+  $('#ld-close').hidden=false; $('#ld-num').textContent='経過 0:00';
+  // 選択画面はボタンの近くに出るので、カードはボタンと反対側の上部に置く（画面上端の帯は常に見える）
+  const ov=$('#load-ov'), r=$('#o-files').getBoundingClientRect(); ov.classList.remove('side-l','side-r');
+  if(innerWidth>=700) ov.classList.add(r.left+r.width/2<innerWidth/2?'side-r':'side-l');
+  ov.hidden=false; $('#ld-strip').hidden=false; $('#ld-strip-t').textContent='画像を取り込んでいます'; $('#ld-strip-bar').classList.add('ind'); $('#ld-strip-bar i').style.width=''; $('#ld-strip-n').textContent='0:00';
+  clearInterval(LD.timer); LD.timer=setInterval(()=>{ if(LD.on&&!LD.count){const t=mmss((performance.now()-LD.t0)/1000);$('#ld-num').textContent=`経過 ${t}`;$('#ld-strip-n').textContent=t;} },500); }
 function ldCount(k,n){ LD.count=true; $('#ld-bar').classList.remove('ind'); $('#ld-bar i').style.width=(100*k/Math.max(1,n))+'%'; $('#ld-close').hidden=true;
-  $('#ld-title').textContent='撮影時刻を読んでいます'; $('#ld-num').textContent=`${k} / ${n} 枚・経過 ${mmss((performance.now()-LD.t0)/1000)}`; }
-function ldHide(){ LD.on=false; LD.count=false; clearInterval(LD.timer); $('#load-ov').hidden=true; }
+  $('#load-ov').classList.remove('side-l','side-r');
+  $('#ld-title').textContent='撮影時刻を読んでいます'; $('#ld-num').textContent=`${k} / ${n} 枚・経過 ${mmss((performance.now()-LD.t0)/1000)}`;
+  $('#ld-strip-bar').classList.remove('ind'); $('#ld-strip-bar i').style.width=(100*k/Math.max(1,n))+'%'; $('#ld-strip-t').textContent='撮影時刻を読んでいます'; $('#ld-strip-n').textContent=`${k} / ${n} 枚`; }
+function ldHide(){ LD.on=false; LD.count=false; clearInterval(LD.timer); $('#load-ov').hidden=true; $('#ld-strip').hidden=true; }
 $('#o-files').addEventListener('click',()=>{ if(!busy)ldShow(); });
 $('#o-files').addEventListener('cancel',ldHide);
 $('#ld-close').addEventListener('click',ldHide);
@@ -2509,7 +2536,8 @@ function rotateSol(sol,phi){
 function readOpts(){
   const h=Math.max(0.3,+$('#o-h').value||3), th=Math.max(30,Math.min(75,+$('#o-theta').value||55));
   const grade=$('#o-mode').value==='slab'?Math.max(0,Math.min(20,+$('#o-grade').value||0))/100*(+$('#o-gdir').value||1):0;
-  return {h,th,grade,maxW:+$('#o-q').value,gain:$('#o-gain').value==='1',mode:$('#o-mode').value,seam:+$('#o-seam').value,pd:+$('#o-pd').value,pw:+$('#o-pw').value,pt:+$('#o-pt').value};
+  const gmode=$('#o-mode').value==='slab'?$('#o-gmode').value:'manual';
+  return {h,th,grade:gmode==='manual'?grade:0,gmode,maxW:+$('#o-q').value,gain:$('#o-gain').value==='1',mode:$('#o-mode').value,seam:+$('#o-seam').value,pd:+$('#o-pd').value,pw:+$('#o-pw').value,pt:+$('#o-pt').value};
 }
 function currentGsd(){const v=$('#o-gsd').value;return v==='auto'?S.autoG:(+v)/1000}
 /* 縦断勾配：橋軸方向（撮影位置の並びの主方向）に沿って床版下面の高さが変わるとして、各画像の離隔と傾きを求める */
@@ -2520,15 +2548,60 @@ function slopeGeom(sol,o,ref,dz){
   const ang=0.5*Math.atan2(2*sxy,sxx-syy); let ux=Math.cos(ang),uy=Math.sin(ang);
   let far=cr.i,fd=-1; cams.forEach(c=>{const d=Math.hypot(c.tx-cr.tx,c.ty-cr.ty);if(d>fd){fd=d;far=c.i}});
   const cf=cams.find(c=>c.i===far); if((cf.tx-cr.tx)*ux+(cf.ty-cr.ty)*uy<0){ux=-ux;uy=-uy;}
-  const gwx=o.grade*ux,gwy=o.grade*uy, cam=new Map(); let hmin=1e9,hmax=-1e9,smin=1e9,smax=-1e9,clamped=false;
+  let gwx=o.grade*ux,gwy=o.grade*uy; const cam=new Map();
+  if(o.gref){const w=tiltFromRef(sol,cr.i,o.gref);gwx=w[0];gwy=w[1];} let hmin=1e9,hmax=-1e9,smin=1e9,smax=-1e9,clamped=false;
   cams.forEach(c=>{
     const sAx=(c.tx-cr.tx)*ux+(c.ty-cr.ty)*uy; smin=Math.min(smin,sAx);smax=Math.max(smax,sAx);
-    let h0=o.h+o.grade*sAx-dz(c.i); if(h0<0.3){h0=0.3;clamped=true;}
+    let h0=o.h+gwx*(c.tx-cr.tx)+gwy*(c.ty-cr.ty)-dz(c.i); if(h0<0.3){h0=0.3;clamped=true;}
     const sc=Math.hypot(c.a,c.b)||1, a=c.a/sc, b=c.b/sc;   // 画像座標→全体座標の回転
     cam.set(c.i,{h0,gx:a*gwx+b*gwy,gy:-b*gwx+a*gwy,s:sAx}); hmin=Math.min(hmin,h0);hmax=Math.max(hmax,h0);
   });
-  return {cam,far,hmin,hmax,len:smax-smin,ux,uy,clamped};
+  return {cam,far,hmin,hmax,len:smax-smin,ux,uy,clamped,gw:[gwx,gwy]};
 }
+/* ---- 勾配の自動推定（v1.22） ----
+   床版が投影面に対して傾き g（離隔の勾配ベクトル）を持つと、撮影位置が B 離れた2枚の投影像は
+   厳密に v = u − (h/d)·B + B·(g·u)/d の関係になる（撮影間隔の方向にだけ伸びる）。
+   全ペアの対応点に「相似変換＋この項」を当てはめ、g（全体座標の2成分）を最小二乗で求める。画像の再投影は不要 */
+function estimateTilt(sol,pairs,feats,dOf){
+  const cm=new Map(sol.cams.map(c=>[c.i,c])), S=new Float64Array(4), R=new Float64Array(2), keep=[];
+  const solve4=(N,b)=>solveLin(Float64Array.from(N),Float64Array.from(b),4);
+  for(const p of pairs){ if(p.pts)continue; const ci=cm.get(p.i),cj=cm.get(p.j); if(!ci||!cj)continue;
+    const si=Math.hypot(ci.a,ci.b)||1,sj=Math.hypot(cj.a,cj.b)||1, ai=ci.a/si,bi=ci.b/si,aj=cj.a/sj,bj=cj.b/sj;
+    const d=Math.max(0.3,dOf(p.i)||1), Bx=(cj.tx-ci.tx)/si, By=(cj.ty-ci.ty)/si; if(Math.hypot(Bx,By)<0.2)continue;
+    const Fi=feats[p.i],Fj=feats[p.j], rows=[], step=Math.max(1,Math.floor(p.inliers.length/400));
+    for(let k=0;k<p.inliers.length;k+=step){const [u,v]=p.inliers[k];
+      const ux=ai*Fi.X[u]-bi*Fi.Y[u], uy=bi*Fi.X[u]+ai*Fi.Y[u], vx=aj*Fj.X[v]-bj*Fj.Y[v], vy=bj*Fj.X[v]+aj*Fj.Y[v];
+      rows.push([ux,-uy,1,0,Bx*ux/d,Bx*uy/d,vx],[uy,ux,0,1,By*ux/d,By*uy/d,vy]);}
+    if(rows.length<40)continue;
+    const N=new Float64Array(36), r=new Float64Array(6);
+    rows.forEach(q=>{for(let a=0;a<6;a++){r[a]+=q[a]*q[6];for(let b=0;b<6;b++)N[a*6+b]+=q[a]*q[b];}});
+    const Nll=new Float64Array(16); for(let a=0;a<4;a++)for(let b=0;b<4;b++)Nll[a*4+b]=N[a*6+b];
+    const X0=solve4(Nll,[0,1,2,3].map(a=>N[a*6+4])), X1=solve4(Nll,[0,1,2,3].map(a=>N[a*6+5])), Xr=solve4(Nll,[0,1,2,3].map(a=>r[a]));
+    if(!X0||!X1||!Xr)continue;
+    const ngl=(g,a)=>N[(4+g)*6+a];
+    let s00=N[4*6+4],s01=N[4*6+5],s11=N[5*6+5],r0=r[4],r1=r[5];
+    for(let a=0;a<4;a++){s00-=ngl(0,a)*X0[a];s01-=ngl(0,a)*X1[a];s11-=ngl(1,a)*X1[a];r0-=ngl(0,a)*Xr[a];r1-=ngl(1,a)*Xr[a];}
+    S[0]+=s00;S[1]+=s01;S[2]+=s01;S[3]+=s11;R[0]+=r0;R[1]+=r1;
+    keep.push({rows,X0,X1,Xr,B:Math.hypot(Bx,By)});
+  }
+  const det=S[0]*S[3]-S[1]*S[2]; if(keep.length<1||!(Math.abs(det)>1e-12))return null;
+  const gx=(S[3]*R[0]-S[1]*R[1])/det, gy=(S[0]*R[1]-S[2]*R[0])/det;
+  let sse=0,nobs=0;
+  keep.forEach(k=>{const loc=[0,1,2,3].map(a=>k.Xr[a]-k.X0[a]*gx-k.X1[a]*gy);
+    k.rows.forEach(q=>{const e=q[0]*loc[0]+q[1]*loc[1]+q[2]*loc[2]+q[3]*loc[3]+q[4]*gx+q[5]*gy-q[6];sse+=e*e;nobs++;});});
+  const dof=Math.max(1,nobs-4*keep.length-2), s2=sse/dof;
+  return {g:[gx,gy],C:[s2*S[3]/det,-s2*S[1]/det,s2*S[0]/det],rms:Math.sqrt(sse/nobs),npairs:keep.length};
+}
+/* 全体座標の勾配 ⇔ 基準画像（画像1）の座標の勾配。全体座標は位置合わせのたびに回り直すため、画像1の座標で持つ */
+function tiltToRef(sol,ref,gw){const c=sol.cams.find(q=>q.i===ref)||sol.cams[0],s=Math.hypot(c.a,c.b)||1,a=c.a/s,b=c.b/s;return [a*gw[0]+b*gw[1],-b*gw[0]+a*gw[1]];}
+function tiltFromRef(sol,ref,gr){const c=sol.cams.find(q=>q.i===ref)||sol.cams[0],s=Math.hypot(c.a,c.b)||1,a=c.a/s,b=c.b/s;return [a*gr[0]-b*gr[1],b*gr[0]+a*gr[1]];}
+/* 縦断（画像1→最も遠い画像の向き）・横断に分ける */
+function tiltParts(gw,C,ax){const ux=ax.ux,uy=ax.uy,nx=-uy,ny=ux;
+  const al=gw[0]*ux+gw[1]*uy, cr=gw[0]*nx+gw[1]*ny;
+  const v=(x,y)=>C?Math.sqrt(Math.max(0,x*x*C[0]+2*x*y*C[1]+y*y*C[2])):0;
+  return {al,cr,sal:v(ux,uy),scr:v(nx,ny)};}
+function tiltTxt(t,withSig){const pc=x=>fmt(Math.abs(x)*100,2), sg=x=>withSig?` ±${fmt(x*100,2)}`:'';
+  return `縦断 ${pc(t.al)}%${sg(t.sal)}（画像1から離れるほど床版が${t.al>=0?'高い':'低い'}）・横断 ${pc(t.cr)}%${sg(t.scr)}（進行方向の${t.cr>=0?'左':'右'}側が高い・向きは参考）`;}
 async function register(n,names,getSrc,yaws,truth,alts){
   const o=readOpts(); const t0=performance.now(); const wall=o.mode==='wall';
   if(wall){ // 壁の正面方向：指定した画像（なければ1枚目を自動推定）から、機体の向きの差で各画像に配る
@@ -2578,18 +2651,23 @@ async function register(n,names,getSrc,yaws,truth,alts){
   }
   return {sol,pairs};
   };
-  let {sol,pairs}=await matchSolve(o.h,null,0.4,o.grade?0.5:0.6);
-  if(!wall&&o.grade){
-    /* 縦断勾配：床版下面を傾いた平面とみなし、各画像の離隔を求めて投影し直す */
+  const autoG=!wall&&o.mode==='slab'&&o.gmode!=='manual';
+  let {sol,pairs}=await matchSolve(o.h,null,0.4,(o.grade||autoG)?0.5:0.6);
+  if(!wall&&o.mode==='slab'){
     const ref=sol.used.includes(0)?0:sol.used[0];
     const hasAlt=alts&&alts[ref]!=null&&sol.used.every(k=>alts[k]!=null);
     const dz=k=>hasAlt?alts[k]-alts[ref]:0;
     const dirTxt=g=>`画像1から離れるほど床版が${g>0?'高い':'低い'}`;
-    log(`縦断勾配 ${fmt(Math.abs(o.grade)*100,1)}%（${dirTxt(o.grade)}。画像1 = ${names[ref]}）・画像1の離隔 ${fmt(o.h,2)} m${hasAlt?'・機体の高度を考慮':'（高度情報なし：高度一定とみなします）'}`);
     const base={sol,pairs,feats:feats.slice(),hists:hists.slice()};
-    // 指定の勾配で投影し直して位置合わせ。つながる画像が減ったら失敗（null）
-    const trySlope=async(grade,label)=>{
-      const og={...o,grade}; let cur={sol:base.sol,pairs:base.pairs}; let fe=base.feats.slice(), hi=base.hists.slice();
+    /* 勾配の自動推定（勾配 0% で投影した画像の対応点から）。手入力のときも参考としてログに出す */
+    const ax0=slopeGeom(sol,{...o,grade:0,gref:null},ref,dz);
+    const est0=estimateTilt(sol,pairs,feats,()=>o.h);
+    const t0=est0?tiltParts(est0.g,est0.C,ax0):null;
+    if(est0) log(`勾配の自動推定（${est0.npairs} ペア）：${tiltTxt(t0,true)}`);
+    else log('勾配の自動推定：推定に使えるペアがありません（撮影位置が近すぎるか、重なりが不足）');
+    // 指定の勾配で投影し直して位置合わせ。つながる画像が減ったら失敗（null）。自動のときは残りの傾きを推定して1回更新する
+    const trySlope=async(spec,label)=>{
+      let og={...o,grade:spec.grade||0,gref:spec.gref||null}, last=null; let cur={sol:base.sol,pairs:base.pairs}; let fe=base.feats.slice(), hi=base.hists.slice();
       for(let pass=0;pass<2;pass++){
         const geo=slopeGeom(cur.sol,og,ref,dz);
         log(`  ${label}${pass+1}回目：離隔 ${fmt(geo.hmin,2)}〜${fmt(geo.hmax,2)} m（橋軸方向 ${fmt(geo.len,1)} m の範囲）`);
@@ -2609,26 +2687,50 @@ async function register(n,names,getSrc,yaws,truth,alts){
           return null;
         }
         cur=r;
+        const gN=slopeGeom(cur.sol,og,ref,dz), est=estimateTilt(cur.sol,cur.pairs,feats,k=>gN.cam.get(k).h0); last=est;
+        if(est){const t=tiltParts(est.g,est.C,gN); log(`  ${label}${pass+1}回目の残りの傾き：${tiltTxt(t,true)}`);
+          if(og.gref&&pass===0){let dW=est.g; if(o.gmode==='auto1')dW=[t.al*gN.ux,t.al*gN.uy];
+            const dr=tiltToRef(cur.sol,ref,dW); og={...og,gref:[og.gref[0]+dr[0],og.gref[1]+dr[1]]};}}
       }
       const geo=slopeGeom(cur.sol,og,ref,dz);
-      return {sol:cur.sol,pairs:cur.pairs,feats:feats.slice(),hists:hists.slice(),geo,grade};
+      return {sol:cur.sol,pairs:cur.pairs,feats:feats.slice(),hists:hists.slice(),geo,grade:og.grade,gref:og.gref,last};
     };
-    let res=await trySlope(o.grade,'');
-    if(!res){
-      log(`  指定の向きでは位置合わせが不安定です。勾配の向きを逆（${dirTxt(-o.grade)}）にして試します…`);
-      res=await trySlope(-o.grade,'逆向き ');
-      if(res) log(`注意：勾配の向きを逆（${dirTxt(-o.grade)}）にすると正しくつながったため、逆向きで合成しました。「勾配の向き」の設定を確認してください。`);
+    let res=null, tried=false;
+    if(!autoG&&o.grade){
+      tried=true;
+      log(`縦断勾配 ${fmt(Math.abs(o.grade)*100,1)}%（${dirTxt(o.grade)}。画像1 = ${names[ref]}）・画像1の離隔 ${fmt(o.h,2)} m${hasAlt?'・機体の高度を考慮':'（高度情報なし：高度一定とみなします）'}`);
+      res=await trySlope({grade:o.grade},'');
+      if(!res){
+        log(`  指定の向きでは位置合わせが不安定です。勾配の向きを逆（${dirTxt(-o.grade)}）にして試します…`);
+        res=await trySlope({grade:-o.grade},'逆向き ');
+        if(res) log(`注意：勾配の向きを逆（${dirTxt(-o.grade)}）にすると正しくつながったため、逆向きで合成しました。「勾配の向き」の設定を確認してください。`);
+      }
+    }else if(autoG){
+      const sig=t0&&(Math.hypot(t0.al,t0.cr)>=0.002)&&(Math.hypot(t0.al,t0.cr)>=2*Math.hypot(t0.sal,t0.scr));
+      if(!est0||!sig) log('自動推定：はっきりした傾きが見つからないため、勾配 0% として合成します。');
+      else{
+        tried=true;
+        const lim=x=>Math.max(-0.2,Math.min(0.2,x));
+        const gW=o.gmode==='auto1'?[lim(t0.al)*ax0.ux,lim(t0.al)*ax0.uy]:[lim(est0.g[0]),lim(est0.g[1])];
+        log(`自動推定の勾配で投影し直します（${o.gmode==='auto1'?'縦断のみ補正':'縦断＋横断を補正'}。画像1 = ${names[ref]}・画像1の離隔 ${fmt(o.h,2)} m${hasAlt?'・機体の高度を考慮':'（高度情報なし：高度一定とみなします）'}）`);
+        res=await trySlope({gref:tiltToRef(sol,ref,gW)},'自動 ');
+      }
     }
     if(res){
       sol=res.sol; pairs=res.pairs; for(let k=0;k<n;k++){feats[k]=res.feats[k];hists[k]=res.hists[k];}
       sol.cams.forEach(c=>{const g=res.geo.cam.get(c.i);c.h0=g.h0;c.gx=g.gx;c.gy=g.gy;});
       const ss=sol.cams.map(c=>c.s);
+      const tu=tiltParts(res.geo.gw,null,res.geo);
+      log(`採用した勾配：${tiltTxt(tu,false)}`);
       log(`勾配補正後の離隔：画像1 ${fmt(res.geo.cam.get(ref).h0,2)} m → 最も遠い ${names[res.geo.far]} ${fmt(res.geo.cam.get(res.geo.far).h0,2)} m（${fmt(res.geo.len,1)} m 離れた位置）・各画像の縮尺 ${fmt(Math.min(...ss),3)}〜${fmt(Math.max(...ss),3)}`);
-      sol.slope={grade:res.grade,ref,hasAlt};
-    }else{
+      // 床版の勾配の推定値 = 合成に使った勾配 + 補正後に残った傾き
+      const tw=res.last?[res.geo.gw[0]+res.last.g[0],res.geo.gw[1]+res.last.g[1]]:res.geo.gw, tt=tiltParts(tw,res.last?res.last.C:null,res.geo);
+      sol.slope={grade:tu.al,cross:tu.cr,auto:autoG,gmode:o.gmode,ref,hasAlt,est:{al:tt.al,cr:tt.cr,sal:tt.sal,scr:tt.scr,np:res.last?res.last.npairs:0}};
+    }else if(tried){
       sol=base.sol; pairs=base.pairs; for(let k=0;k<n;k++){feats[k]=base.feats[k];hists[k]=base.hists[k];}
       log('注意：勾配補正をかけると位置合わせが不安定になるため、勾配 0% として合成しました。勾配の値・離隔 h（画像1の位置）を確認してください。');
     }
+    if(!sol.slope) sol.slope={grade:0,cross:0,auto:autoG,gmode:o.gmode,ref,hasAlt,failed:tried,est:t0?{al:t0.al,cr:t0.cr,sal:t0.sal,scr:t0.scr,np:est0.npairs,rough:true}:null};
   }
   const deg=new Map();pairs.forEach(p=>{deg.set(p.i,(deg.get(p.i)||0)+1);deg.set(p.j,(deg.get(p.j)||0)+1)});
   sol.cams.forEach(c=>setThumbStatus(c.i,`<span class="chip ok">接続 ${deg.get(c.i)||0} 枚</span> <span class="num">±${fmt(c.rms*1000,0)}mm</span>`));
@@ -2653,9 +2755,23 @@ async function register(n,names,getSrc,yaws,truth,alts){
   const s0=srcInfo[0];
   S.autoG=wall?Math.max(0.0008,Math.ceil(o.h*(2*WALL_LON*D2R)/Math.min(s0.W*2*WALL_LON/360,o.maxW)*2000)/2000)
               :Math.max(0.0008,Math.ceil(o.h*Math.PI/s0.H*Math.max(1,s0.W/o.maxW/2)*2000)/2000);
-  Object.assign(S,{sol,gains,o,srcInfo,names,getSrc,yaws,hists});
+  Object.assign(S,{sol,gains,o,srcInfo,names,getSrc,yaws,hists}); gradeResUI();
+}
+/* 自動推定した床版の勾配（次回の合成・撮影計画の目安） */
+function gradeResUI(){
+  const el=$('#grade-res'); if(!el)return;
+  const sl=S.sol&&S.sol.slope, e=sl&&sl.est;
+  if(!S.o||S.o.mode!=='slab'||!sl||!e){el.hidden=true;return;}
+  const pc=x=>fmt(Math.abs(x)*100,1), nm=S.names&&S.names[sl.ref]!=null?S.names[sl.ref]:'画像1';
+  const used=sl.gmode==='manual'?(sl.grade?`手入力の縦断 ${pc(sl.grade)}% で合成`:'勾配 0% で合成（手入力）')
+    :sl.failed?'補正が不安定なため勾配 0% で合成':(sl.grade||sl.cross)?`自動推定の勾配で合成（${sl.gmode==='auto1'?'縦断のみ補正':'縦断＋横断を補正'}）`:'はっきりした傾きがないため勾配 0% で合成';
+  el.innerHTML=`<div><b>床版下面の勾配（自動推定）</b></div>
+    <div>縦断 <b class="v">${pc(e.al)}%</b>（${nm} から離れるほど床版が${e.al>=0?'高い':'低い'}）　横断 <b class="v">${pc(e.cr)}%</b>（進行方向の${e.cr>=0?'左':'右'}側が高い）</div>
+    <div class="sub">${used}。${e.rough?'勾配 0% で投影した画像からの簡易推定のため、実際よりやや小さめに出ることがあります。':''}次回の手入力・撮影計画の目安にできます。横断の左右は参考です。</div>`;
+  el.hidden=false;
 }
 async function renderCurrent(){
+  gradeResUI();
   const t0=performance.now();
   S.img=null; S.measure=[]; S.lvPts=[]; S.exported=null; $('#export-ready').hidden=true; $('#sk-ready').hidden=true; setBusy(true); setLevel(0);
   const img=isPier(S.o.mode)?await renderPier(S.faces[S.faceSel],S.o,S.getSrc,S.crop,currentGsd(),S.names)
@@ -2696,7 +2812,9 @@ $('#o-sample').addEventListener('click',()=>task(async()=>{
   const T=makeSlabTexture(12,7.5,0.005);
   let s=3;const rnd=()=>{s=(s*16807)%2147483647;return s/2147483647-0.5};
   const cams=[];const xs=[3.0,4.8,6.6,8.4],ys=[2.6,5.0];
-  ys.forEach((y,j)=>{(j?xs.slice().reverse():xs).forEach(x=>cams.push({x:x+rnd()*0.3,y:y+rnd()*0.3,h:3.0+rnd()*0.12,yaw:(j?Math.PI:0)+rnd()*0.3,gain:1+rnd()*0.2}))});
+  const sg=($('#o-sgrade').value||'0,0').split(',').map(v=>(+v||0)/100), G=[sg[0],sg[1]];
+  if(G[0]||G[1]) log(`サンプルの勾配：縦断 ${fmt(G[0]*100,1)}%（x が大きいほど床版が高い）・横断 ${fmt(G[1]*100,1)}%（y が大きいほど高い）。機体の高度は一定で撮影`);
+  ys.forEach((y,j)=>{(j?xs.slice().reverse():xs).forEach(x=>{const px=x+rnd()*0.3,py=y+rnd()*0.3;cams.push({x:px,y:py,h:3.0+G[0]*(px-3.0)+G[1]*(py-2.6)+rnd()*0.12,yaw:(j?Math.PI:0)+rnd()*0.3,gain:1+rnd()*0.2,G})})});
   const srcs=[];for(let k=0;k<cams.length;k++){prog(0.1*k/cams.length);srcs.push(synthEquirect(T,cams[k],4096,2048,72));await sleep();}
   T.cv.width=T.cv.height=1;
   await runPipeline(srcs.length,srcs.map((_,k)=>`SAMPLE_${String(k+1).padStart(3,'0')}.JPG`),async k=>srcs[k],null,cams.map(c=>[c.x,c.y]));
@@ -2913,6 +3031,7 @@ async function openProject(id){
   S.img=null; S.orthoSig=null; let cached=false;
   try{cached=await orthoCacheLoad(id);}catch(e){console.error(e);cached=false;}
   if(!cached){await renderCurrent(); try{await orthoCacheSave();}catch(e){console.error(e);}}
+  gradeResUI();
   await skLoad(id);
 }
 async function refreshProjects(){
@@ -3451,6 +3570,7 @@ const HELP=[
  {sel:'#o-files',at:'field',t:'360° 画像',b:'ドローンの 360°静止画（DJI_…_D.JPG）を選びます。何枚でも同時に選べ、撮影時刻の順に自動で並びます。<br>「ブラウズ」→「<b>ファイルを選択</b>」から選んでください（「写真ライブラリ」からだと縮小されることがあります）。選んだ後の取り込みには、120MP の画像 1 枚につき 1 秒ほどかかります。'},
  {sel:'#o-h',at:'field',t:'離隔',b:()=>{const m=curMode(); return m==='wall'?'カメラから壁面までの水平距離です（レーザー距離計の値）。高さの違う画像があれば、画像から自動で補正します。':isPier(m)?'カメラから柱の表面までの水平距離です。高さを変えて撮った画像から自動で補正するため、目安（例：2.0〜2.5 m）で構いません。':'カメラから床版下面までの距離です（桁下の高さ − 飛行高度。レーザー距離計の値）。<b>縮尺に直接効く</b>ので、なるべく正確に入れてください。';}},
  {sel:'#o-theta',at:'field',t:()=>isSide()?'使う視野角':'使用する天頂角',b:()=>isSide()?'1枚の画像のうち、正面から何度までを使うかです。大きいほど1枚で広く写せますが、端は斜めから見るため粗くなります。標準のままで構いません。':'1枚の画像のうち、真上から何度までを使うかです。大きいほど1枚で広く写せますが、端はゆがみ・粗さが増えます。標準は 55°。重なりが足りないときに少し大きくします。'},
+ {sel:'#o-gmode',at:'field',t:'床版の勾配',b:'自動推定：重なった画像のずれ方から床版の縦断・横断勾配を求めて合成します（標準）。縦断のみ補正：横断方向は水平とみなします。手入力：図面などの縦断勾配を入れます。'},
  {sel:'#o-grade',at:'field',t:'縦断勾配',b:'床版の縦断勾配（%）です。0% なら、離隔が一定として合成します。勾配のある橋で、高さを変えずに飛んだときに入れます。'},
  {sel:'#o-gdir',at:'field',t:'勾配の向き',b:'画像1（最初の画像）から離れるにつれて、床版が高くなるか低くなるかを選びます。'},
  {sel:'#o-q',at:'field',t:'読込画質',b:'画像を計算に使うときの細かさです。「標準」で十分な精度が出ます。「高」はより細かくなりますが、メモリーを多く使い、枚数が多いと iPad で落ちることがあります。'},
@@ -3795,7 +3915,7 @@ const SKO={pts:new Map(),pinch:null,lp:null,draw:null,erase:null,drag:null,tap:n
 function skXY(e){const r=$('#sk-cv').getBoundingClientRect();return [e.clientX-r.left,e.clientY-r.top];}
 function skToolDown(e,xy){
   if(SK.tool==='draw'){const rect=SK.shape==='rect'&&!SKK[SK.kind].line;SKO.draw={id:e.pointerId,pts:rect?[xy,xy]:[xy],pen:e.pointerType==='pen',rect};}
-  else if(SK.tool==='select'){const it=skHit(xy[0],xy[1],16);if(it)skToggleSel(it.id);}
+  else if(SK.tool==='select'){const it=skHit(xy[0],xy[1],16);if(it)skToggleSel(it.id);else if(SK.msel.size||SK.sel){skClearSel();skPanoNote2('選択を解除しました。');}}
   else if(SK.tool==='erase'){SKO.erase={id:e.pointerId,ops:[]};skEraseAt(xy);}
   else if(SK.tool==='move'||SK.tool==='copy'){const it=skHit(xy[0],xy[1],16);
     SKO.drag={id:e.pointerId,it,x0:xy[0],y0:xy[1],dx:0,dy:0,moved:false,copy:SK.tool==='copy'};
@@ -3902,7 +4022,8 @@ function skBuildUI(){
     if(!SK.view.show)skSetShow(true);skReq();if(!$('#pano').hidden)skPanoDraw();});
   $('#skw-all').addEventListener('click',()=>skApplyWidth(true));
   $('#skw-sel').addEventListener('click',()=>skApplyWidth(false));
-  $('#skw-clr').addEventListener('click',()=>{SK.msel.clear();skUI();skReq();});
+  $('#skw-clr').addEventListener('click',skClearSel);
+  $('#sk-unsel').addEventListener('click',skClearSel);
   $('#sk-ckall').addEventListener('change',e=>{if(e.target.checked)skLive().forEach(it=>SK.msel.add(it.id));else SK.msel.clear();skUI();skReq();});
   $('#sk-csv').addEventListener('click',()=>{if(!skOK())return;const r=skCSV();if(!r)return;readyExport(r.blob,r.name);log(`変状一覧の CSV を作成しました（${r.n} 件）`);});
   $('#sk-fdraw').addEventListener('change',e=>{SK.fdraw=e.target.checked;skHint();});
@@ -3943,10 +4064,13 @@ function skSetKind(k){SK.kind=k;document.querySelectorAll('#sk-kinds .skk').forE
   if(SK.tool!=='draw')skSetTool('draw');}
 function skHint(){const h=$('#sk-hint');if(!h||h.dataset.tmp)return;const by=SK.fdraw?'Apple Pencil・指':'Apple Pencil';
   const t={draw:SK.shape==='rect'?`${by}で対角の2点をドラッグすると、長方形で記入します（ひびわれは自由線で記入します）。`:`${by}でなぞる（ひびわれ）・囲む（面状の変状）と記入します。`,
-    select:`${by}で変状をタップすると選択・解除できます（水色の線）。下の「選択した変状に適用」で線幅をまとめて変えられます。`,erase:`${by}で消したい変状をなぞると消えます。`,
+    select:`${by}で変状をタップすると選択・解除できます（水色の線）。<b>何もない所をタップするか、右上の「選択解除」ボタンですべての選択を解除</b>します。下の「選択した変状に適用」で線幅をまとめて変えられます。`,erase:`${by}で消したい変状をなぞると消えます。`,
     move:`${by}で変状の線をつかんで、動かしたい位置までずらします。`,copy:`${by}で変状の線をつかんでずらすと、同じ形の変状がその位置に複写されます。`,
     pano:'<b>360°画像を開きたい場所をタップしてください。</b>（もう一度ボタンを押すと取りやめます）'}[SK.tool];
   h.innerHTML=t+(SK.tool==='pano'?'':' 指1本で移動、2本指で拡大・縮小。元の 360°画像は「360°画像」ボタンのあと画面をタップするか、長押しで開きます。');}
+/* 選択をすべて解除（「選択解除」ボタン・何もない所をタップ・Esc キー） */
+function skClearSel(){SK.msel.clear(); if(SK.sel)skSelect(null); skUI(); skReq(); if(!$('#pano').hidden)skPanoDraw();}
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('#pano').hidden&&$('#tab-sketch').getAttribute('aria-selected')==='true'&&(SK.msel.size||SK.sel))skClearSel();});
 function skToggleSel(id){if(SK.msel.has(id))SK.msel.delete(id);else SK.msel.add(id);skUI();skReq();if(!$('#pano').hidden)skPanoDraw();}
 function skSetShow(on){SK.view.show=on;skViewSave();const b=$('#sk-show');b.setAttribute('aria-pressed',on);b.dataset.off=on?'':'1';b.querySelector('span').textContent=on?'変状 表示':'変状 非表示';
   skReq();if(!$('#pano').hidden)skPanoDraw();}
@@ -3991,6 +4115,7 @@ function skUI(){
   document.querySelectorAll('#sk-list [data-ck]').forEach(c=>c.addEventListener('change',()=>skToggleSel(c.dataset.ck)));
   [...SK.msel].forEach(id=>{if(!live.some(it=>it.id===id))SK.msel.delete(id);});
   $('#skw-n').textContent=SK.msel.size; $('#skw-sel').disabled=!SK.msel.size; $('#skw-clr').disabled=!SK.msel.size;
+  $('#sk-unsel').hidden=!SK.msel.size; $('#sk-unsel-n').textContent=SK.msel.size;
   $('#sk-ckall').checked=!!live.length&&SK.msel.size===live.length;
   $('#skw-lw').value=(+(SK.opt.lw||SK_LW0)).toFixed(2); $('#skw-hw').value=(+(SK.opt.hw||SK_HW0)).toFixed(2);
   $('#sk-listwrap').hidden=!live.length;
