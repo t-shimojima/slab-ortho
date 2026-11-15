@@ -276,7 +276,7 @@ input[type=text],input[type=date]{font:inherit;font-size:15px;width:100%;padding
 <header class="top">
   <div class="brand">
     <h1>床版下面オルソ</h1>
-    <p>DJI Avata 360 の 360° 静止画から、床版下面の平面オルソ画像を端末内で合成します（v1.28）</p>
+    <p>DJI Avata 360 の 360° 静止画から、床版下面の平面オルソ画像を端末内で合成します（v1.31）</p>
     <div class="offline" id="offline"><i></i><span>オフライン対応を確認中…</span></div>
   </div>
   <nav class="tabs" role="tablist">
@@ -1855,8 +1855,11 @@ function waterLineLat(band){
     lats.push(la);L.push(l/c);G.push(g/c);}
   const k=Math.round(3/st), k2=Math.round(6/st);
   // 柱の根元は明るく（水の跡で白っぽい）、その下の水面は暗い。下 6° まで暗いままのとき水面とみなす（柱の上の影の線と区別する）
-  for(let y=k;y<L.length-k;y++){let up=0,dn=0,dn2=0;const m2=Math.min(k2,L.length-y);for(let q=0;q<k;q++){up+=L[y-k+q];dn+=L[y+q];}for(let q=0;q<m2;q++)dn2+=L[y+q];up/=k;dn/=k;dn2/=m2;
-    if(up>110&&dn<0.45*up&&dn<100&&dn2<110){let best=y,bd=-1e9;for(let q=y-k;q<y+k-4;q++){const d=L[q]-L[q+4];if(d>bd){bd=d;best=q+2;}}return lats[best]*D2R;}}
+  // v1.29：緑がかった明るい水面（平三水橋など）は暗くならないため、色（緑み G−R）の変化でも判定する。
+  // 柱は灰色〜白（G−R がほぼ 0 以下）、水面は緑（G−R が大きい）。境目の下 6° まで緑が続き、明るさも下がるとき水面とみなす
+  for(let y=k;y<L.length-k;y++){let up=0,dn=0,dn2=0,ug=0,dg2=0;const m2=Math.min(k2,L.length-y);for(let q=0;q<k;q++){up+=L[y-k+q];dn+=L[y+q];ug+=G[y-k+q];}for(let q=0;q<m2;q++){dn2+=L[y+q];dg2+=G[y+q];}up/=k;dn/=k;dn2/=m2;ug/=k;dg2/=m2;
+    const dark=dn<0.45*up&&dn<100&&dn2<110, green=ug<8&&dg2>ug+18&&dg2>12&&dn<0.85*up;
+    if(up>110&&(dark||green)){let best=y,bd=-1e9;for(let q=y-k;q<y+k-4;q++){const d=L[q]-L[q+4];if(d>bd){bd=d;best=q+2;}}return lats[best]*D2R;}}
   return null;
 }
 /* 飛行ごとの水面の高さ（相対高度の基準での値）を、各コースの下側の画像に写る水面の境目から求める。
@@ -1971,7 +1974,14 @@ async function registerPier(n,names,getSrc,yaws,alts){
   if(seg[n-1]>0&&absA){const off=[];for(let s=0;s<=seg[n-1];s++){const d=[];for(let k=0;k<n;k++)if(seg[k]===s&&absA[k]!=null&&alts[k]!=null)d.push(absA[k]-alts[k]);
       d.sort((p,q)=>p-q); off.push(d.length?d[d.length>>1]:null);}
     if(off.every(v=>v!=null)){altX=alts.map((a,k)=>a==null?null:a+off[seg[k]]-off[0]);
-      log(`飛行ごとの高さの基準の差（絶対高度から推定）：${off.map((v,s)=>`${s+1}回目 ${s?(v-off[0]>=0?'+':'')+fmt(v-off[0],2)+' m':'基準'}`).join('、')}。別の飛行の画像どうしも、この差を見込んでつなぎます。`);}}
+      const offTxt=off.map((v,s)=>`${s+1}回目 ${s?(v-off[0]>=0?'+':'')+fmt(v-off[0],2)+' m':'基準'}`).join('、');
+      // v1.29：絶対高度（GPS）は飛行ごとに数十 m ずれることがある。差を見込むと撮影範囲の高さが不自然に広がる
+      // （1回の飛行の高さの幅の 1.6 倍＋2 m を超える）ときは、同じ柱を撮ったとは考えにくいため使わない
+      const span=a=>{const v=a.filter(x=>x!=null);return v.length?Math.max(...v)-Math.min(...v):0;};
+      const one=Math.max(...[...Array(seg[n-1]+1).keys()].map(s=>span(alts.filter((_,k)=>seg[k]===s)))), all=span(altX);
+      if(all>1.6*one+2){altX=null;
+        log(`注意：絶対高度から求めた飛行ごとの高さの差（${offTxt}）は、撮影範囲が ${fmt(all,1)} m に広がる不自然な値のため使いません（1回の飛行の高さの幅は ${fmt(one,1)} m）。同じ離陸地点とみなし、画像どうしの照合で高さをそろえます。`);}
+      else log(`飛行ごとの高さの基準の差（絶対高度から推定）：${offTxt}。別の飛行の画像どうしも、この差を見込んでつなぎます。`);}}
   const crossDy=(i,j)=>altX&&altX[i]!=null&&altX[j]!=null?altX[i]-altX[j]:null;
   // 機首方位（コース・面の判定、柱の周りの位置）と、360°画像の向き（画像どうしの回転）を分けて扱う
   const noses=(S.noses&&S.noses.length===n&&S.noses.every(v=>v!=null))?S.noses:yaws;
@@ -1990,7 +2000,7 @@ async function registerPier(n,names,getSrc,yaws,alts){
     const wl=await waterLevels(n,seg,courses,alts,k=>angDiff(noses[k],panoW[k])*D2R,getSrc);
     if(wl.w.every(v=>v!=null)){const w0=wl.w[0]; altX=alts.map((a,k)=>a==null?null:a-(wl.w[seg[k]]-w0));
       log(`飛行ごとの高さの基準の差（水面から推定、${wl.nc} コース）：${wl.w.map((v,s)=>`${s+1}回目 ${s?((w0-v)>=0?'+':'')+fmt(w0-v,2)+' m':'基準'}`).join('、')}。水面が水平になるようにつなぎます。`);}
-    else log('水面の境目が見つからない飛行があるため、絶対高度の差でつなぎます（上下にずれることがあります）。');
+    else log(altX?'水面の境目が見つからない飛行があるため、絶対高度の差でつなぎます（上下にずれることがあります）。':'水面の境目が見つからない飛行があるため、画像どうしの照合で飛行ごとの高さをそろえます。');
   }
   const D0=o.h, faces=[];
   if(round){
@@ -2011,8 +2021,15 @@ async function registerPier(n,names,getSrc,yaws,alts){
         cs.push((e.l.lon+e.r.lon)/2); hs.push(h);}
       if(cs.length<2)continue; cs.sort((a,b)=>a-b); hs.sort((a,b)=>a-b);
       const mc=cs[cs.length>>1], near=cs.filter(v=>Math.abs(v-mc)<=2.5).length; if(near*2<cs.length)continue;
-      aimC[g]=mc; halfC[g]=hs[hs.length>>1];
-      courses[g].forEach(k=>{phis[k]+=mc*D2R; aim[k]=noses[k]+mc;});}
+      aimC[g]=mc; halfC[g]=hs[hs.length>>1];}
+    // v1.29：岸・流木・背景の縦線を柱の輪郭と取り違えたコースは、中心の方向や見かけの幅が他のコースと大きく違う。
+    // 全コースの中央値から 6° 以上外れたコースは使わず（見かけの幅は離隔でコースごとに変わるため判定に使わない）、機首の向き（＋全体の中央値）を中心とする
+    {const med=a=>{const v=a.filter(x=>x!=null).sort((p,q)=>p-q);return v.length?v[v.length>>1]:null;};
+     const mA=med(aimC), bad=[];
+     if(aimC.filter(v=>v!=null).length>=3)aimC.forEach((v,g)=>{if(v==null)return;
+       if(Math.abs(v-mA)>6){bad.push(`C${g+1}（${v>=0?'+':''}${fmt(v,1)}°・半幅 ${fmt(halfC[g],1)}°）`);aimC[g]=null;halfC[g]=null;}});
+     courses.forEach((c,g)=>{const mc=aimC[g]!=null?aimC[g]:(bad.length&&mA!=null?mA:0); c.forEach(k=>{phis[k]+=mc*D2R; aim[k]=noses[k]+mc;});});
+     if(bad.length)log(`柱の輪郭の測定がほかのコースと大きく違うため、使わなかったコース：${bad.join('、')}（中心の方向は中央値 ${fmt(mA,1)}° を使います）`);}
     {const okA=aimC.filter(v=>v!=null);
      if(okA.length)log(`機首の向きのずれ（柱の輪郭から測定）：${courses.map((c,g)=>`C${g+1} ${aimC[g]==null?'—':(aimC[g]>=0?'+':'')+fmt(aimC[g],1)+'°'}`).join('、')}。各画像の柱の中心の方向を補正しました。`);
      else log('柱の輪郭が見つからないため、機首の向きを柱の中心として扱います。');}
@@ -2048,7 +2065,10 @@ async function registerPier(n,names,getSrc,yaws,alts){
       log(`画像から推定した柱の直径：約 ${fmt(2*est.R,2)} m（入力値 ${fmt(2*R,2)} m、${est.n} コースの中央値）${Math.abs(est.R/R-1)>0.08?'。入力値と 8% 以上違います。図面の直径を確認するか、「画像から自動推定」を試してください':''}`);
     }
     // 離隔の確認：入力した直径と見かけの半幅からも離隔が求まる（D = R/sinα − R）。高度計からの値が 10% 以上外れるコース・求まらないコースはこちらを使う
-    {const fixed=[];courses.forEach((c,g)=>{if(halfC[g]==null)return;const Ds=R/Math.sin(halfC[g]*D2R)-R;if(!(Ds>0.3&&Ds<8))return;
+    // v1.29：輪郭の取り違えで見かけの幅が外れることもあるため、両隣のコースの離隔（高度計）に近い方を採る
+    {const fixed=[], D0c=Dc.slice(), G=courses.length;courses.forEach((c,g)=>{if(halfC[g]==null)return;const Ds=R/Math.sin(halfC[g]*D2R)-R;if(!(Ds>0.3&&Ds<8))return;
+       const nb=[D0c[(g+G-1)%G],D0c[(g+1)%G]].filter(v=>v!=null), nm=nb.length?nb.reduce((p,q)=>p+q,0)/nb.length:null;
+       if(Dc[g]!=null&&nm!=null&&Math.abs(Dc[g]-nm)<Math.abs(Ds-nm))return;
        if(Dc[g]==null||Math.abs(Dc[g]/Ds-1)>0.10){fixed.push(`C${g+1} ${Dc[g]==null?'—':fmt(Dc[g],2)}→${fmt(Ds,2)}m`);Dc[g]=Ds;}});
      if(fixed.length)log(`離隔を柱の見かけの幅から補正：${fixed.join('、')}`);}
     const ok=Dc.filter(v=>v!=null), avg=ok.length?ok.reduce((p,q)=>p+q,0)/ok.length:D0;
@@ -4530,7 +4550,7 @@ skBuildUI();
 /* ================= 案件の書き出し・読み込み（v1.24） =================
    .slabortho ＝ 無圧縮 zip。manifest.json / project.json / sketches.json / preview.jpg / images/ / ortho/
    種別：full（360°画像は原本）・view（360°画像を長辺 4096px に縮小、オルソ同梱）・sketch（変状だけ） */
-const PKG={fmt:'slabortho-pkg',ver:1,app:'1.28',reduceW:4096};
+const PKG={fmt:'slabortho-pkg',ver:1,app:'1.31',reduceW:4096};
 const PKG_KIND={full:'完全版',view:'閲覧・スケッチ版',sketch:'スケッチのみ'};
 const newUid=()=>{try{if(crypto.randomUUID)return crypto.randomUUID();}catch(e){}
   const b=crypto.getRandomValues(new Uint8Array(16));b[6]=b[6]&15|64;b[8]=b[8]&63|128;const h=[...b].map(x=>x.toString(16).padStart(2,'0')).join('');
@@ -4541,29 +4561,46 @@ const CRC_T=(()=>{const t=new Uint32Array(256);for(let n=0;n<256;n++){let c=n;fo
 function crc32Up(c,u8){for(let i=0;i<u8.length;i++)c=CRC_T[(c^u8[i])&255]^(c>>>8);return c;}
 async function crcOfBlob(b){let c=0xFFFFFFFF;const CH=8<<20;for(let p=0;p<b.size;p+=CH){c=crc32Up(c,new Uint8Array(await b.slice(p,p+CH).arrayBuffer()));await sleep();}return (c^0xFFFFFFFF)>>>0;}
 function dosTime(d){return {t:(d.getHours()<<11)|(d.getMinutes()<<5)|(d.getSeconds()>>1),d:((d.getFullYear()-1980)<<9)|((d.getMonth()+1)<<5)|d.getDate()};}
+/* v1.30：4GB を超える案件（360°画像が多い橋脚など）は ZIP64 形式で書き出す（Windows 標準の展開にも対応） */
+const Z32=0xFFFFFFFF;
 async function zipBuild(entries,onProg){
   const enc=new TextEncoder(),parts=[],cd=[],now=dosTime(new Date());let off=0;
+  const total=entries.reduce((s,e)=>s+e.blob.size+30+60+20,0), z64=!!window.__z64||total>=0xFFFF0000||entries.length>=0xFFFF;
   for(let i=0;i<entries.length;i++){const e=entries[i],nm=enc.encode(e.name),b=e.blob,crc=e.crc!=null?e.crc:await crcOfBlob(b);e.crc=crc;
-    if(off+b.size+30+nm.length>0xFFFFFFFF)throw new Error('書き出しが 4GB を超えるため作成できません（「閲覧・スケッチ版」をお試しください）');
-    const h=new DataView(new ArrayBuffer(30));h.setUint32(0,0x04034b50,true);h.setUint16(4,20,true);h.setUint16(6,0x0800,true);h.setUint16(8,0,true);
-    h.setUint16(10,now.t,true);h.setUint16(12,now.d,true);h.setUint32(14,crc,true);h.setUint32(18,b.size,true);h.setUint32(22,b.size,true);h.setUint16(26,nm.length,true);h.setUint16(28,0,true);
-    parts.push(h.buffer,nm,b);
-    const c=new DataView(new ArrayBuffer(46));c.setUint32(0,0x02014b50,true);c.setUint16(4,20,true);c.setUint16(6,20,true);c.setUint16(8,0x0800,true);c.setUint16(10,0,true);
-    c.setUint16(12,now.t,true);c.setUint16(14,now.d,true);c.setUint32(16,crc,true);c.setUint32(20,b.size,true);c.setUint32(24,b.size,true);c.setUint16(28,nm.length,true);c.setUint32(42,off,true);
-    cd.push(c.buffer,nm); off+=30+nm.length+b.size; onProg&&onProg((i+1)/entries.length);}
-  const cdSize=cd.reduce((s,x)=>s+x.byteLength,0);
-  const z=new DataView(new ArrayBuffer(22));z.setUint32(0,0x06054b50,true);z.setUint16(8,entries.length,true);z.setUint16(10,entries.length,true);z.setUint32(12,cdSize,true);z.setUint32(16,off,true);
-  return new Blob([...parts,...cd,z.buffer],{type:'application/octet-stream'});
+    const lx=z64?20:0, h=new DataView(new ArrayBuffer(30+lx));h.setUint32(0,0x04034b50,true);h.setUint16(4,z64?45:20,true);h.setUint16(6,0x0800,true);h.setUint16(8,0,true);
+    h.setUint16(10,now.t,true);h.setUint16(12,now.d,true);h.setUint32(14,crc,true);h.setUint32(18,z64?Z32:b.size,true);h.setUint32(22,z64?Z32:b.size,true);h.setUint16(26,nm.length,true);h.setUint16(28,lx,true);
+    if(z64){h.setUint16(30,1,true);h.setUint16(32,16,true);h.setBigUint64(34,BigInt(b.size),true);h.setBigUint64(42,BigInt(b.size),true);}
+    parts.push(h.buffer.slice(0,30),nm); if(z64)parts.push(h.buffer.slice(30)); parts.push(b);
+    const cx=z64?28:0, c=new DataView(new ArrayBuffer(46+cx));c.setUint32(0,0x02014b50,true);c.setUint16(4,z64?45:20,true);c.setUint16(6,z64?45:20,true);c.setUint16(8,0x0800,true);c.setUint16(10,0,true);
+    c.setUint16(12,now.t,true);c.setUint16(14,now.d,true);c.setUint32(16,crc,true);c.setUint32(20,z64?Z32:b.size,true);c.setUint32(24,z64?Z32:b.size,true);c.setUint16(28,nm.length,true);c.setUint16(30,cx,true);c.setUint32(42,z64?Z32:off,true);
+    if(z64){c.setUint16(46,1,true);c.setUint16(48,24,true);c.setBigUint64(50,BigInt(b.size),true);c.setBigUint64(58,BigInt(b.size),true);c.setBigUint64(66,BigInt(off),true);}
+    cd.push(c.buffer.slice(0,46),nm); if(z64)cd.push(c.buffer.slice(46));
+    off+=30+nm.length+lx+b.size; onProg&&onProg((i+1)/entries.length);}
+  const cdSize=cd.reduce((s,x)=>s+x.byteLength,0), n=entries.length, tailParts=[];
+  if(z64){const r=new DataView(new ArrayBuffer(56));r.setUint32(0,0x06064b50,true);r.setBigUint64(4,44n,true);r.setUint16(12,45,true);r.setUint16(14,45,true);
+      r.setBigUint64(24,BigInt(n),true);r.setBigUint64(32,BigInt(n),true);r.setBigUint64(40,BigInt(cdSize),true);r.setBigUint64(48,BigInt(off),true);
+    const l=new DataView(new ArrayBuffer(20));l.setUint32(0,0x07064b50,true);l.setBigUint64(8,BigInt(off+cdSize),true);l.setUint32(16,1,true);
+    tailParts.push(r.buffer,l.buffer);}
+  const z=new DataView(new ArrayBuffer(22));z.setUint32(0,0x06054b50,true);z.setUint16(8,z64?0xFFFF:n,true);z.setUint16(10,z64?0xFFFF:n,true);z.setUint32(12,z64?Z32:cdSize,true);z.setUint32(16,z64?Z32:off,true);
+  return new Blob([...parts,...cd,...tailParts,z.buffer],{type:'application/octet-stream'});
 }
 async function zipRead(file){
-  const tailN=Math.min(file.size,65557),tail=new DataView(await file.slice(file.size-tailN).arrayBuffer());let p=-1;
+  const tailN=Math.min(file.size,65557+20),tailStart=file.size-tailN,tail=new DataView(await file.slice(tailStart).arrayBuffer());let p=-1;
   for(let i=tailN-22;i>=0;i--)if(tail.getUint32(i,true)===0x06054b50){p=i;break;}
-  if(p<0)throw new Error('床版オルソの書き出しファイルではありません（zip として読めません）');
-  const n=tail.getUint16(p+10,true),cdSize=tail.getUint32(p+12,true),cdOff=tail.getUint32(p+16,true);
+  if(p<0)throw new Error('床版オルソの書き出しファイルではありません（zip として読めません。0 バイトや途中までのファイルの可能性があります）');
+  let n=tail.getUint16(p+10,true),cdSize=tail.getUint32(p+12,true),cdOff=tail.getUint32(p+16,true);
+  if(p>=20&&tail.getUint32(p-20,true)===0x07064b50){const ro=Number(tail.getBigUint64(p-20+8,true)),r=new DataView(await file.slice(ro,ro+56).arrayBuffer());
+    if(r.getUint32(0,true)!==0x06064b50)throw new Error('ファイルが壊れています（ZIP64 目次）');
+    n=Number(r.getBigUint64(32,true));cdSize=Number(r.getBigUint64(40,true));cdOff=Number(r.getBigUint64(48,true));}
   const cd=new DataView(await file.slice(cdOff,cdOff+cdSize).arrayBuffer()),dec=new TextDecoder(),out=new Map();let q=0;
   for(let k=0;k<n;k++){if(cd.getUint32(q,true)!==0x02014b50)throw new Error('ファイルが壊れています（目次）');
-    const method=cd.getUint16(q+10,true),crc=cd.getUint32(q+16,true),cs=cd.getUint32(q+20,true),nl=cd.getUint16(q+28,true),xl=cd.getUint16(q+30,true),cl=cd.getUint16(q+32,true),lo=cd.getUint32(q+42,true);
-    const name=dec.decode(new Uint8Array(cd.buffer,q+46,nl)); q+=46+nl+xl+cl;
+    const method=cd.getUint16(q+10,true),crc=cd.getUint32(q+16,true),nl=cd.getUint16(q+28,true),xl=cd.getUint16(q+30,true),cl=cd.getUint16(q+32,true);
+    let cs=cd.getUint32(q+20,true),us=cd.getUint32(q+24,true),lo=cd.getUint32(q+42,true);
+    const name=dec.decode(new Uint8Array(cd.buffer,q+46,nl));
+    for(let x=q+46+nl;x<q+46+nl+xl;){const id=cd.getUint16(x,true),sz=cd.getUint16(x+2,true);
+      if(id===1){let y=x+4;if(us===Z32){us=Number(cd.getBigUint64(y,true));y+=8;}if(cs===Z32){cs=Number(cd.getBigUint64(y,true));y+=8;}if(lo===Z32){lo=Number(cd.getBigUint64(y,true));y+=8;}}
+      x+=4+sz;}
+    q+=46+nl+xl+cl;
     out.set(name,{name,method,crc,size:cs,lo});}
   const blobOf=async e=>{if(e.method!==0)throw new Error(`圧縮されたファイルには対応していません（${e.name}）。アプリで書き出したファイルをそのまま使ってください`);
     const h=new DataView(await file.slice(e.lo,e.lo+30).arrayBuffer());if(h.getUint32(0,true)!==0x04034b50)throw new Error('ファイルが壊れています（'+e.name+'）');
@@ -4608,13 +4645,15 @@ async function pkgExportClick(id,kind,stEl){
     try{fh=await showSaveFilePicker({suggestedName:name,types:[{description:'床版オルソ 書き出し',accept:{'application/octet-stream':['.slabortho']}}]});}
     catch(e){if(e&&e.name==='AbortError'){st('保存先の選択をやめました');return;} fh=null;}
   }
-  st('書き出しを作成しています…（大きな案件では数分かかります）');
+  st('書き出しを作成しています…（360°画像が多い案件では数分〜十数分かかります。終わるまでこの画面を閉じないでください）');
   await task(async()=>{
     try{const ex=await exportProject(id,kind), mb=fmt(ex.blob.size/1048576,1)+' MB';
       if(fh){st(`保存しています…（${mb}）`);const w=await fh.createWritable();await w.write(ex.blob);await w.close();st(`保存しました：${fh.name}（${mb}）`);log(`保存しました：${fh.name}`);}
       else if(!MOBILE){pkgDownload(ex.blob,ex.name);st(`「ダウンロード」フォルダーに保存しました：${ex.name}（${mb}）`);}
       else{st(`作成しました（${mb}）。上の「共有」から保存してください`);pkgReady(ex);}
-    }catch(e){st('書き出しできませんでした：'+(e&&e.message||e),true);throw e;}
+    }catch(e){let m='書き出しできませんでした：'+(e&&e.message||e);
+      if(fh){let rm=false;try{if(fh.remove){await fh.remove();rm=true;}}catch(_){} if(!rm)m+=`（保存先に空のファイル「${fh.name}」が残っているので削除してください）`;}
+      st(m,true);throw e;}
   });
 }
 async function exportProject(id,kind){
