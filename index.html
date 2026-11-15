@@ -276,7 +276,7 @@ input[type=text],input[type=date]{font:inherit;font-size:15px;width:100%;padding
 <header class="top">
   <div class="brand">
     <h1>床版下面オルソ</h1>
-    <p>DJI Avata 360 の 360° 静止画から、床版下面の平面オルソ画像を端末内で合成します（v1.26）</p>
+    <p>DJI Avata 360 の 360° 静止画から、床版下面の平面オルソ画像を端末内で合成します（v1.27）</p>
     <div class="offline" id="offline"><i></i><span>オフライン対応を確認中…</span></div>
   </div>
   <nav class="tabs" role="tablist">
@@ -3125,6 +3125,7 @@ async function openProject(id){
 async function refreshProjects(){
   const box=$('#projects'); let list=[];
   try{list=(await DB.all('projects')).sort((a,b)=>b.updated-a.updated);}catch(e){box.innerHTML='<div class="empty">この環境では保存機能を使えません。</div>';return;}
+  window.PKG_RECS=new Map(list.map(r=>[r.id,r]));
   if(!list.length){box.innerHTML='<div class="empty">保存した案件はまだありません。合成が終わると自動で保存されます。</div>';}
   else box.innerHTML=list.map(r=>`<div class="proj" data-id="${r.id}">
       <img src="${r.thumb||''}" alt="">
@@ -3132,12 +3133,13 @@ async function refreshProjects(){
       <div class="muted num">撮影日 ${esc(r.info.date||'—')}・${r.nImg} 枚・h ${r.o.h} m・更新 ${new Date(r.updated).toLocaleString('ja-JP')}${r.imported?'・取り込み':''}${r.reduced?'・縮小画像':''}</div>
       <div class="acts"><button class="btn small primary" data-open>開く</button><button class="btn small" data-exp>書き出し…</button><button class="btn small" data-del>削除</button>
       <span class="expsel" hidden><select data-kind style="width:auto;min-height:34px;font-size:13px"><option value="full">完全版（360°画像は原本）</option><option value="view">閲覧・スケッチ版（360°画像を縮小）</option><option value="sketch">スケッチのみ</option></select> <button class="btn small primary" data-exp-go>作成</button></span>
+      <div class="hint" data-st hidden style="margin-top:6px"></div>
       <span class="confirm" hidden>削除しますか？ <button class="btn small danger" data-del-yes>削除する</button><button class="btn small" data-del-no>やめる</button></span></div></div></div>`).join('');
   box.querySelectorAll('.proj').forEach(el=>{const id=el.dataset.id;
     el.querySelector('[data-open]').addEventListener('click',()=>task(()=>openProject(id)));
     el.querySelector('[data-del]').addEventListener('click',()=>{el.querySelector('.confirm').hidden=false;});
     el.querySelector('[data-exp]').addEventListener('click',()=>{const s=el.querySelector('.expsel');s.hidden=!s.hidden;});
-    el.querySelector('[data-exp-go]').addEventListener('click',()=>{const kind=el.querySelector('[data-kind]').value;task(async()=>{const ex=await exportProject(id,kind);pkgReady(ex);});});
+    el.querySelector('[data-exp-go]').addEventListener('click',()=>pkgExportClick(id,el.querySelector('[data-kind]').value,el.querySelector('[data-st]')));
     el.querySelector('[data-del-no]').addEventListener('click',()=>{el.querySelector('.confirm').hidden=true;});
     el.querySelector('[data-del-yes]').addEventListener('click',async()=>{await DB.del('projects',id);await DB.delRange('images',id+'/',id+'/\uffff');try{await DB.delRange('orthos',id+'/',id+'/\uffff');await DB.del('sketches',id);}catch(e){}if(SK.key===id)await skLoad(null);if(S.projectId===id)S.projectId=null;refreshProjects();});
   });
@@ -4528,7 +4530,7 @@ skBuildUI();
 /* ================= 案件の書き出し・読み込み（v1.24） =================
    .slabortho ＝ 無圧縮 zip。manifest.json / project.json / sketches.json / preview.jpg / images/ / ortho/
    種別：full（360°画像は原本）・view（360°画像を長辺 4096px に縮小、オルソ同梱）・sketch（変状だけ） */
-const PKG={fmt:'slabortho-pkg',ver:1,app:'1.26',reduceW:4096};
+const PKG={fmt:'slabortho-pkg',ver:1,app:'1.27',reduceW:4096};
 const PKG_KIND={full:'完全版',view:'閲覧・スケッチ版',sketch:'スケッチのみ'};
 const newUid=()=>{try{if(crypto.randomUUID)return crypto.randomUUID();}catch(e){}
   const b=crypto.getRandomValues(new Uint8Array(16));b[6]=b[6]&15|64;b[8]=b[8]&63|128;const h=[...b].map(x=>x.toString(16).padStart(2,'0')).join('');
@@ -4593,6 +4595,28 @@ async function reduceImage(blob,maxW){
     const b=await new Promise(r=>c.toBlob(r,'image/jpeg',0.9));c.width=c.height=1;if(!b)throw new Error('画像を縮小できませんでした');return b;
   }finally{src.close&&src.close();}
 }
+function pkgName(rec,kind){const d=new Date(),ds=`${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
+  return `${pkgSafe(rec.info.bridge)||'案件'}${rec.info.span?'_'+pkgSafe(rec.info.span):''}_${PKG_KIND[kind]}_${ds}.slabortho`;}
+function pkgDownload(blob,name){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},60000);}
+/* 「作成」ボタン（v1.27）：PC は押した直後に保存先を選ぶ画面を開き、作成後そこへ直接書き込む。
+   （作成に時間がかかるため、作成後に保存画面を開こうとするとブラウザーに止められる）。進み具合と結果は案件の欄に表示 */
+async function pkgExportClick(id,kind,stEl){
+  if(busy)return; const st=(s,bad)=>{stEl.hidden=false;stEl.textContent=s;stEl.style.color=bad?'var(--bad)':'';};
+  let fh=null;
+  if(!MOBILE&&window.showSaveFilePicker){
+    const r=window.PKG_RECS&&window.PKG_RECS.get(id); let name='案件.slabortho'; try{if(r)name=pkgName(r,kind);}catch(e){}
+    try{fh=await showSaveFilePicker({suggestedName:name,types:[{description:'床版オルソ 書き出し',accept:{'application/octet-stream':['.slabortho']}}]});}
+    catch(e){if(e&&e.name==='AbortError'){st('保存先の選択をやめました');return;} fh=null;}
+  }
+  st('書き出しを作成しています…（大きな案件では数分かかります）');
+  await task(async()=>{
+    try{const ex=await exportProject(id,kind), mb=fmt(ex.blob.size/1048576,1)+' MB';
+      if(fh){st(`保存しています…（${mb}）`);const w=await fh.createWritable();await w.write(ex.blob);await w.close();st(`保存しました：${fh.name}（${mb}）`);log(`保存しました：${fh.name}`);}
+      else if(!MOBILE){pkgDownload(ex.blob,ex.name);st(`「ダウンロード」フォルダーに保存しました：${ex.name}（${mb}）`);}
+      else{st(`作成しました（${mb}）。上の「共有」から保存してください`);pkgReady(ex);}
+    }catch(e){st('書き出しできませんでした：'+(e&&e.message||e),true);throw e;}
+  });
+}
 async function exportProject(id,kind){
   if(SK.key===id){clearTimeout(SK.saveT);await skFlush();}
   const rec=await DB.get('projects',id);if(!rec)throw new Error('案件が見つかりません');
@@ -4627,8 +4651,7 @@ async function exportProject(id,kind){
   for(let i=0;i<body.length;i++){body[i].crc=await crcOfBlob(body[i].blob);prog(0.5+0.5*(i+1)/body.length);}
   man.files=body.map(e=>({name:e.name,size:e.blob.size,crc:e.crc}));
   const blob=await zipBuild([{name:'manifest.json',blob:J(man)},...body]);
-  const d=new Date(),ds=`${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
-  const name=`${pkgSafe(rec.info.bridge)||'案件'}${rec.info.span?'_'+pkgSafe(rec.info.span):''}_${PKG_KIND[kind]}_${ds}.slabortho`;
+  const name=pkgName(rec,kind);
   log(`書き出しを作成しました：${name}（${fmt(blob.size/1048576,1)} MB${reduced?'・360°画像は長辺 '+PKG.reduceW+'px に縮小':''}）`);
   return {blob,name,kind,id};
 }
