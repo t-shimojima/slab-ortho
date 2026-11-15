@@ -1,0 +1,37 @@
+279c279
+<     <p>DJI Avata 360 の 360° 静止画から、床版下面の平面オルソ画像を端末内で合成します（v1.33）</p>
+---
+>     <p>DJI Avata 360 の 360° 静止画から、床版下面の平面オルソ画像を端末内で合成します（v1.34）</p>
+3811,3812c3811,3814
+<   SKC={f,sol,R:f.R,q:sol.cams.map(c=>({a:c.a/c.s,b:c.b/c.s,tx:c.tx,ty:c.ty,Dt:(f.Dk?f.Dk[c.i]:f.Dt[c.i])*c.s,phi:f.phis[c.i]}))}; return SKC;}
+< function skCylGeo(j,Wx,Wy){const C=skCyl(),q=C.q[j],R=C.R,dx=Wx-q.tx,dy=Wy-q.ty,X=q.a*dx+q.b*dy,Y=q.a*dy-q.b*dx,t=X/R;
+---
+>   // v1.34：展開図が一周分（xr）のとき、周方向は一周（circ）ごとに同じ位置。つなぎ目をまたいだ位置も扱えるようにする
+>   const ring=!!(f.xr&&f.xr[1]-f.xr[0]>=2*Math.PI*f.R*0.99);
+>   SKC={f,sol,R:f.R,ring,circ:2*Math.PI*f.R,x0:ring?f.xr[0]:0,q:sol.cams.map(c=>({a:c.a/c.s,b:c.b/c.s,tx:c.tx,ty:c.ty,Dt:(f.Dk?f.Dk[c.i]:f.Dt[c.i])*c.s,phi:f.phis[c.i]}))}; return SKC;}
+> function skCylGeo(j,Wx,Wy,noWrap){const C=skCyl(),q=C.q[j],R=C.R; let dx=Wx-q.tx; if(C.ring&&!noWrap)dx-=C.circ*Math.round(dx/C.circ); const dy=Wy-q.ty,X=q.a*dx+q.b*dy,Y=q.a*dy-q.b*dx,t=X/R;
+3815a3818,3821
+> /* v1.34：円柱の展開図で、変状全体を周方向に一周分ずらして展開図の範囲（xr）に入れる。
+>    360°画像で展開図の左右の端（一周のつなぎ目）の先に記入しても、反対側の端に表示され、選択・削除できる */
+> function skCylWrap(P){if(!skCylM()||!P||!P.length)return P;const C=skCyl();if(!C.ring)return P;
+>   const mx=P.reduce((a,p)=>a+p[0],0)/P.length, k=Math.floor((mx-C.x0)/C.circ); return k?P.map(([x,y])=>[x-k*C.circ,y]):P;}
+3853c3859
+<     for(let j=0;j<cs.length;j++){const g=skCylGeo(j,Wx,Wy); if(!g)continue; const al=Math.abs(g.lat), sc0=g.inc/D2R+6*g.dist;
+---
+>     for(let j=0;j<cs.length;j++){const g=skCylGeo(j,Wx,Wy,true); if(!g)continue; /* 担当画像は合成と同じ規則（つなぎ目をまたがない） */ const al=Math.abs(g.lat), sc0=g.inc/D2R+6*g.dist;
+3882c3888
+<   const r={w,lost,dev,fromB}; SK.res.set(it.id,r); return r;}
+---
+>   const r={w:lost?w:skCylWrap(w),lost,dev,fromB}; SK.res.set(it.id,r); return r;}
+4351c4357
+<   let P=skSimplify(world,0.0015); const K=SKK[SK.kind];
+---
+>   let P=skSimplify(skCylWrap(world),0.0015); const K=SKK[SK.kind];
+4361c4367
+< function skPanoRect(c){const [p,q]=c.pts.map(([x,y])=>{const uv=skPanoUV(x,y);return skInv(c.j,uv.u,uv.v);});if(!p||!q)return null;
+---
+> function skPanoRect(c){let [p,q]=c.pts.map(([x,y])=>{const uv=skPanoUV(x,y);return skInv(c.j,uv.u,uv.v);});if(!p||!q)return null; [p,q]=skCylWrap([p,q]);
+4558c4564
+< const PKG={fmt:'slabortho-pkg',ver:1,app:'1.33',reduceW:4096};
+---
+> const PKG={fmt:'slabortho-pkg',ver:1,app:'1.34',reduceW:4096};
