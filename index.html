@@ -276,7 +276,7 @@ input[type=text],input[type=date]{font:inherit;font-size:15px;width:100%;padding
 <header class="top">
   <div class="brand">
     <h1>床版下面オルソ</h1>
-    <p>DJI Avata 360 の 360° 静止画から、床版下面の平面オルソ画像を端末内で合成します（v1.27）</p>
+    <p>DJI Avata 360 の 360° 静止画から、床版下面の平面オルソ画像を端末内で合成します（v1.28）</p>
     <div class="offline" id="offline"><i></i><span>オフライン対応を確認中…</span></div>
   </div>
   <nav class="tabs" role="tablist">
@@ -601,7 +601,7 @@ input[type=text],input[type=date]{font:inherit;font-size:15px;width:100%;padding
   <div class="box" style="margin-bottom:14px"><h3>別の端末と受け渡す</h3>
     <p class="hint" style="margin:0 0 10px">各案件の「書き出し…」で .slabortho ファイルを作り、社内PCの共有フォルダや SD カードに保存します。受け取った側は「ファイルを読み込む」で取り込みます。PC で描いた変状は「スケッチのみ」で書き出して iPad に戻せます（同じ案件に統合されます）。</p>
     <div style="display:flex;align-items:center;flex-wrap:wrap;gap:8px"><button class="btn" id="imp-btn" data-busy="any">ファイルを読み込む…</button><input type="file" id="imp-file" hidden></div>
-    <div class="grade-res" id="imp-box" hidden></div><div class="grade-res" id="exp-box" hidden></div></div>
+    <div class="hint" id="imp-st" hidden style="margin-top:8px"></div><div class="grade-res" id="imp-box" hidden></div><div class="grade-res" id="exp-box" hidden></div></div>
   <div id="projects"><div class="empty">読み込み中…</div></div>
 </section>
 
@@ -4530,7 +4530,7 @@ skBuildUI();
 /* ================= 案件の書き出し・読み込み（v1.24） =================
    .slabortho ＝ 無圧縮 zip。manifest.json / project.json / sketches.json / preview.jpg / images/ / ortho/
    種別：full（360°画像は原本）・view（360°画像を長辺 4096px に縮小、オルソ同梱）・sketch（変状だけ） */
-const PKG={fmt:'slabortho-pkg',ver:1,app:'1.27',reduceW:4096};
+const PKG={fmt:'slabortho-pkg',ver:1,app:'1.28',reduceW:4096};
 const PKG_KIND={full:'完全版',view:'閲覧・スケッチ版',sketch:'スケッチのみ'};
 const newUid=()=>{try{if(crypto.randomUUID)return crypto.randomUUID();}catch(e){}
   const b=crypto.getRandomValues(new Uint8Array(16));b[6]=b[6]&15|64;b[8]=b[8]&63|128;const h=[...b].map(x=>x.toString(16).padStart(2,'0')).join('');
@@ -4658,7 +4658,7 @@ async function exportProject(id,kind){
 async function skFlush(){if(!SK.key||SK.key==='sample')return;skTrack();await DB.put('sketches',{id:SK.key,items:JSON.parse(JSON.stringify(SK.items)),opt:{...SK.opt},gone:{...SK.gone},updated:Date.now()});}
 
 /* ---- 読み込み ---- */
-function pkgAsk(html,choices){return new Promise(res=>{const box=$('#imp-box');box.hidden=false;
+function pkgAsk(html,choices){return new Promise(res=>{const box=$('#imp-box');box.hidden=false;setTimeout(()=>box.scrollIntoView({block:'nearest'}),0);
   box.innerHTML=`<div>${html}</div><div style="display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-top:10px">${choices.map((c,i)=>`<button class="btn small${i===0?' primary':''}" data-c="${c[0]}">${esc(c[1])}</button>`).join('')}</div>`;
   box.querySelectorAll('[data-c]').forEach(b=>b.addEventListener('click',()=>{box.hidden=true;box.innerHTML='';res(b.dataset.c);}));});}
 async function importPackage(file){
@@ -4729,8 +4729,15 @@ function pkgReady(ex){pkgOut=ex;const box=$('#exp-box');box.hidden=false;
   $('#exp-close').addEventListener('click',()=>{box.hidden=true;box.innerHTML='';pkgOut=null;});
   box.scrollIntoView({block:'nearest'});
 }
-$('#imp-btn').addEventListener('click',()=>{if(!busy)$('#imp-file').click();});
-$('#imp-file').addEventListener('change',()=>{const f=$('#imp-file').files[0];$('#imp-file').value='';if(f)task(()=>importPackage(f));});
+/* 読み込み（v1.28）：進み具合・結果・エラーをこの欄に表示（これまではオルソ合成タブのログだけに出ていた） */
+function impSt(s,bad){const st=$('#imp-st');st.hidden=false;st.textContent=s;st.style.color=bad?'var(--bad)':'';}
+$('#imp-btn').addEventListener('click',()=>{
+  if(busy){impSt(!$('#imp-box').hidden?'前の読み込みの選択が終わっていません。下の選択肢を選ぶか「やめる」を押してください':'ほかの処理の実行中です。終わってから読み込んでください',true);$('#imp-box').scrollIntoView({block:'nearest'});return;}
+  $('#imp-file').click();});
+$('#imp-file').addEventListener('change',()=>{const f=$('#imp-file').files[0];$('#imp-file').value='';if(!f)return;
+  impSt(`読み込んでいます：${f.name}`);
+  task(async()=>{const L=log;log=s=>{L(s);const l=String(s).trim();if(l)impSt(l);};
+    try{await importPackage(f);}catch(e){impSt('読み込めませんでした：'+(e&&e.message||e),true);throw e;}finally{log=L;}});});
 </script>
 </body>
 </html>
