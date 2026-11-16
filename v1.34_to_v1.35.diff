@@ -1,6 +1,6 @@
 --- v134/index.html	2026-11-15 11:33:04.308229000 +0000
-+++ v135/index.html	2026-11-16 08:18:38.692993000 +0000
-@@ -1,4808 +1,5512 @@
++++ v135/index.html	2026-11-16 08:54:21.675381075 +0000
+@@ -1,4808 +1,5534 @@
 -<!doctype html>
 -<html lang="ja">
 -<head>
@@ -5084,6 +5084,13 @@
 +.ovw-stage{position:relative;overflow:auto;max-height:60vh;border-radius:8px;background:#111;border:1px solid var(--line);-webkit-overflow-scrolling:touch}
 +.ovw-stage canvas{display:block;image-rendering:auto}
 +#ovw-box .toolbar{margin:8px 0}
++#ovw-panes{display:flex;gap:8px;align-items:flex-start}
++#ovw-box{min-width:0;max-width:100%;overflow:hidden}
++#ovw-panes{width:100%;max-width:100%}
++.ovw-stage{max-width:100%}
++.ovw-col{flex:1 1 0;min-width:0;max-width:100%;overflow:hidden}
++.ovw-cap{font-size:12px;color:var(--muted);margin:0 0 4px;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
++@media (max-width:700px){#ovw-panes{flex-direction:column}.ovw-col{width:100%}}
 +#ovw-box .lg{display:inline-flex;gap:10px;font-size:12px;color:var(--muted)}
 +#ovw-box .lg i{display:inline-block;width:14px;height:3px;vertical-align:middle;margin-right:4px}
 +</style>
@@ -5332,6 +5339,7 @@
 +          <select id="ovw-img" aria-label="確認する画像" style="width:auto;min-height:36px;padding:4px 8px;max-width:60%"></select>
 +          <label><input type="checkbox" id="ovw-use"> この画像を使う</label>
 +        </div>
++        <div class="toolbar" style="margin-top:0"><label><input type="checkbox" id="ovw-tap" checked> 合成図をタップして写真を開く</label><span class="hint" style="margin:0">合成図（上）の確認・補正したい位置をタップすると、その位置を写した写真がここに開きます（距離を測るときはチェックを外します）。</span></div>
 +        <div class="hint num" id="ovw-sum"></div>
 +        <div class="hint" id="ovw-info"></div>
 +        <div class="toolbar">
@@ -5342,10 +5350,11 @@
 +        </div>
 +        <p class="hint" id="ovw-tool-hint" style="margin:0 0 6px">線の確認だけを行います。</p>
 +        <div class="hint" id="ovw-load"></div>
-+        <div class="ovw-stage" id="ovw-stage"><canvas id="ovw-cv" width="1" height="1"></canvas></div>
++        <div id="ovw-panes">
++          <div class="ovw-col"><div class="ovw-cap">補正する画像（合成図のこの位置を担当）</div><div class="ovw-stage" id="ovw-stage"><canvas id="ovw-cv" width="1" height="1"></canvas></div></div>
++          <div class="ovw-col" id="ovw-colB" hidden><div class="ovw-cap">基準の画像（ずれていない画像）<select id="ovw-ref" aria-label="基準の画像" style="width:auto;min-height:32px;padding:2px 6px;max-width:100%"></select></div><div class="ovw-stage" id="ovw-stage2" style="touch-action:none"><canvas id="ovw-cv2" width="1" height="1"></canvas></div></div>
++        </div>
 +        <div id="ovw-pair-row" hidden>
-+          <div class="toolbar"><span class="unit">基準の画像（ずれていない画像）</span><select id="ovw-ref" aria-label="基準の画像" style="width:auto;min-height:36px;padding:4px 8px;max-width:60%"></select></div>
-+          <div class="ovw-stage" id="ovw-stage2" style="touch-action:none"><canvas id="ovw-cv2" width="1" height="1"></canvas></div>
 +          <p class="hint" id="ovw-pair-note"></p>
 +          <div class="toolbar"><button class="btn small primary" id="ovw-pair-apply" disabled>対応点で位置を合わせる</button><button class="btn small" id="ovw-pair-clear">対応点を消す</button><button class="btn small" id="ovw-off-reset">この画像の位置の補正を戻す</button></div>
 +        </div>
@@ -9016,7 +9025,7 @@
 +/* ================= 小判型：確認・手動補正（v1.35） =================
 +   ・水際線（緑）・天端（水色）の確認と、なぞり直し・部分的な削除、画像の除外 → 「再計算して合成し直す」
 +   ・対応点：ずれている画像（A）と基準の画像（B）で同じ点（目地の角・ひび割れの端など）をタップ → A の位置を B に合わせる */
-+const OVU={tool:'view',A:null,B:null,pairs:[],pend:null,undo:[],stroke:null,labs:[]};
++const OVU={tool:'view',A:null,B:null,pairs:[],pend:null,undo:[],stroke:null,labs:[],mark:null,lastB:null};
 +const ovwOn=()=>!!(S.ovm&&S.o&&S.o.mode==='pier-oval'&&S.faces&&S.faces[0]&&S.faces[0].type==='wl');
 +function ovwUI(){
 +  const box=$('#ovw-box'); if(!box)return; box.hidden=!ovwOn(); if(box.hidden)return;
@@ -9061,10 +9070,15 @@
 +    const pts=OVU.pairs.map(p=>which==='B'?p.b:p.a); if(OVU.pend&&OVU.pend.which===which)pts.push(OVU.pend.p);
 +    pts.forEach((p,i)=>{if(!p)return; const [x,y]=ovwToPx(V,p[0],p[1]); ctx.strokeStyle='#000'; ctx.beginPath(); ctx.arc(x,y,u*4,0,TAU); ctx.stroke(); ctx.strokeStyle='#f2c14e'; ctx.beginPath(); ctx.arc(x,y,u*3.2,0,TAU); ctx.stroke();
 +      ctx.beginPath(); ctx.moveTo(x-u*6,y);ctx.lineTo(x+u*6,y);ctx.moveTo(x,y-u*6);ctx.lineTo(x,y+u*6);ctx.stroke(); ctx.fillStyle='#f2c14e'; ctx.fillText(String(i+1),x+u*5,y-u*5);});}
++  // 合成図でタップした位置（目安の枠）
++  const mk=OVU.mark&&OVU.mark[which]; if(mk&&mk.k===V.k){const [x,y]=ovwToPx(V,mk.lon,mk.lat), h=u*14; ctx.setLineDash([u*3,u*2]); ctx.lineWidth=u;
++    ctx.strokeStyle='#000'; ctx.strokeRect(x-h-u/2,y-h-u/2,2*h+u,2*h+u); ctx.strokeStyle='#ff4fd8'; ctx.strokeRect(x-h,y-h,2*h,2*h); ctx.setLineDash([]);}
 +  ovwZoom();
 +}
 +function ovwZoom(){const z=+$('#ovw-zoom').value||1;
-+  [['#ovw-cv','#ovw-stage',OVU.A],['#ovw-cv2','#ovw-stage2',OVU.B]].forEach(([c,s,V])=>{const cv=$(c),st=$(s); if(!V)return; const w=(st.clientWidth||600)*z; cv.style.width=w+'px'; cv.style.height=(w*V.img.height/V.img.width)+'px';});}
++  // 画像の表示幅は、欄の幅（並べるときは半分）から決める（中身の大きさで欄が広がらないように）
++  const pw=$('#ovw-box').clientWidth-34, two=!$('#ovw-colB').hidden&&innerWidth>700, base=Math.max(200,two?(pw-8)/2:pw);
++  [['#ovw-cv','#ovw-stage',OVU.A],['#ovw-cv2','#ovw-stage2',OVU.B]].forEach(([c,s,V])=>{const cv=$(c),st=$(s); if(!V)return; const w=base*z; cv.style.width=w+'px'; cv.style.height=(w*V.img.height/V.img.width)+'px';});}
 +async function ovwShow(k,keepPairs){if(!ovwOn())return; $('#ovw-img').value=String(k); ovwInfo();
 +  if(!keepPairs){OVU.pairs=[];OVU.pend=null;}
 +  $('#ovw-load').textContent='画像を読み込んでいます…'; try{OVU.A=await ovwLoad(k);}finally{$('#ovw-load').textContent='';} ovwDraw('A'); ovwPairNote();}
@@ -9103,7 +9117,7 @@
 +  cv.addEventListener('pointerup',end); cv.addEventListener('pointercancel',end);
 +}
 +function ovwPairNote(){const n=OVU.pairs.length;
-+  $('#ovw-pair-note').textContent=OVU.pend?`点 ${n+1}：もう一方の画像で同じ点をタップしてください`:n?`対応点 ${n} 組。さらに追加するか、「対応点で位置を合わせる」を押してください（2〜3組を離れた位置で取ると確実です）。`:'上の画像（ずれている画像）と下の画像（基準）で、同じ点（目地の角・ひび割れの端など）を順にタップしてください。';
++  $('#ovw-pair-note').textContent=OVU.pend?`点 ${n+1}：もう一方の画像で同じ点をタップしてください`:n?`対応点 ${n} 組。さらに追加するか、「対応点で位置を合わせる」を押してください（2〜3組を離れた位置で取ると確実です）。`:'左の画像（ずれている画像）と右の画像（基準）で、同じ点（目地の角・ひび割れの端など）を順にタップしてください。';
 +  $('#ovw-pair-apply').disabled=busy||!n;}
 +function ovwPairTap(which,p){
 +  if(OVU.pend&&OVU.pend.which!==which){const a=which==='A'?p:OVU.pend.p, b=which==='B'?p:OVU.pend.p; OVU.pairs.push({a,b}); OVU.pend=null;}
@@ -9136,32 +9150,39 @@
 +  ovwUI(); ovwInfo();
 +  await renderCurrent(); if(S.projectId)await saveProject(false);
 +}
-+/* 合成結果をタップ（対応点のとき）：その位置を担当している画像を A、次に良く写している画像を B にして表示 */
++/* 合成結果をタップ：その位置を担当している画像を「補正する画像」として開く。対応点のときは、同じ位置を写した別の画像を「基準の画像」として右に並べる */
 +async function ovwPickOrtho(Wx,Wy){
 +  const m=S.ovm, fc=S.faces[S.faceSel], s=fc.q0+Wx, z=Wy, cand=[];
 +  m.imgs.forEach((im,k)=>{if(!im.use)return; const p=ovwProject(m,im,s,z); if(!p||p.vis<0.25||Math.abs(p.lon)>55*D2R)return; const mk=ovwMaskOf(im,OVW_EXT); if(!ovwMaskOK(mk,p.lon,p.lat))return;
 +    cand.push({k,sc:(p.vis*Math.cos(p.lat))**2*Math.cos(p.lon)/p.dist,p});});
++  // 除外した画像も、その位置が写っていれば候補に（線を直して使い直すため）
++  if(!cand.length)m.imgs.forEach((im,k)=>{if(im.use||im.cx==null)return; const p=ovwProject(m,im,s,z); if(p&&p.vis>0.25&&Math.abs(p.lon)<55*D2R)cand.push({k,sc:0,p});});
 +  if(!cand.length){log('その位置を写している画像がありません');return;}
-+  let a=cand[0]; const lab=OVU.labs[fc.fi];
++  cand.sort((p,q)=>q.sc-p.sc); let a=cand[0]; const lab=OVU.labs[fc.fi];
 +  if(lab){const c=Math.floor((Wx+fc.M)/lab.Gc), r=Math.floor((m.ZT-z)/lab.Gc); if(c>=0&&r>=0&&c<lab.Wc&&r<lab.Hc){const j=lab.lab[r*lab.Wc+c]; if(j>=0){const f=cand.find(q=>q.k===lab.ks[j]); if(f)a=f;}}}
-+  cand.sort((p,q)=>q.sc-p.sc); const b=cand.find(q=>q.k!==a.k);
++  const b=cand.find(q=>q.k!==a.k)||null;
++  OVU.mark={A:{k:a.k,lon:a.p.lon,lat:a.p.lat},B:b?{k:b.k,lon:b.p.lon,lat:b.p.lat}:null}; OVU.lastB=b?b.k:null;
 +  S.pick={x:Wx,y:Wy,j:-1,face:S.faceSel||0}; drawOverlay();
-+  await ovwShow(a.k); if(b)await ovwShowRef(b.k);
-+  // 両方の画像を、タップした位置が見える所までスクロール
-+  const scroll=(V,stage,pp)=>{if(!V||!pp)return; const [x,y]=ovwToPx(V,pp.lon,pp.lat), st=$(stage), cv=$(stage==='#ovw-stage'?'#ovw-cv':'#ovw-cv2'), f=cv.clientWidth/V.img.width;
-+    st.scrollLeft=x*f-st.clientWidth/2; st.scrollTop=y*f-st.clientHeight/2;};
++  await ovwShow(a.k); if(OVU.tool==='pair'&&b)await ovwShowRef(b.k);
 +  if(+$('#ovw-zoom').value<2){$('#ovw-zoom').value='2'; ovwZoom();}
-+  scroll(OVU.A,'#ovw-stage',a.p); if(b)scroll(OVU.B,'#ovw-stage2',b.p);
-+  log(`この位置：担当 ${m.imgs[a.k].name}${b?`、基準の候補 ${m.imgs[b.k].name}`:''}。上下の画像で同じ点をタップしてください。`);
++  ovwCenter('A'); if(OVU.tool==='pair')ovwCenter('B');
++  const st=$('#ovw-panes').getBoundingClientRect(); if(st.top<0||st.top>innerHeight*0.6)$('#ovw-panes').scrollIntoView({behavior:'smooth',block:'center'});
++  log(`この位置の写真：${m.imgs[a.k].name}${OVU.tool==='pair'&&b?`（基準：${m.imgs[b.k].name}）`:''}`);
 +}
++/* タップした位置（桃色の枠）が見えるように画像をスクロール */
++function ovwCenter(which){const V=which==='B'?OVU.B:OVU.A, mk=OVU.mark&&OVU.mark[which]; if(!V||!mk||mk.k!==V.k)return;
++  const [x,y]=ovwToPx(V,mk.lon,mk.lat), st=$(which==='B'?'#ovw-stage2':'#ovw-stage'), cv=$(which==='B'?'#ovw-cv2':'#ovw-cv'), f=cv.clientWidth/V.img.width;
++  st.scrollLeft=x*f-st.clientWidth/2; st.scrollTop=y*f-st.clientHeight/2;}
 +function ovwInitUI(){
 +  const box=$('#ovw-box'); if(!box)return;
 +  document.querySelectorAll('[data-ovt]').forEach(b=>b.addEventListener('click',()=>{OVU.tool=b.dataset.ovt; OVU.pend=null;
 +    document.querySelectorAll('[data-ovt]').forEach(x=>x.setAttribute('aria-pressed',x===b)); $('#ovw-pair-row').hidden=OVU.tool!=='pair';
 +    $('#ovw-stage').style.touchAction=OVU.tool==='view'?'auto':'none';
 +    $('#ovw-tool-hint').textContent={view:'線の確認だけを行います。',wl:'正しい水際線（柱と水面の境目）を左右になぞってください。なぞった範囲が置き換わります。',top:'正しい天端（柱と桁・支承の境目）を左右になぞってください。',
-+      erase:'誤った線の上を左右になぞると、その範囲を使わないようにします（近い方の線が消えます）。',pair:'合成結果でずれている所をタップすると、その位置の画像が上下に並びます。上下で同じ点をタップしてください。'}[OVU.tool];
-+    if(OVU.tool==='pair'&&!OVU.B&&OVU.A){const m=S.ovm, k=OVU.A.k; let r=-1; for(let d=1;d<m.imgs.length&&r<0;d++)for(const q of [k-d,k+d])if(r<0&&m.imgs[q]&&m.imgs[q].use)r=q; if(r>=0)task(()=>ovwShowRef(r));}
++      erase:'誤った線の上を左右になぞると、その範囲を使わないようにします（近い方の線が消えます）。',pair:'合成結果でずれている所をタップすると、その位置を写した2枚の画像が左右に並びます。左の画像→右の画像の順に、同じ点（目地・しみなど）を交互にタップしてください。'}[OVU.tool];
++    $('#ovw-colB').hidden=OVU.tool!=='pair'; ovwZoom();
++    if(OVU.tool==='pair'&&OVU.A&&OVU.lastB!=null&&(!OVU.B||OVU.B.k!==OVU.lastB)&&OVU.mark&&OVU.mark.A&&OVU.mark.A.k===OVU.A.k)task(async()=>{await ovwShowRef(OVU.lastB); ovwCenter('B');});
++    else if(OVU.tool==='pair'&&!OVU.B&&OVU.A){const m=S.ovm, k=OVU.A.k; let r=-1; for(let d=1;d<m.imgs.length&&r<0;d++)for(const q of [k-d,k+d])if(r<0&&m.imgs[q]&&m.imgs[q].use)r=q; if(r>=0)task(()=>ovwShowRef(r));}
 +    ovwDraw('A'); ovwDraw('B'); ovwPairNote();}));
 +  $('#ovw-img').addEventListener('change',()=>task(()=>ovwShow(+$('#ovw-img').value)));
 +  $('#ovw-ref').addEventListener('change',()=>task(async()=>{await ovwShowRef(+$('#ovw-ref').value); OVU.pairs=[];OVU.pend=null; ovwPairNote();}));
@@ -9176,8 +9197,8 @@
 +  $('#ovw-pair-apply').addEventListener('click',()=>task(ovwPairApply));
 +  $('#ovw-apply').addEventListener('click',()=>task(ovwRecompute));
 +  ovwBind('A'); ovwBind('B');
-+  // 合成結果のタップ（対応点のときだけ横取りする）
-+  $('#viewer').addEventListener('click',e=>{if(!ovwOn()||OVU.tool!=='pair'||!S.img||busy||!$('#inner').contains(e.target))return; e.stopImmediatePropagation(); e.preventDefault();
++  // 合成結果のタップ（「合成図をタップして写真を開く」が入っているときは横取りする）
++  $('#viewer').addEventListener('click',e=>{if(!ovwOn()||!$('#ovw-tap').checked||!S.img||busy||!$('#inner').contains(e.target))return; e.stopImmediatePropagation(); e.preventDefault();
 +    const p=evPt(e), [Wx,Wy]=toWorld(S.img,p[0]-0.5,p[1]-0.5); task(()=>ovwPickOrtho(Wx,Wy));},true);
 +}
 +ovwInitUI();
@@ -9219,8 +9240,9 @@
 + {sel:'[data-tool="measure"]',at:'seg',t:'距離を測る・範囲を指定・傾きを補正',b:'<b>距離を測る</b>：2点をタップすると実寸を表示します。既知の寸法（目地の間隔・柱の幅など）を測って「実寸」に入れると、縮尺を補正できます。<br><b>範囲を指定</b>：必要な部分だけを囲んで、その範囲を細かく合成し直します。<br><b>傾きを補正</b>：まっすぐな線に沿って2点をタップし、図の向きを直します。'},
 + {sel:'#m-true',at:'after',t:'実寸',b:'測った2点の間の本当の長さ（m）を入れて「縮尺を補正」を押すと、図全体の縮尺を直します。'},
 + // 小判型：確認・手動補正
-+ {sel:'#ovw-img',at:'after',t:'確認する画像',b:'合成に使った画像を1枚ずつ開き、検出した<b>水際線（緑）</b>と<b>天端（水色）</b>を重ねて表示します。⚠ は線が全体と合っていない画像です。「この画像を使う」を外すと、その画像を合成から除きます（入れ直すこともできます）。'},
-+ {sel:'[data-ovt="view"]',at:'seg',t:'線の手動補正・対応点',b:'<b>水際線をなぞる</b>：柱と水面の境目を指でなぞると、その範囲の線を置き換えます。<br><b>天端をなぞる</b>：柱の上端（梁・支承との境目）をなぞります。<br><b>線を消す</b>：誤検出した部分をなぞって消します。<br>線を直したら「再計算して合成し直す」を押します。<br><b>対応点</b>：合成図でずれている所をタップすると、その場所を担当している画像（左）と、同じ所が写った別の画像（右）が開きます。同じ目地・しみなどを左→右の順に2〜3組タップして「対応点で位置を合わせる」を押すと、左の画像の位置を直して合成し直します。'},
++ {sel:'#ovw-tap',at:'after',t:'合成図をタップして写真を開く',b:'チェックが入っていると、合成図（上）をタップした位置を担当している写真が下の欄に開き、その位置を桃色の枠で示します。「対応点」を選んでいるときは、同じ位置を写した別の写真も右に並べて開きます。距離を測る・範囲を指定するときはチェックを外してください。'},
++ {sel:'#ovw-img',at:'after',t:'確認する画像',b:'合成図をタップする代わりに、一覧から画像を選んで開くこともできます。合成に使った画像を1枚ずつ開き、検出した<b>水際線（緑）</b>と<b>天端（水色）</b>を重ねて表示します。⚠ は線が全体と合っていない画像です。「この画像を使う」を外すと、その画像を合成から除きます（入れ直すこともできます）。'},
++ {sel:'[data-ovt="view"]',at:'seg',t:'線の手動補正・対応点',b:'<b>水際線をなぞる</b>：柱と水面の境目を指でなぞると、その範囲の線を置き換えます。<br><b>天端をなぞる</b>：柱の上端（梁・支承との境目）をなぞります。<br><b>線を消す</b>：誤検出した部分をなぞって消します。<br>線を直したら「再計算して合成し直す」を押します。<br><b>対応点</b>：合成図でずれている所をタップすると、その場所を担当している画像（左）と、同じ所が写った別の画像（右）が左右に並んで開きます。右の画像は一覧から選び直せます。同じ目地・しみなどを左→右の順に2〜3組タップして「対応点で位置を合わせる」を押すと、左の画像の位置を直して合成し直します。'},
 + {sel:'#ovw-apply',at:'after',t:'再計算して合成し直す',b:'直した水際線・天端・除外した画像を使って、断面と撮影位置をもう一度求め、合成し直します。数十秒かかります。'},
 + // 書き出し
 + {sel:'#o-gsd',at:'after',t:'画素寸法',b:'書き出す画像の1画素が何 mm にあたるかです。小さいほど細かくなりますが、ファイルが大きくなります。「自動」は元画像の細かさに合わせます。大きな面では画素数の上限に合わせて自動で粗くなるので、細部は「範囲を指定」で絞ってください。'},
