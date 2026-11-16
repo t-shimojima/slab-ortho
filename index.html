@@ -278,6 +278,7 @@ input[type=text],input[type=date]{font:inherit;font-size:15px;width:100%;padding
 #ovw-panes{width:100%;max-width:100%}
 .ovw-stage{max-width:100%}
 .ovw-col{flex:1 1 0;min-width:0;max-width:100%;overflow:hidden}
+.ovw-sw{display:inline-block;width:12px;height:12px;border-radius:3px;border:1px solid rgba(0,0,0,.4)}
 .ovw-cap{font-size:12px;color:var(--muted);margin:0 0 4px;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
 @media (max-width:700px){#ovw-panes{flex-direction:column}.ovw-col{width:100%}}
 #ovw-box .lg{display:inline-flex;gap:10px;font-size:12px;color:var(--muted)}
@@ -540,8 +541,8 @@ input[type=text],input[type=date]{font:inherit;font-size:15px;width:100%;padding
         <p class="hint" id="ovw-tool-hint" style="margin:0 0 6px">線の確認だけを行います。</p>
         <div class="hint" id="ovw-load"></div>
         <div id="ovw-panes">
-          <div class="ovw-col"><div class="ovw-cap">補正する画像（合成図のこの位置を担当）</div><div class="ovw-stage" id="ovw-stage"><canvas id="ovw-cv" width="1" height="1"></canvas></div></div>
-          <div class="ovw-col" id="ovw-colB" hidden><div class="ovw-cap">基準の画像（ずれていない画像）<select id="ovw-ref" aria-label="基準の画像" style="width:auto;min-height:32px;padding:2px 6px;max-width:100%"></select></div><div class="ovw-stage" id="ovw-stage2" style="touch-action:none"><canvas id="ovw-cv2" width="1" height="1"></canvas></div></div>
+          <div class="ovw-col"><div class="ovw-cap"><i class="ovw-sw" style="background:rgb(255,138,31)"></i>補正する画像（合成図の橙色の範囲）</div><div class="ovw-stage" id="ovw-stage"><canvas id="ovw-cv" width="1" height="1"></canvas></div></div>
+          <div class="ovw-col" id="ovw-colB" hidden><div class="ovw-cap"><i class="ovw-sw" style="background:rgb(34,195,238)"></i>基準の画像（合成図の水色の範囲）<select id="ovw-ref" aria-label="基準の画像" style="width:auto;min-height:32px;padding:2px 6px;max-width:100%"></select></div><div class="ovw-stage" id="ovw-stage2" style="touch-action:none"><canvas id="ovw-cv2" width="1" height="1"></canvas></div></div>
         </div>
         <div id="ovw-pair-row" hidden>
           <p class="hint" id="ovw-pair-note"></p>
@@ -2489,7 +2490,7 @@ function ovwFit(obs,nF,G,o){
   let gpsRms=null; if(gpsOn){let s2=0; for(const g of useG){const f=gfl[g]; s2+=(x[iC+2*g]-gE[g]-x[iT+2*f])**2+(x[iC+2*g+1]-gNo[g]-x[iT+2*f+1])**2;} gpsRms=Math.sqrt(s2/useG.length);}
   return {a:x[0],r:x[1],phi:((x[2]%Math.PI)+Math.PI)%Math.PI,w:Array.from(x.subarray(iW,iW+nF)),hg:Array.from(x.subarray(iH,iH+G)),
     cam:obs.map((q,i)=>[x[iC+2*q.g]+x[iD+2*i],x[iC+2*q.g+1]+x[iD+2*i+1]]),
-    per:per.map(v=>ovwMed(v)),perTop:pt.map(v=>v.length?ovwMed(v):null),Zt:nTop?x[iZ]:null,resMed:ovwMed(Array.from(best.res).filter((_,p)=>!Pk[p]).map(Math.abs)),cost:best.cost,x:Array.from(x),gpsRms,gpsOn,nIt};
+    per:per.map(v=>ovwMed(v)),perTop:pt.map(v=>v.length?ovwMed(v):null),Zt:nTop?x[iZ]:null,t:gpsOn?Array.from({length:nF},(_,f)=>[x[iT+2*f],x[iT+2*f+1]]):null,resMed:ovwMed(Array.from(best.res).filter((_,p)=>!Pk[p]).map(Math.abs)),cost:best.cost,x:Array.from(x),gpsRms,gpsOn,nIt};
 }
 /* 初期値をいくつか変えて解き、最もよく当てはまる解を採る（平面部の長さ・向きには局所解が多い）。
    まず点を間引いて短く解き、良い2つだけを全部の点で解き直す */
@@ -2544,6 +2545,8 @@ function ovwColcor(m,im,ZTOP){
   const km=ovwMedFilt(kf,15); for(let i=0;i<n;i++)km[i]=Math.max(0.9,Math.min(1.1,km[i]));
   return {zcp:Math.round(zcp*1e4)/1e4,k:Array.from(km,v=>Math.round(v*1e4)/1e4)};
 }
+/* 仮の位置の画像：線から高さを合わせられないときは、高度計の高さをそのまま使う（縦の倍率 1） */
+function ovwColcorFlat(m,im){const n=Math.floor(ovwPerim(m)/OVW_GS); return {zcp:Math.round(im.zc*1e4)/1e4,k:new Array(n).fill(1),flat:true};}
 const ovwK=(cor,s)=>{const k=cor.k,n=k.length,f=s/OVW_GS-0.5; if(f<=0)return k[0]; if(f>=n-1)return k[n-1]; const i=Math.floor(f),t=f-i; return k[i]*(1-t)+k[i+1]*t;};
 /* 面上の点（周長 s・水面からの高さ z）が、画像 im のどの方向（中央からの経度 lon・緯度 lat）に写るか。写らなければ null */
 function ovwProject(m,im,s,z){
@@ -2565,10 +2568,11 @@ function ovwUnproject(m,im,lon,lat){
 }
 /* 画像の使える範囲（線の上下 4 画素の内側。ext：左右に広げる角度） */
 function ovwMaskOf(im,ext){
-  const g=ovwGood(im.wl,8); if(!g||g.n<30)return null; const tg=im.top?ovwGood(im.top,10):null;
+  const g=ovwGood(im.wl,8), tg=im.top?ovwGood(im.top,10):null;
+  if(!g||g.n<30){if(!im.approx)return null; return {lo:-55*D2R,hi:55*D2R,wl:null,top:tg&&tg.n>30?tg:null,d:4*OVW_PX};}   // 仮の位置の画像：水際線がなくても使う
   return {lo:g.lo-ext,hi:g.hi+ext,wl:g,top:tg&&tg.n>30?tg:null,d:4*OVW_PX};
 }
-const ovwMaskOK=(mk,lon,lat)=>mk&&lon>=mk.lo&&lon<=mk.hi&&lat>ovwInterp(mk.wl,lon)+mk.d&&(!mk.top||lat<ovwInterp(mk.top,lon)-mk.d);
+const ovwMaskOK=(mk,lon,lat)=>mk&&lon>=mk.lo&&lon<=mk.hi&&(!mk.wl||lat>ovwInterp(mk.wl,lon)+mk.d)&&(!mk.top||lat<ovwInterp(mk.top,lon)-mk.d);
 /* 4 面の範囲（周長 s）：平面部・円弧部・平面部・円弧部。両側に 0.3 m ずつはみ出して描く */
 function ovwFaces(m){
   const a=m.a,r=m.r,L=ovwPerim(m), q=[0,2*a,2*a+Math.PI*r,4*a+Math.PI*r,L], c=Math.cos(m.phi), s=Math.sin(m.phi);
@@ -2590,11 +2594,12 @@ async function ovwRenderFace(fc,o,getSrc,G,names){
   for(let k=0;k<m.imgs.length;k++){const im=m.imgs[k]; if(!im.use||!im.cor)continue;
     const mk0=ovwMaskOf(im,0), mk1=ovwMaskOf(im,OVW_EXT); if(!mk0)continue;
     const sc=new Float32Array(NC), fl=new Uint8Array(NC); let n0=0,n1=0; const visC=[];
+    const pen=im.approx&&!(im.ds||im.dz)?0.3:1;   // 仮の位置の画像は、対応点で直すまで他の画像を優先
     for(let c=0;c<Wc;c++){const s=s0+(c+0.5)*Gc, sg=s-(im.ds||0), v=ovwView(m,im,sg); if(!(v.vis>0.25)||Math.abs(v.psi)>lim55)continue;
       const kk=ovwK(im.cor,((sg%L)+L)%L); let any=false;
       for(let r=0;r<Hc;r++){const z=ZT-(r+0.5)*Gc, zz=im.zc+(z-im.cor.zcp-(im.dz||0))/kk, el=Math.atan2(zz-im.zc,v.hd); if(Math.abs(el)>lim65)continue;
         let f=0; if(ovwMaskOK(mk0,v.psi,el)){f=3;any=true;n0++;} else if(ovwMaskOK(mk1,v.psi,el)){f=2;n1++;} if(!f)continue;
-        const ce=Math.cos(el); sc[r*Wc+c]=(v.vis*ce)**2*Math.cos(v.psi)/Math.hypot(v.hd,zz-im.zc); fl[r*Wc+c]=f;}
+        const ce=Math.cos(el); sc[r*Wc+c]=pen*(v.vis*ce)**2*Math.cos(v.psi)/Math.hypot(v.hd,zz-im.zc); fl[r*Wc+c]=f;}
       if(any)visC.push(v.vis);}
     if(n0+n1<0.01*NC)continue;
     cand.push({k,im,sc,fl,n0,frontal:visC.length?ovwMed(visC):0});
@@ -2676,8 +2681,11 @@ function ovwSolve(m,quiet,opt){ opt=opt||{};
     im.fitted=i>=0; im.res=i>=0?Math.round(fit.per[i]*1e4)/1e4:null;
     if(i>=0){im.cx=fit.cam[i][0];im.cy=fit.cam[i][1];}
     else if(ccOf.has(im.g)){const c=ccOf.get(im.g); im.cx=c.reduce((p,q)=>p+q[0],0)/c.length; im.cy=c.reduce((p,q)=>p+q[1],0)/c.length;}
+    else if(im.gps&&fit.t){const t=fit.t[fi>=0?fi:0]; im.cx=im.gps[0]+t[0]; im.cy=im.gps[1]+t[1];}   // 同じ列の画像がない：GPS の位置（ずれは推定値で補正）
     else im.cx=null;
-    im.hb=im.cen+(gi>=0?fit.hg[gi]:0); im.zc=fi>=0&&im.z!=null?im.z-fit.w[fi]:null;
+    const wf=fi>=0?fit.w[fi]:fit.w.reduce((p,q)=>p+q,0)/fit.w.length;
+    im.hb=im.cen+(gi>=0?fit.hg[gi]:0); im.zc=im.z!=null?im.z-wf:null;
+    im.approx=!im.excl&&i<0&&im.cx!=null&&im.zc!=null&&im.zc>0.05;   // 仮の位置（同じ列の位置と高度計の高さ）。対応点で直して使う
     im.why=im.excl?'手動で除外':i>=0?'':drop.includes(k)?'水際線が全体と合わない':!ovwGood(im.wl,8)||ovwGood(im.wl,8).n<30?'水際線を検出できない':'位置を決められない';});
   Object.assign(m,{a:fit.a,r:fit.r,phi:fit.phi,w:fit.w,flights:fl,resMed:fit.resMed,gpsRms:fit.gpsRms,Zt:fit.Zt});
   if(!quiet){const ax=((90-m.phi/D2R)%180+180)%180;
@@ -2703,8 +2711,11 @@ function ovwFinish(m){
   m.ZTOP=zt.length?ovwMed(zt):null;
   if(m.ZTOP==null){const zc=m.imgs.filter(im=>im.fitted).map(im=>im.zc); m.ZTOP=Math.max(...zc)+1.0; log(`天端が見つからないため、図の上端を水面から ${fmt(m.ZTOP,1)} m とします`);}
   m.ZT=Math.ceil((m.ZTOP+0.35)*10)/10;
-  let nc=0; m.imgs.forEach(im=>{im.cor=im.cx!=null&&im.zc>0.05?ovwColcor(m,im,m.ZTOP):null; im.use=!im.excl&&im.fitted&&!!im.cor; if(im.use)nc++;});
+  let nc=0, na=0; m.imgs.forEach(im=>{im.cor=im.cx!=null&&im.zc>0.05?ovwColcor(m,im,m.ZTOP):null;
+    if(!im.cor&&im.approx)im.cor=ovwColcorFlat(m,im);
+    im.use=!im.excl&&(im.fitted||im.approx)&&!!im.cor; if(im.use){if(im.fitted)nc++; else na++;}});
   log(`高さ合わせ：水際線＝0 m、天端＝${fmt(m.ZTOP,2)} m として ${nc} 枚の高さを列ごとに合わせました`);
+  if(na)log(`水際線が合わない画像 ${na} 枚は、同じ列の位置と高度計の高さで仮に置きました（合成では他の画像を優先します。ずれていれば「対応点」で直してください）`);
   m.rev=(m.rev||0)+1;
 }
 async function ovwRegister(n,names,getSrc,noses,alts,seg,courseOf,panoW,locked,o){
@@ -2735,7 +2746,7 @@ async function ovwRegister(n,names,getSrc,noses,alts,seg,courseOf,panoW,locked,o
   ovwSolve(m,false,m.Zt!=null?{phis:[m.phi]}:{});   // 仕上げ：天端の重みを下げ、向きはここまでの値の近くで解く
   ovwDetectTops(m,feats); feats.fill(null);
   ovwFinish(m);
-  m.imgs.forEach((im,k)=>{if(!im.use)setThumbStatus(k,`<span class="chip bad">${im.why||'除外'}</span>`); else setThumbStatus(k,`<span class="chip ok">使用</span>${im.top?'':'<span class="chip warn">天端なし</span>'}`);});
+  m.imgs.forEach((im,k)=>{if(!im.use)setThumbStatus(k,`<span class="chip bad">${im.why||'除外'}</span>`); else setThumbStatus(k,im.approx?'<span class="chip warn">仮の位置</span>':`<span class="chip ok">使用</span>${im.top?'':'<span class="chip warn">天端なし</span>'}`);});
   S.ovm=m;
   const faces=ovwFaces(m).map((fc,i)=>({...fc,type:'wl',fi:i,sol:{cams:[],dropped:[],used:[]},gains:null,marks:[]}));
   // 画素寸法の目安：元画像の 1 画素が、柱の表面（平均の距離）で何 m か
@@ -3006,6 +3017,7 @@ function drawOverlay(){
   if(o!=='none'&&!(S.marks&&S.marks.length)){const [A,B]=sideNames(),L=o==='left'?A:B,R=o==='left'?B:A;
     s+=`<text x="${u*2}" y="${img.H/2}" style="font-size:${u*5}px;fill:#fff;paint-order:stroke;stroke:#000;stroke-width:${u*0.8}px">${L}</text>`;
     s+=`<text x="${img.W-u*2}" y="${img.H/2}" text-anchor="end" style="font-size:${u*5}px;fill:#fff;paint-order:stroke;stroke:#000;stroke-width:${u*0.8}px">${R}</text>`;}
+  if(typeof ovwOverlaySVG==='function')s+=ovwOverlaySVG(u);
   if(typeof skOverlaySVG==='function')s+=skOverlaySVG(u);
   if(S.cropDraft){const r=S.cropDraft;s+=`<rect x="${Math.min(r[0],r[2])}" y="${Math.min(r[1],r[3])}" width="${Math.abs(r[2]-r[0])}" height="${Math.abs(r[3]-r[1])}" fill="rgba(242,193,78,.15)" stroke="#f2c14e" stroke-width="${u*0.5}" stroke-dasharray="${u*2} ${u}"/>`;}
   if(S.tool==='level'&&S.lvPts){S.lvPts.forEach(p=>{s+=`<circle cx="${p[0]}" cy="${p[1]}" r="${u*1.2}" fill="#4ec9f2" stroke="#000" stroke-width="${u*0.3}"/>`});
@@ -4219,7 +4231,7 @@ const ovwOn=()=>!!(S.ovm&&S.o&&S.o.mode==='pier-oval'&&S.faces&&S.faces[0]&&S.fa
 function ovwUI(){
   const box=$('#ovw-box'); if(!box)return; box.hidden=!ovwOn(); if(box.hidden)return;
   const m=S.ovm, sel=$('#ovw-img'), cur=sel.value;
-  sel.innerHTML=m.imgs.map((im,k)=>`<option value="${k}">${k+1}. ${esc(im.name.replace(/^DJI_\d+_/,''))}${im.use?'':'（除外）'}${im.res!=null&&im.res>0.04?' ⚠':''}</option>`).join('');
+  sel.innerHTML=m.imgs.map((im,k)=>`<option value="${k}">${k+1}. ${esc(im.name.replace(/^DJI_\d+_/,''))}${im.use?(im.approx?'（仮）':''):'（除外）'}${im.res!=null&&im.res>0.04?' ⚠':''}</option>`).join('');
   sel.value=cur!==''&&+cur<m.imgs.length?cur:String(Math.max(0,m.imgs.findIndex(im=>im.use)));
   $('#ovw-ref').innerHTML=m.imgs.map((im,k)=>`<option value="${k}">${k+1}. ${esc(im.name.replace(/^DJI_\d+_/,''))}</option>`).join('');
   $('#ovw-sum').textContent=`断面 幅 ${fmt(2*(m.a+m.r),2)} m・厚さ ${fmt(2*m.r,2)} m${m.fix?'（図面）':'（推定）'}／天端 水面から ${fmt(m.ZTOP,2)} m／水際線の当てはまり ${fmt((m.resMed||0)*100,1)} cm`;
@@ -4230,7 +4242,7 @@ function ovwDirtyNote(){const m=S.ovm; $('#ovw-dirty').textContent=m.dirtyFit?'�
 function ovwInfo(){const m=S.ovm, k=+$('#ovw-img').value, im=m.imgs[k]; if(!im)return;
   $('#ovw-use').checked=!im.excl;
   const off=(im.ds||im.dz)?`・手動の位置補正 横 ${fmt((im.ds||0)*100,1)} cm／縦 ${fmt((im.dz||0)*100,1)} cm`:'';
-  $('#ovw-info').textContent=`${im.name}：${im.use?'使用':'除外（'+(im.why||(im.cor?'':'高さ合わせ不可'))+'）'}${im.res!=null?`・水際線の当てはまり ${fmt(im.res*100,1)} cm`:''}${im.zc!=null?`・カメラ高さ（水面から）${fmt(im.zc,2)} m`:''}${off}`;}
+  $('#ovw-info').textContent=`${im.name}：${im.use?(im.approx?`仮の位置で使用（${im.why||'水際線が合わない'}。ずれていれば対応点で直してください）`:'使用'):'除外（'+(im.why||(im.cor?'':'高さ合わせ不可'))+'）'}${im.res!=null?`・水際線の当てはまり ${fmt(im.res*100,1)} cm`:''}${im.zc!=null?`・カメラ高さ（水面から）${fmt(im.zc,2)} m`:''}${off}`;}
 /* 画像の帯（水際線〜天端が入る範囲）を読み込んで表示用に切り出す */
 async function ovwLoad(k){
   const m=S.ovm, im=m.imgs[k]; const src=await S.getSrc(k); const b=getWallBand(src,im.bphi||0,OVW_DW,OVW_LAT); src.close&&src.close();
@@ -4270,8 +4282,8 @@ function ovwZoom(){const z=+$('#ovw-zoom').value||1;
   [['#ovw-cv','#ovw-stage',OVU.A],['#ovw-cv2','#ovw-stage2',OVU.B]].forEach(([c,s,V])=>{const cv=$(c),st=$(s); if(!V)return; const w=base*z; cv.style.width=w+'px'; cv.style.height=(w*V.img.height/V.img.width)+'px';});}
 async function ovwShow(k,keepPairs){if(!ovwOn())return; $('#ovw-img').value=String(k); ovwInfo();
   if(!keepPairs){OVU.pairs=[];OVU.pend=null;}
-  $('#ovw-load').textContent='画像を読み込んでいます…'; try{OVU.A=await ovwLoad(k);}finally{$('#ovw-load').textContent='';} ovwDraw('A'); ovwPairNote();}
-async function ovwShowRef(k){OVU.B=await ovwLoad(k); $('#ovw-ref').value=String(k); ovwDraw('B');}
+  $('#ovw-load').textContent='画像を読み込んでいます…'; try{OVU.A=await ovwLoad(k);}finally{$('#ovw-load').textContent='';} ovwDraw('A'); ovwPairNote(); drawOverlay();}
+async function ovwShowRef(k){OVU.B=await ovwLoad(k); $('#ovw-ref').value=String(k); ovwDraw('B'); drawOverlay();}
 /* 線をなぞった結果を反映（なぞった経度の範囲を置き換え。範囲が足りなければ線を延ばす） */
 function ovwApplyStroke(tr,pts,V){
   const P=pts.slice().sort((p,q)=>p[0]-q[0]); if(P.length<2)return tr; const lo=P[0][0], hi=P[P.length-1][0];
@@ -4334,7 +4346,7 @@ async function ovwRecompute(){
   if(m.dirtyFit){log('水際線・除外の変更を反映して、断面と撮影位置を推定し直します…'); await sleep(); ovwSolve(m,false);}
   else log('天端の変更を反映して、高さを合わせ直します…');
   ovwFinish(m); m.dirtyFit=false; m.dirtyCor=false; S.dirty=true;
-  m.imgs.forEach((im,k)=>setThumbStatus(k,im.use?`<span class="chip ok">使用</span>${im.top?'':'<span class="chip warn">天端なし</span>'}`:`<span class="chip bad">${im.why||'除外'}</span>`));
+  m.imgs.forEach((im,k)=>setThumbStatus(k,im.use&&im.approx?'<span class="chip warn">仮の位置</span>':im.use?`<span class="chip ok">使用</span>${im.top?'':'<span class="chip warn">天端なし</span>'}`:`<span class="chip bad">${im.why||'除外'}</span>`));
   $('#thumb-note').textContent=`${m.imgs.filter(im=>im.use).length}/${m.imgs.length} 枚を使用`;
   ovwUI(); ovwInfo();
   await renderCurrent(); if(S.projectId)await saveProject(false);
@@ -4362,6 +4374,28 @@ async function ovwPickOrtho(Wx,Wy){
 function ovwCenter(which){const V=which==='B'?OVU.B:OVU.A, mk=OVU.mark&&OVU.mark[which]; if(!V||!mk||mk.k!==V.k)return;
   const [x,y]=ovwToPx(V,mk.lon,mk.lat), st=$(which==='B'?'#ovw-stage2':'#ovw-stage'), cv=$(which==='B'?'#ovw-cv2':'#ovw-cv'), f=cv.clientWidth/V.img.width;
   st.scrollLeft=x*f-st.clientWidth/2; st.scrollTop=y*f-st.clientHeight/2;}
+/* 合成図に、開いている2枚の画像が写している範囲を色分けして表示（左＝補正する画像：橙、右＝基準の画像：水色） */
+const OVW_FPC={A:'255,138,31',B:'34,195,238'};
+function ovwFpOf(k){const m=S.ovm, fc=S.faces&&S.faces[S.faceSel||0]; if(!m||!fc||fc.type!=='wl'||!m.imgs[k])return null;
+  const key=`${k}:${fc.fi}:${m.rev}:${m.imgs[k].ds||0}:${m.imgs[k].dz||0}`; OVU.fpCache=OVU.fpCache||new Map(); if(OVU.fpCache.has(key))return OVU.fpCache.get(key);
+  const im=m.imgs[k], g=0.05, x0=-fc.M, x1=fc.q1-fc.q0+fc.M, nx=Math.ceil((x1-x0)/g), ny=Math.ceil(m.ZT/g), mk=ovwMaskOf(im,OVW_EXT), cov=[], own=[];
+  if(im.cor&&mk)for(let r=0;r<ny;r++){const z=m.ZT-(r+0.5)*g; let a=-1;
+    for(let c=0;c<=nx;c++){let ok=false; if(c<nx){const p=ovwProject(m,im,fc.q0+x0+(c+0.5)*g,z); ok=!!p&&p.vis>0.25&&Math.abs(p.lon)<55*D2R&&ovwMaskOK(mk,p.lon,p.lat);}
+      if(ok&&a<0)a=c; if(!ok&&a>=0){cov.push([x0+a*g,x0+c*g,z+g/2,z-g/2]);a=-1;}}}
+  const lab=OVU.labs[fc.fi];
+  if(lab){const j=lab.ks.indexOf(k); if(j>=0)for(let r=0;r<lab.Hc;r++){let a=-1; for(let c=0;c<=lab.Wc;c++){const ok=c<lab.Wc&&lab.lab[r*lab.Wc+c]===j;
+    if(ok&&a<0)a=c; if(!ok&&a>=0){own.push([a*lab.Gc-fc.M,c*lab.Gc-fc.M,m.ZT-r*lab.Gc,m.ZT-(r+1)*lab.Gc]);a=-1;}}}}
+  const pc=im.cor?ovwUnproject(m,im,0,0):null, cam=pc?[ovwSX(fc,pc.s),im.cor.zcp]:null;
+  const fp={cov,own,cam}; OVU.fpCache.set(key,fp); return fp;}
+function ovwOverlaySVG(u){
+  if(!ovwOn()||!S.img||!S.faces||S.faces[S.faceSel||0].type!=='wl')return ''; let s='';
+  const path=rs=>rs.map(([xa,xb,ya,yb])=>{const [p,q]=toOut(S.img,xa,ya), [p2,q2]=toOut(S.img,xb,yb); const X=Math.min(p,p2),Y=Math.min(q,q2); return `M${X.toFixed(1)} ${Y.toFixed(1)}h${Math.abs(p2-p).toFixed(1)}v${Math.abs(q2-q).toFixed(1)}h${(-Math.abs(p2-p)).toFixed(1)}z`;}).join('');
+  const show=[['A',OVU.A]]; if(OVU.tool==='pair'&&OVU.B)show.push(['B',OVU.B]);
+  show.forEach(([w,V])=>{if(!V)return; const fp=ovwFpOf(V.k); if(!fp)return; const c=OVW_FPC[w];
+    if(fp.cov.length)s+=`<path d="${path(fp.cov)}" fill="rgba(${c},.16)" stroke="none"/>`;
+    if(fp.own.length)s+=`<path d="${path(fp.own)}" fill="rgba(${c},.30)" stroke="none"/>`;
+    if(fp.cam){const [x,y]=toOut(S.img,fp.cam[0],fp.cam[1]); s+=`<circle cx="${x}" cy="${y}" r="${u*2.4}" fill="rgb(${c})" stroke="#000" stroke-width="${u*0.4}"/><text x="${x+u*3}" y="${y+u*1.6}" style="font-size:${u*4.5}px;fill:rgb(${c});paint-order:stroke;stroke:#000;stroke-width:${u*0.8}px">${w==='A'?'補正':'基準'} ${V.k+1}</text>`;}});
+  return s;}
 function ovwInitUI(){
   const box=$('#ovw-box'); if(!box)return;
   document.querySelectorAll('[data-ovt]').forEach(b=>b.addEventListener('click',()=>{OVU.tool=b.dataset.ovt; OVU.pend=null;
@@ -4372,7 +4406,7 @@ function ovwInitUI(){
     $('#ovw-colB').hidden=OVU.tool!=='pair'; ovwZoom();
     if(OVU.tool==='pair'&&OVU.A&&OVU.lastB!=null&&(!OVU.B||OVU.B.k!==OVU.lastB)&&OVU.mark&&OVU.mark.A&&OVU.mark.A.k===OVU.A.k)task(async()=>{await ovwShowRef(OVU.lastB); ovwCenter('B');});
     else if(OVU.tool==='pair'&&!OVU.B&&OVU.A){const m=S.ovm, k=OVU.A.k; let r=-1; for(let d=1;d<m.imgs.length&&r<0;d++)for(const q of [k-d,k+d])if(r<0&&m.imgs[q]&&m.imgs[q].use)r=q; if(r>=0)task(()=>ovwShowRef(r));}
-    ovwDraw('A'); ovwDraw('B'); ovwPairNote();}));
+    ovwDraw('A'); ovwDraw('B'); ovwPairNote(); drawOverlay();}));
   $('#ovw-img').addEventListener('change',()=>task(()=>ovwShow(+$('#ovw-img').value)));
   $('#ovw-ref').addEventListener('change',()=>task(async()=>{await ovwShowRef(+$('#ovw-ref').value); OVU.pairs=[];OVU.pend=null; ovwPairNote();}));
   $('#ovw-zoom').addEventListener('change',ovwZoom); window.addEventListener('resize',ovwZoom);
