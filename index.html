@@ -2341,31 +2341,96 @@ function ovwWaterline(b){
   for(let j=0;j<Wn;j++){ys[j]=path[j]+n+r0; cf[j]=sc[j*Tn+path[j]];}
   return ovwTrace(b,x0,ys,cf);
 }
+/* 水位標・看板などの鮮やかな色の画素（目印）。1 赤 2 橙 3 黄 4 緑 5 青。柱の列の範囲だけ、2画素おきに持つ */
+function ovwColCls(R,G,B){
+  if(R>140&&R-G>70&&R-B>50&&G<110)return 1;
+  if(R>180&&G>85&&G<160&&B<100&&R-G>50)return 2;
+  if(R>170&&G>140&&B<120&&R-B>80&&Math.abs(R-G)<60)return 3;
+  if(G>120&&G-R>60&&G-B>-10&&B<210)return 4;
+  if(B>140&&B-R>80&&B-G>25)return 5;
+  return 0;}
+function ovwColPts(b,g){
+  const {w,h,data}=b, x0=Math.max(0,Math.floor(((g.lo-b.phi)/b.lonSpan+0.5)*w)), x1=Math.min(w,Math.ceil(((g.hi-b.phi)/b.lonSpan+0.5)*w)), pts=[];
+  for(let y=1;y<h-1;y+=2)for(let x=x0;x<x1;x+=2){const p=(y*w+x)*4, c=ovwColCls(data[p],data[p+1],data[p+2]); if(c)pts.push(x,y,c);}
+  return {pts:Int16Array.from(pts),w,h,lonSpan:b.lonSpan,latSpan:b.latSpan,phi:b.phi};}
 /* 天端の検出用の特徴（桁の色の鮮やかさ＋暗さ）を、柱の列の範囲だけ 8bit で持っておく */
-function ovwTopFeat(b,lonLo,lonHi){
+function ovwTopFeat(b,lonLo,lonHi,g){
   const {w,h,data}=b, Hp=h*Math.PI/b.latSpan, rows=Math.min(h,Math.round(h/2+0.36*Hp)+20);
   let x0=Math.max(0,Math.floor(((lonLo-b.phi)/b.lonSpan+0.5)*w)-2), x1=Math.min(w,Math.ceil(((lonHi-b.phi)/b.lonSpan+0.5)*w)+3), fw=x1-x0;
-  if(fw<5)return null; const f=new Uint8Array(rows*fw);
+  if(fw<5)return null; const f=new Uint8Array(rows*fw), sat=new Uint8Array(rows*fw);
   for(let y=0;y<rows;y++)for(let x=0;x<fw;x++){const p=(y*w+x0+x)*4, R=data[p],G=data[p+1],B=data[p+2];
-    const mx=Math.max(R,G,B), mn=Math.min(R,G,B), lum=(R+G+B)/3; let v=Math.min(80,Math.max(0,mx-mn-15))+0.5*Math.min(100,Math.max(0,150-lum)); f[y*fw+x]=Math.round(v);}
-  return {x0,w:fw,rows,data:f,bw:w,bh:h,lonSpan:b.lonSpan,latSpan:b.latSpan,phi:b.phi};
+    const mx=Math.max(R,G,B), mn=Math.min(R,G,B), lum=(R+G+B)/3, sv=Math.min(80,Math.max(0,mx-mn-15)); let v=sv+0.5*Math.min(100,Math.max(0,150-lum)); f[y*fw+x]=Math.round(v);
+    const cl=ovwColCls(R,G,B); sat[y*fw+x]=cl>=1&&cl<=4?255:sv;}   // 255：水位標・看板の色（その下端を天端と取り違えないため）
+  return {x0,w:fw,rows,data:f,sat,bw:w,bh:h,lonSpan:b.lonSpan,latSpan:b.latSpan,phi:b.phi,jrow:g?ovwJointTop(b,lonLo,lonHi,g):null};
 }
-/* 天端の検出：水面からの高さ zlo〜zhi に入る行の範囲で、上が桁（鮮やか・暗い）・下がコンクリートの境目を探す */
-function ovwTopDetect(tf,wl,zc,zlo,zhi){
+/* 型枠目地による天端の位置（帯の行）。柱の中央 6 割の列で、胴体（カメラの高さ付近）の縦目地の並びを手本にして上へたどり、
+   目地の並びが途切れた行を天端とする。円弧部は型枠の幅が狭く、細かい縦目地が天端まで続き、桁・支承には続かないため。
+   見つからなければ null（水際線と色の境目だけで探す） */
+function ovwJointTop(b,lonLo,lonHi,g){
+  const {w,h,data}=b, pd=h/(b.latSpan/D2R)/2, hor=h/4;           // 半分の解像度で扱う（1° ≒ 5.4 画素）
+  const c=(lonLo+lonHi)/2, hw=(lonHi-lonLo)/2*0.6;
+  const xa=Math.max(0,Math.floor(((c-hw-b.phi)/b.lonSpan+0.5)*w/2)), xb=Math.min(Math.floor(w/2)-1,Math.floor(((c+hw-b.phi)/b.lonSpan+0.5)*w/2));
+  const ya=Math.max(0,Math.round(hor-46*pd)), yb=Math.min(Math.floor(h/2)-1,Math.round(hor+10*pd)), cw=xb-xa+1, ch=yb-ya+1;
+  if(cw<20||ch<60)return null;
+  const L=new Float32Array(cw*ch), sg=new Uint8Array(cw*ch);
+  for(let y=0;y<ch;y++)for(let x=0;x<cw;x++){let s=0,col=0; for(let dy=0;dy<2;dy++)for(let dx=0;dx<2;dx++){const p=((2*(y+ya)+dy)*w+2*(x+xa)+dx)*4, R=data[p],G=data[p+1],B=data[p+2];
+      s+=R+G+B; const mx=Math.max(R,G,B), mn=Math.min(R,G,B); if((mx-mn)/(mx+1)>0.4&&!(B>=R&&B>=G-10))col=1;}   // 鮮やかな色（青系の桁は除く）＝水位標・看板・赤い桁
+    L[y*cw+x]=s/12; sg[y*cw+x]=col;}
+  // 色の所を ±3 画素広げ、縦 ±3 行に色の無い所だけを使う
+  const sd=new Uint8Array(cw*ch); for(let y=0;y<ch;y++)for(let x=0;x<cw;x++){if(!sg[y*cw+x])continue; for(let dy=-3;dy<=3;dy++)for(let dx=-3;dx<=3;dx++){const yy=y+dy,xx=x+dx; if(yy>=0&&yy<ch&&xx>=0&&xx<cw)sd[yy*cw+xx]=1;}}
+  const Bv=new Float32Array(cw*ch), hp=new Float32Array(cw*ch), ok=new Uint8Array(cw*ch);
+  for(let x=0;x<cw;x++)for(let y=0;y<ch;y++){let s=0,n=0,bad=0; for(let d=-3;d<=3;d++){const yy=Math.min(ch-1,Math.max(0,y+d)); s+=L[yy*cw+x]; n++; bad|=sd[yy*cw+x];} Bv[y*cw+x]=s/n; ok[y*cw+x]=bad?0:1;}
+  for(let y=0;y<ch;y++)for(let x=0;x<cw;x++){let s=0,n=0; for(let d=-4;d<=4;d++){const xx=Math.min(cw-1,Math.max(0,x+d)); s+=Bv[y*cw+xx]; n++;} hp[y*cw+x]=Bv[y*cw+x]-s/n;}
+  // 手本の行の範囲：水平より 1° 下〜12° 下（水際線の 3° 上まで）。取れなければ水平の 8° 上〜水平
+  const wr=[]; for(let i=0;i<g.n;i++)if(g.L[i]>=c-hw&&g.L[i]<=c+hw)wr.push((0.5-g.T[i]/b.latSpan)*h/2-ya); const wlr=wr.length?ovwMed(wr):1e9;
+  let ra=Math.round(hor+pd-ya), rb=Math.round(Math.min(hor+12*pd,wlr+ya-3*pd)-ya);
+  if(rb-ra<4*pd){ra=Math.round(hor-8*pd-ya); rb=Math.round(hor-ya);} ra=Math.max(0,ra); rb=Math.min(ch-1,rb); if(rb-ra<10)return null;
+  const ref=new Float32Array(cw), rn=new Float32Array(cw);
+  for(let y=ra;y<=rb;y++)for(let x=0;x<cw;x++)if(ok[y*cw+x]){ref[x]+=hp[y*cw+x]; rn[x]++;}
+  for(let x=0;x<cw;x++)ref[x]=rn[x]?ref[x]/rn[x]:0;
+  const corr=new Float32Array(ch).fill(NaN);
+  for(let y=0;y<=rb;y++){let best=-2; for(let s=-2;s<=2;s++){let n=0,sa=0,sb=0; const idx=[];
+      for(let x=0;x<cw;x++){const xs=x-s; if(xs<0||xs>=cw||!ok[y*cw+xs]||!rn[x])continue; n++; sa+=hp[y*cw+xs]; sb+=ref[x];}
+      if(n<0.3*cw)continue; const ma=sa/n, mb=sb/n; let ab=0,aa=0,bb=0;
+      for(let x=0;x<cw;x++){const xs=x-s; if(xs<0||xs>=cw||!ok[y*cw+xs]||!rn[x])continue; const a=hp[y*cw+xs]-ma, q=ref[x]-mb; ab+=a*q; aa+=a*a; bb+=q*q;}
+      best=Math.max(best,ab/Math.sqrt(aa*bb+1e-6));}
+    if(best>-2)corr[y]=best;}
+  const cs=new Float32Array(ch).fill(NaN); for(let y=4;y<ch-4;y++){let s=0; for(let d=-4;d<=4;d++)s+=corr[y+d]; cs[y]=s/9;}   // NaN を含めば NaN
+  // 胴体から上へたどり、目地の並びが途切れた（相関が下がった、または色で覆われた）行を探す
+  let top=-1; for(let r=ra;r>8;r--){if(isNaN(cs[r])){top=r;break;} if(cs[r]<0.25){let s=0,n=0; for(let k=Math.max(0,r-15);k<r;k++)if(!isNaN(cs[k])){s+=cs[k];n++;} if(!n||s/n<0.2){top=r;break;}}}
+  if(top<40)return null;   // 探す範囲の上端付近（見上げ 39° より上）は使わない
+  // 天端には明るさの段差があること（胴体の中の汚れ・影で目地が見えにくい所を除く）
+  let a=0,bq=0,na=0,nb=0; for(let y=top-6;y<top-1;y++)for(let x=0;x<cw;x++){a+=Bv[y*cw+x];na++;} for(let y=top+1;y<top+6;y++)for(let x=0;x<cw;x++){bq+=Bv[y*cw+x];nb++;}
+  if(Math.abs(a/na-bq/nb)<2.5)return null;
+  return 2*(top+ya)+1;
+}
+/* 天端の検出：水面からの高さ zlo〜zhi に入る行の範囲で、上が桁（鮮やか・暗い）・下がコンクリートの境目を探す。
+   型枠目地で天端の行が分かっている画像は、その高さの ±30 cm に絞る。needJ のときは目地で分かった画像だけ */
+function ovwTopDetect(tf,wl,zc,zlo,zhi,needJ){
   const g=ovwGood(wl,8); if(!g||g.n<30||!(zc>0.05))return null;
   const {bw,bh,latSpan,lonSpan,phi}=tf, Hp=bh*Math.PI/latSpan;
+  if(tf.jrow!=null){const c=(g.lo+g.hi)/2, hw=(g.hi-g.lo)/2*0.6, rr=[]; for(let i=0;i<g.n;i++)if(g.L[i]>=c-hw&&g.L[i]<=c+hw&&-g.T[i]>0.002)rr.push(zc/Math.tan(-g.T[i]));
+    if(rr.length){const zJ=zc+ovwMed(rr)*Math.tan((0.5-(tf.jrow+0.5)/bh)*latSpan); tf.zJ=zJ; zlo=Math.max(zlo,zJ-0.3); zhi=Math.min(zhi,zJ+0.3);} else if(needJ)return null;}
+  else if(needJ)return null;
+  if(!(zhi>zlo+0.05))return null;
   const colOf=lon=>((lon-phi)/lonSpan+0.5)*bw-0.5;
-  const xa=Math.max(tf.x0,Math.ceil(colOf(g.lo))), xb=Math.min(tf.x0+tf.w-1,Math.floor(colOf(g.hi))), Wn=xb-xa+1; if(Wn<30)return null;
+  // 柱の両端は桁の影・支承と重なりやすいので、中央 8 割の列だけで探す
+  const gm=(g.hi-g.lo)*0.1, xa=Math.max(tf.x0,Math.ceil(colOf(g.lo+gm))), xb=Math.min(tf.x0+tf.w-1,Math.floor(colOf(g.hi-gm))), Wn=xb-xa+1; if(Wn<30)return null;
   const top=new Float32Array(Wn), bot=new Float32Array(Wn); let lo=1e9,hi=-1e9;
   const rowOf=(z,rho)=>(0.5-Math.atan2(z-zc,rho)/latSpan)*bh-0.5;
   for(let j=0;j<Wn;j++){const lon=phi+((xa+j+0.5)/bw-0.5)*lonSpan, dl=-ovwInterp(g,lon); if(!(dl>0.002)){top[j]=1e9;bot[j]=-1e9;continue;}
-    const rho=zc/Math.tan(dl); top[j]=rowOf(zhi,rho); bot[j]=rowOf(zlo,rho); lo=Math.min(lo,top[j]); hi=Math.max(hi,bot[j]);}
-  lo=Math.round(Math.max(15,lo)); hi=Math.round(Math.min(bh/2+0.36*Hp,hi,tf.rows-16)); if(hi-lo<30)return null;
-  const r0=lo-15, T=hi+15-r0, n=10, A=new Float32Array(T*Wn), fw=tf.w, F=tf.data;
-  for(let t=0;t<T;t++)for(let j=0;j<Wn;j++){const x=xa+j-tf.x0, o=(r0+t)*fw, xm=x>0?x-1:0, xp=x<fw-1?x+1:fw-1; A[t*Wn+j]=(F[o+xm]+F[o+x]+F[o+xp])/3;}
-  const Tn=T-2*n; if(Tn<5)return null; const sc=new Float32Array(Tn*Wn), cs=new Float64Array(T+1);
-  for(let j=0;j<Wn;j++){cs[0]=0; for(let t=0;t<T;t++)cs[t+1]=cs[t]+A[t*Wn+j];
-    for(let q=0;q<Tn;q++){const t=q+n,row=t+r0; sc[j*Tn+q]=(row>=top[j]&&row<=bot[j])?(cs[t]-cs[t-n])/n-(cs[t+n]-cs[t])/n:-1e3;}}
+    // 見上げる角度が 45° を超える所は使わない（真上に近いほど、わずかな角度の誤差で高さが大きく狂うため）
+    const rho=zc/Math.tan(dl), rMax=(0.5-45*D2R/latSpan)*bh-0.5; top[j]=Math.max(rowOf(zhi,rho),rMax); bot[j]=rowOf(zlo,rho); if(bot[j]<top[j]+3){top[j]=1e9;bot[j]=-1e9;continue;} lo=Math.min(lo,top[j]); hi=Math.max(hi,bot[j]);}
+  lo=Math.round(Math.max(15,lo)); hi=Math.round(Math.min(bh/2+0.36*Hp,hi,tf.rows-16)); if(hi-lo<6)return null;
+  const n=10, r0=lo-n-2, T=hi+n+2-r0, A=new Float32Array(T*Wn), Sa=new Float32Array(T*Wn), Sg=new Float32Array(T*Wn), fw=tf.w, F=tf.data, SF=tf.sat;
+  if(r0<0||r0+T>tf.rows)return null;
+  for(let t=0;t<T;t++)for(let j=0;j<Wn;j++){const x=xa+j-tf.x0, o=(r0+t)*fw, xm=x>0?x-1:0, xp=x<fw-1?x+1:fw-1; A[t*Wn+j]=(F[o+xm]+F[o+x]+F[o+xp])/3; const sm=SF[o+xm], s0=SF[o+x], sp=SF[o+xp]; Sa[t*Wn+j]=(Math.min(80,sm)+Math.min(80,s0)+Math.min(80,sp))/3; Sg[t*Wn+j]=((sm===255)+(s0===255)+(sp===255))/3;}
+  const Tn=T-2*n; if(Tn<5)return null; const sc=new Float32Array(Tn*Wn), cs=new Float64Array(T+1), css=new Float64Array(T+1), csg=new Float64Array(T+1);
+  for(let j=0;j<Wn;j++){cs[0]=0; css[0]=0; csg[0]=0; for(let t=0;t<T;t++){cs[t+1]=cs[t]+A[t*Wn+j]; css[t+1]=css[t]+Sa[t*Wn+j]; csg[t+1]=csg[t]+Sg[t*Wn+j];}
+    // 境目の下（柱側）はコンクリート（色が薄い）であること。水位標・看板の色が境目の上下に入る所（看板の下端など）は天端ではない
+    for(let q=0;q<Tn;q++){const t=q+n,row=t+r0; if(!(row>=top[j]&&row<=bot[j])){sc[j*Tn+q]=-1e3;continue;}
+      const satB=(css[t+n]-css[t])/n, sg=(csg[t+n]-csg[t-n])/(2*n);
+      sc[j*Tn+q]=((cs[t]-cs[t-n])/n-(cs[t+n]-cs[t])/n)-1.0*Math.max(0,satB-28)-(sg>0.1&&tf.jrow==null?60:0);}}
   const path=ovwDP(sc,Tn,Wn), ys=new Float32Array(Wn), cf=new Float32Array(Wn);
   for(let j=0;j<Wn;j++){ys[j]=path[j]+n+r0; cf[j]=sc[j*Tn+path[j]];}
   return ovwTrace({w:bw,h:bh,lonSpan,latSpan,phi},xa,ys,cf);
@@ -2401,43 +2466,45 @@ function ovwFit(obs,nF,G,o){
   obs.forEach(q=>{gN[q.g]+=q.lon.length+(q.tl?q.tl.length:0); if(q.gps){gE[q.g]+=q.gps[0];gNo[q.g]+=q.gps[1];gc[q.g]++;} gfl[q.g]=q.f;});
   const useG=[]; for(let g=0;g<G;g++)if(gc[g]){gE[g]/=gc[g];gNo[g]/=gc[g];useG.push(g);}
   const gpsOn=o.gps!==false&&useG.length>=2;
-  const npts=obs.map(q=>q.lon.length+(q.tl?q.tl.length:0)), iW=3,iH=3+nF,iC=iH+G,iT=iC+2*G,iZ=iT+2*nF,NG=iZ+1,iD=NG,NP=NG+2*N;
+  const npts=obs.map(q=>q.lon.length+(q.tl?q.tl.length:0)), iW=3,iH=3+nF,iC=iH+G,iT=iC+2*G,iZ=iT+2*nF,iK=iZ+1,NG=iK+nF,iD=NG,NP=NG+2*N;   // iK：飛行ごとの高度計の倍率（高度計の目盛りの誤差）
   const pw=npts.map(c=>0.02*Math.sqrt(c)/SIG), ph=0.02*Math.sqrt(M/G)/HS, pg=gN.map(c=>0.02*Math.sqrt(c)/SG);
-  const nPen=2*N+G+(gpsOn?2*useG.length:0), R=M+nPen;
-  const free=new Uint8Array(NP).fill(1); if(o.fix){free[0]=0;free[1]=0;} if(!gpsOn)for(let k=iT;k<iZ;k++)free[k]=0; if(!nTop)free[iZ]=0;
+  const pk=0.02*Math.sqrt(M/nF)/0.1, nPen=2*N+G+nF+(gpsOn?2*useG.length:0), R=M+nPen;   // 倍率は 1 ± 0.1 程度
+  const free=new Uint8Array(NP).fill(1); if(o.fix){free[0]=0;free[1]=0;} if(!gpsOn)for(let k=iT;k<iZ;k++)free[k]=0; if(!nTop)free[iZ]=0; if(o.fitK!==true)for(let f=0;f<nF;f++)free[iK+f]=0;   // 倍率は通常は 1 に固定（天端の誤検出に引っ張られやすいため）
   const lb=new Float64Array(NP).fill(-80), ub=new Float64Array(NP).fill(80);
-  lb[0]=0;ub[0]=15;lb[1]=0.3;ub[1]=5;lb[2]=-20;ub[2]=20;lb[iZ]=0.5;ub[iZ]=60;
+  lb[0]=0;ub[0]=15;lb[1]=0.3;ub[1]=5;lb[2]=-20;ub[2]=20;lb[iZ]=0.5;ub[iZ]=60; for(let f=0;f<nF;f++){lb[iK+f]=0.8;ub[iK+f]=1.25;}
   for(let f=0;f<nF;f++){lb[iW+f]=o.wLb[f];ub[iW+f]=o.wUb[f];}
   for(let g=0;g<G;g++){lb[iH+g]=-0.6;ub[iH+g]=0.6;}
   for(let i=0;i<N;i++){lb[iD+2*i]=lb[iD+2*i+1]=-3;ub[iD+2*i]=ub[iD+2*i+1]=3;}
-  const r=new Float64Array(R), Jv=new Float64Array(M*10), Ji=new Int32Array(M*10);
+  const r=new Float64Array(R), Jv=new Float64Array(M*11), Ji=new Int32Array(M*11);
   const evalR=(x,wantJ)=>{const a=x[0],rr=x[1],c=Math.cos(x[2]),s=Math.sin(x[2]);
-    for(let p=0;p<M;p++){const i=Pi[p],q=obs[i],f=q.f,g=q.g, br=Pc[p]+x[iH+g], sb=Math.sin(br), cb=Math.cos(br), rho=(Pz[p]-x[iW+f]-(Pk[p]?x[iZ]:0))/Pt[p];
+    for(let p=0;p<M;p++){const i=Pi[p],q=obs[i],f=q.f,g=q.g, br=Pc[p]+x[iH+g], sb=Math.sin(br), cb=Math.cos(br), rho=(x[iK+f]*Pz[p]-x[iW+f]-(Pk[p]?x[iZ]:0))/Pt[p];
       const X=x[iC+2*g]+x[iD+2*i]+rho*sb, Y=x[iC+2*g+1]+x[iD+2*i+1]+rho*cb, u=c*X+s*Y, v=-s*X+c*Y, au=Math.abs(u), mm=Math.max(au-a,0), hh=Math.hypot(mm,v);
       const sc=Pk[p]?TW*Math.abs(Pt[p]):1;   // 天端の点は「高さの差」（m）で測る（水平に近い視線で距離の誤差が大きくならないように）
       r[p]=(hh-rr)*sc;
-      if(wantJ){const on=hh>1e-12, du=on&&au>a?(mm/hh)*Math.sign(u):0, dv=on?v/hh:0, gX=du*c-dv*s, gY=du*s+dv*c, o9=p*10;
+      if(wantJ){const on=hh>1e-12, du=on&&au>a?(mm/hh)*Math.sign(u):0, dv=on?v/hh:0, gX=du*c-dv*s, gY=du*s+dv*c, o9=p*11;
         Ji[o9]=0;Jv[o9]=on&&au>a?-mm/hh:0; Ji[o9+1]=1;Jv[o9+1]=-1; Ji[o9+2]=2;Jv[o9+2]=du*v-dv*u;
         Ji[o9+3]=iW+f;Jv[o9+3]=-(gX*sb+gY*cb)/Pt[p]; Ji[o9+4]=iH+g;Jv[o9+4]=rho*(gX*cb-gY*sb);
-        Ji[o9+5]=iC+2*g;Jv[o9+5]=gX; Ji[o9+6]=iC+2*g+1;Jv[o9+6]=gY; Ji[o9+7]=iZ;Jv[o9+7]=Pk[p]?Jv[o9+3]:0; Ji[o9+8]=iD+2*i;Jv[o9+8]=gX; Ji[o9+9]=iD+2*i+1;Jv[o9+9]=gY; if(sc!==1)for(let e=0;e<10;e++)Jv[o9+e]*=sc;}}
+        Ji[o9+5]=iC+2*g;Jv[o9+5]=gX; Ji[o9+6]=iC+2*g+1;Jv[o9+6]=gY; Ji[o9+7]=iZ;Jv[o9+7]=Pk[p]?Jv[o9+3]:0; Ji[o9+8]=iK+f;Jv[o9+8]=-Jv[o9+3]*Pz[p]; Ji[o9+9]=iD+2*i;Jv[o9+9]=gX; Ji[o9+10]=iD+2*i+1;Jv[o9+10]=gY; if(sc!==1)for(let e=0;e<11;e++)Jv[o9+e]*=sc;}}
     let k=M;
     for(let i=0;i<N;i++){r[k++]=x[iD+2*i]*pw[i];r[k++]=x[iD+2*i+1]*pw[i];}
     for(let g=0;g<G;g++)r[k++]=x[iH+g]*ph;
+    for(let f=0;f<nF;f++)r[k++]=(x[iK+f]-1)*pk;
     if(gpsOn)for(const g of useG){const f=gfl[g]; r[k++]=(x[iC+2*g]-gE[g]-x[iT+2*f])*pg[g]; r[k++]=(x[iC+2*g+1]-gNo[g]-x[iT+2*f+1])*pg[g];}
-    let cost=0; for(let q=0;q<R;q++){if(q>=M&&q<M+2*N+G){cost+=0.5*r[q]*r[q];continue;} const z=r[q]/fs; cost+=fs*fs*(Math.sqrt(1+z*z)-1);} return cost;};  // 向き・ずれの事前分布は二乗（外れ値扱いしない）
+    let cost=0; for(let q=0;q<R;q++){if(q>=M&&q<M+2*N+G+nF){cost+=0.5*r[q]*r[q];continue;} const z=r[q]/fs; cost+=fs*fs*(Math.sqrt(1+z*z)-1);} return cost;};  // 向き・ずれの事前分布は二乗（外れ値扱いしない）
   // 正規方程式：全体の未知数（NG 個）と、画像ごとの 2×2 のブロック（dd）に分けて解く（シューア補行列）
   const Agg=new Float64Array(NG*NG), gg=new Float64Array(NG), Agd=new Float64Array(N*NG*2), Add=new Float64Array(N*4), gd=new Float64Array(2*N);
   const Sm=new Float64Array(NG*NG), sv=new Float64Array(NG), dlt=new Float64Array(NP);
   const accum=()=>{Agg.fill(0);gg.fill(0);Agd.fill(0);Add.fill(0);gd.fill(0);
-    for(let p=0;p<M;p++){const z=r[p]/fs, wt=1/Math.sqrt(1+z*z), o9=p*10, i=Pi[p], rp=r[p];
-      for(let a=0;a<8;a++){const ka=Ji[o9+a], va=Jv[o9+a]*wt; if(!va)continue; gg[ka]+=va*rp;
-        for(let b=0;b<8;b++)Agg[ka*NG+Ji[o9+b]]+=va*Jv[o9+b];
-        Agd[(i*NG+ka)*2]+=va*Jv[o9+8]; Agd[(i*NG+ka)*2+1]+=va*Jv[o9+9];}
-      const v7=Jv[o9+8]*wt, v8=Jv[o9+9]*wt; gd[2*i]+=v7*rp; gd[2*i+1]+=v8*rp;
-      Add[4*i]+=v7*Jv[o9+8]; Add[4*i+1]+=v7*Jv[o9+9]; Add[4*i+2]+=v8*Jv[o9+8]; Add[4*i+3]+=v8*Jv[o9+9];}
+    for(let p=0;p<M;p++){const z=r[p]/fs, wt=1/Math.sqrt(1+z*z), o9=p*11, i=Pi[p], rp=r[p];
+      for(let a=0;a<9;a++){const ka=Ji[o9+a], va=Jv[o9+a]*wt; if(!va)continue; gg[ka]+=va*rp;
+        for(let b=0;b<9;b++)Agg[ka*NG+Ji[o9+b]]+=va*Jv[o9+b];
+        Agd[(i*NG+ka)*2]+=va*Jv[o9+9]; Agd[(i*NG+ka)*2+1]+=va*Jv[o9+10];}
+      const v7=Jv[o9+9]*wt, v8=Jv[o9+10]*wt; gd[2*i]+=v7*rp; gd[2*i+1]+=v8*rp;
+      Add[4*i]+=v7*Jv[o9+9]; Add[4*i+1]+=v7*Jv[o9+10]; Add[4*i+2]+=v8*Jv[o9+9]; Add[4*i+3]+=v8*Jv[o9+10];}
     let k=M; const wOf=q=>1/Math.sqrt(1+(r[q]/fs)**2);
     for(let i=0;i<N;i++)for(let c=0;c<2;c++){const w=1; Add[4*i+3*c]+=w*pw[i]*pw[i]; gd[2*i+c]+=w*pw[i]*r[k]; k++;}
     for(let g=0;g<G;g++){const w=1, j=iH+g; Agg[j*NG+j]+=w*ph*ph; gg[j]+=w*ph*r[k]; k++;}
+    for(let f=0;f<nF;f++){const j=iK+f; Agg[j*NG+j]+=pk*pk; gg[j]+=pk*r[k]; k++;}
     if(gpsOn)for(const g of useG){const f=gfl[g];
       for(let c=0;c<2;c++){const w=wOf(k), p2=pg[g]*pg[g]*w, jc=iC+2*g+c, jt=iT+2*f+c;
         Agg[jc*NG+jc]+=p2; Agg[jt*NG+jt]+=p2; Agg[jc*NG+jt]-=p2; Agg[jt*NG+jc]-=p2; gg[jc]+=w*pg[g]*r[k]; gg[jt]-=w*pg[g]*r[k]; k++;}}};
@@ -2479,7 +2546,7 @@ function ovwFit(obs,nF,G,o){
   let best=null;
   const starts=o.phi0!=null?[o.phi0]:[0,45,90,135].map(v=>v*D2R), a0=o.a0!=null?o.a0:1;
   for(const st of starts){const x=new Float64Array(NP);
-    x[0]=o.fix?o.fix.a:a0; x[1]=o.fix?o.fix.r:1; x[2]=st; x[iZ]=o.ztInit||8; for(let f=0;f<nF;f++)x[iW+f]=o.wInit[f];
+    x[0]=o.fix?o.fix.a:a0; x[1]=o.fix?o.fix.r:1; x[2]=st; x[iZ]=o.ztInit||8; for(let f=0;f<nF;f++)x[iK+f]=1; for(let f=0;f<nF;f++)x[iW+f]=o.wInit[f];
     const cc0=ccInit(x[0],x[1],st); for(let g=0;g<G;g++){x[iC+2*g]=cc0[g][0];x[iC+2*g+1]=cc0[g][1];}
     if(gpsOn)for(let f=0;f<nF;f++){const gs=useG.filter(g=>gfl[g]===f); if(gs.length){x[iT+2*f]=gs.reduce((p,g)=>p+cc0[g][0]-gE[g],0)/gs.length; x[iT+2*f+1]=gs.reduce((p,g)=>p+cc0[g][1]-gNo[g],0)/gs.length;}}
     if(o.init&&o.init.length===NP)x.set(o.init);
@@ -2490,7 +2557,7 @@ function ovwFit(obs,nF,G,o){
   let gpsRms=null; if(gpsOn){let s2=0; for(const g of useG){const f=gfl[g]; s2+=(x[iC+2*g]-gE[g]-x[iT+2*f])**2+(x[iC+2*g+1]-gNo[g]-x[iT+2*f+1])**2;} gpsRms=Math.sqrt(s2/useG.length);}
   return {a:x[0],r:x[1],phi:((x[2]%Math.PI)+Math.PI)%Math.PI,w:Array.from(x.subarray(iW,iW+nF)),hg:Array.from(x.subarray(iH,iH+G)),
     cam:obs.map((q,i)=>[x[iC+2*q.g]+x[iD+2*i],x[iC+2*q.g+1]+x[iD+2*i+1]]),
-    per:per.map(v=>ovwMed(v)),perTop:pt.map(v=>v.length?ovwMed(v):null),Zt:nTop?x[iZ]:null,t:gpsOn?Array.from({length:nF},(_,f)=>[x[iT+2*f],x[iT+2*f+1]]):null,resMed:ovwMed(Array.from(best.res).filter((_,p)=>!Pk[p]).map(Math.abs)),cost:best.cost,x:Array.from(x),gpsRms,gpsOn,nIt};
+    per:per.map(v=>ovwMed(v)),perTop:pt.map(v=>v.length?ovwMed(v):null),Zt:nTop?x[iZ]:null,k:Array.from(x.subarray(iK,iK+nF)),t:gpsOn?Array.from({length:nF},(_,f)=>[x[iT+2*f],x[iT+2*f+1]]):null,resMed:ovwMed(Array.from(best.res).filter((_,p)=>!Pk[p]).map(Math.abs)),cost:best.cost,x:Array.from(x),gpsRms,gpsOn,nIt};
 }
 /* 初期値をいくつか変えて解き、最もよく当てはまる解を採る（平面部の長さ・向きには局所解が多い）。
    まず点を間引いて短く解き、良い2つだけを全部の点で解き直す */
@@ -2579,6 +2646,59 @@ function ovwFaces(m){
   const comp=(un,vn)=>{const nx=c*un-s*vn, ny=s*un+c*vn, b=((Math.atan2(nx,ny)/D2R)+360)%360; return ['北','北東','東','南東','南','南西','西','北西'][Math.floor((b+22.5)/45)%8];};
   return [[`平面部（${comp(0,-1)}面）`,'flat'],[`円弧部（${comp(1,0)}端）`,'arc'],[`平面部（${comp(0,1)}面）`,'flat'],[`円弧部（${comp(-1,0)}端）`,'arc']]
     .map(([name,kind],i)=>({name,kind,q0:q[i],q1:q[i+1],M:0.3}));
+}
+/* ⑤ 水位標・看板などの色の目印で、画像どうしの位置（横 ds・縦 dz）をそろえる。
+   各画像の色の画素を面の座標（周長 s・高さ z、4 cm の升目）に置き、他の画像（水際線で位置が決まった画像）が作る目印の図と最も重なるずらし量を探す */
+const OVW_SG=0.04, OVW_SR=15;   // 升目の大きさ（m）、探すずらしの範囲（升目の数：±60 cm）
+function ovwSignCells(m,im,cp){
+  if(!cp||!im.cor||im.cx==null)return null; const L=ovwPerim(m), nS=Math.round(L/OVW_SG), tab=[];
+  for(let i=0;i<Math.ceil(L/0.01);i++){const s=i*0.01, v=ovwView(m,im,s); if(v.vis>0.15&&Math.abs(v.psi)<60*D2R)tab.push([v.psi,s,v.hd]);}
+  if(tab.length<10)return null; tab.sort((p,q)=>p[0]-q[0]);
+  const look=lon=>{if(lon<tab[0][0]||lon>tab[tab.length-1][0])return null; let a=0,b=tab.length-1; while(b-a>1){const c=(a+b)>>1; if(tab[c][0]<=lon)a=c; else b=c;}
+    const t=tab[b][0]>tab[a][0]?(lon-tab[a][0])/(tab[b][0]-tab[a][0]):0; let ds=tab[b][1]-tab[a][1]; if(Math.abs(ds)>0.5)return null; return [tab[a][1]+ds*t,tab[a][2]+(tab[b][2]-tab[a][2])*t];};
+  const mk=ovwMaskOf(im,0); if(!mk)return null; const cells=new Map(), P=cp.pts;
+  for(let i=0;i<P.length;i+=3){const lon=cp.phi+((P[i]+0.5)/cp.w-0.5)*cp.lonSpan, lat=(0.5-(P[i+1]+0.5)/cp.h)*cp.latSpan;
+    if(Math.abs(lat)>60*D2R||!ovwMaskOK(mk,lon,lat))continue; const r=look(lon); if(!r)continue;
+    const s=((r[0]%L)+L)%L, zz=im.zc+r[1]*Math.tan(lat), z=im.cor.zcp+(zz-im.zc)*ovwK(im.cor,s); if(z<0.05||z>m.ZT)continue;
+    const key=(Math.floor(s/OVW_SG)*1024+Math.floor(z/OVW_SG))*8+P[i+2]; cells.set(key,(cells.get(key)||0)+1);}
+  // 色の塊の縁だけを使う（塊の内側は、ずらしてもほとんど重なるため位置が決まらない）
+  const full=new Set(); cells.forEach((n,k)=>{if(n>=2)full.add(k);});
+  const out=[]; full.forEach(k=>{const nb=[k+8,k-8,k+8*1024,k-8*1024]; if(nb.some(q=>!full.has(q)))out.push(k);});
+  return out.length?{keys:out,nS}:null;
+}
+function ovwSignAlign(m,cols,quiet){
+  if(!cols||!cols.length)return;
+  const N=m.imgs.length, C=m.imgs.map((im,k)=>im.use&&cols[k]?ovwSignCells(m,im,cols[k]):null);
+  const ok=k=>C[k]&&C[k].keys.length>=40; if(m.imgs.filter((_,k)=>ok(k)).length<3)return;
+  const nS=C.find(c=>c).nS, R=8;   // 2枚ずつ照合するずらしの範囲：±8 升目（±32 cm）
+  const dec=q=>{const cls=q%8, r=(q-cls)/8, zi=r%1024; return [(r-zi)/1024,zi,cls];};
+  const P=C.map(c=>c?c.keys.map(dec):null), sets=C.map(c=>c?new Set(c.keys):null);
+  const bb=P.map(p=>{if(!p)return null; let a=1e9,b=-1e9,c=1e9,d=-1e9; p.forEach(([si,zi])=>{a=Math.min(a,si);b=Math.max(b,si);c=Math.min(c,zi);d=Math.max(d,zi);}); return [a,b,c,d];});
+  const pairs=[];
+  for(let i=0;i<N;i++)for(let j=i+1;j<N;j++){if(!ok(i)||!ok(j))continue; const A=bb[i],B=bb[j];
+    if(A[1]+R<B[0]||B[1]+R<A[0]||A[3]+R<B[2]||B[3]+R<A[2])continue;
+    const pi=P[i].length>800?P[i].filter((_,t)=>t%Math.ceil(P[i].length/800)===0):P[i], Sj=sets[j];
+    const sc=new Float32Array((2*R+1)**2);
+    for(let a=-R;a<=R;a++)for(let b=-R;b<=R;b++){let n=0; for(const [si,zi,cl] of pi){const sw=((si+a)%nS+nS)%nS; if(Sj.has((sw*1024+zi+b)*8+cl))n++;} sc[(a+R)*(2*R+1)+b+R]=n;}
+    let bi=0; for(let t=1;t<sc.length;t++)if(sc[t]>sc[bi])bi=t; const ba=Math.floor(bi/(2*R+1))-R, bz=bi%(2*R+1)-R, best=sc[bi];
+    let sec=0; for(let t=0;t<sc.length;t++){const a=Math.floor(t/(2*R+1))-R, b=t%(2*R+1)-R; if(Math.abs(a-ba)>2||Math.abs(b-bz)>2)sec=Math.max(sec,sc[t]);}
+    if(best>=Math.max(25,0.2*pi.length)&&best>=1.4*sec&&Math.abs(ba)<R&&Math.abs(bz)<R)pairs.push({i,j,ds:ba*OVW_SG,dz:bz*OVW_SG,w:best});}
+  if(!pairs.length)return;
+  // ずらし量 o を、2枚ずつのずれ（o_j − o_i ＝ 照合したずれ）に合うよう最小二乗で求める。水際線で合わせた画像は 0 に近く、手で合わせた画像は動かさない
+  const man=k=>!!(m.imgs[k].pairs&&m.imgs[k].pairs.length), base=m.imgs.map(im=>[im.ds||0,im.dz||0]);
+  const lam=m.imgs.map((im,k)=>man(k)?1e6:im.fitted?30:1), ts=m.imgs.map((im,k)=>man(k)?-base[k][0]:0), tz=m.imgs.map((im,k)=>man(k)?-base[k][1]:0), os=ts.slice(), oz=tz.slice();
+  let use=pairs.map(()=>true);
+  for(let pass=0;pass<2;pass++){
+    for(let it=0;it<200;it++)for(let k=0;k<N;k++){let ws=lam[k],ss=lam[k]*ts[k],sz=lam[k]*tz[k];
+      pairs.forEach((p,t)=>{if(!use[t])return; const w=Math.min(p.w,200)/100; if(p.i===k){ws+=w;ss+=w*(os[p.j]-p.ds);sz+=w*(oz[p.j]-p.dz);} else if(p.j===k){ws+=w;ss+=w*(os[p.i]+p.ds);sz+=w*(oz[p.i]+p.dz);}});
+      os[k]=ss/ws; oz[k]=sz/ws;}
+    use=pairs.map(p=>Math.hypot(os[p.j]-os[p.i]-p.ds,oz[p.j]-oz[p.i]-p.dz)<0.1);}
+  // 照合したずれ ds は「i の目印を ds ずらすと j と重なる」＝ j の位置は i より −ds。o は各画像に足すずらし量
+  let moved=0,mx=0;
+  m.imgs.forEach((im,k)=>{if(man(k)||!C[k])return; const a=-os[k], b=-oz[k]; if(Math.hypot(a,b)<0.02)return;
+    // 目印の位置は ds・dz を入れずに求めているので、そのまま置き換える
+    im.ds=a; im.dz=b; im.autoOff=true; moved++; mx=Math.max(mx,Math.hypot(a,b));});
+  if(moved){m.rev=(m.rev||0)+1; if(!quiet)log(`水位標・看板の色の目印（${pairs.filter((_,t)=>use[t]).length} 組の画像の照合）で ${moved} 枚の位置を合わせました（最大 ${fmt(mx*100,0)} cm）`);}
 }
 /* ④ 面ごとの合成。まず粗い格子（1.5 cm）で各位置の担当画像を決め（面に正対した画像を優先）、細い切れ端を隣の画像に寄せ、
    担当の境目を 4 cm ほどぼかす。その重みで、元画像から細かい画素寸法で描く */
@@ -2683,11 +2803,11 @@ function ovwSolve(m,quiet,opt){ opt=opt||{};
     else if(ccOf.has(im.g)){const c=ccOf.get(im.g); im.cx=c.reduce((p,q)=>p+q[0],0)/c.length; im.cy=c.reduce((p,q)=>p+q[1],0)/c.length;}
     else if(im.gps&&fit.t){const t=fit.t[fi>=0?fi:0]; im.cx=im.gps[0]+t[0]; im.cy=im.gps[1]+t[1];}   // 同じ列の画像がない：GPS の位置（ずれは推定値で補正）
     else im.cx=null;
-    const wf=fi>=0?fit.w[fi]:fit.w.reduce((p,q)=>p+q,0)/fit.w.length;
-    im.hb=im.cen+(gi>=0?fit.hg[gi]:0); im.zc=im.z!=null?im.z-wf:null;
+    const av=a=>a.reduce((p,q)=>p+q,0)/a.length, wf=fi>=0?fit.w[fi]:av(fit.w), kf=fi>=0?fit.k[fi]:av(fit.k);
+    im.hb=im.cen+(gi>=0?fit.hg[gi]:0); im.zc=im.z!=null?kf*im.z-wf:null;   // 高度計の値に倍率をかけて、水面からの高さに
     im.approx=!im.excl&&i<0&&im.cx!=null&&im.zc!=null&&im.zc>0.05;   // 仮の位置（同じ列の位置と高度計の高さ）。対応点で直して使う
     im.why=im.excl?'手動で除外':i>=0?'':drop.includes(k)?'水際線が全体と合わない':!ovwGood(im.wl,8)||ovwGood(im.wl,8).n<30?'水際線を検出できない':'位置を決められない';});
-  Object.assign(m,{a:fit.a,r:fit.r,phi:fit.phi,w:fit.w,flights:fl,resMed:fit.resMed,gpsRms:fit.gpsRms,Zt:fit.Zt});
+  Object.assign(m,{a:fit.a,r:fit.r,phi:fit.phi,w:fit.w,kAlt:fit.k,flights:fl,resMed:fit.resMed,gpsRms:fit.gpsRms,Zt:fit.Zt});
   if(!quiet){const ax=((90-m.phi/D2R)%180+180)%180;
     log(`断面：幅 ${fmt(2*(m.a+m.r),2)} m・厚さ ${fmt(2*m.r,2)} m${m.fix?'（入力した値で固定）':'（画像から推定・参考値）'}・長手方向の向き ${fmt(ax,0)}°（北から時計回り）`);
     if(!m.fix)log('注意：平面部の長さ（幅）は、水際線だけでは決まりにくく、実際より長く推定されることがあります。図面または実測の幅・厚さがあれば「寸法の決め方：手入力」で入れてください。');
@@ -2695,18 +2815,27 @@ function ovwSolve(m,quiet,opt){ opt=opt||{};
   return {drop};
 }
 /* 天端の検出（1回目：広い範囲で全画像の天端の高さの中央値を求め、2回目：その ±0.8 m で探し直す） */
-function ovwDetectTops(m,feats,quiet){
+function ovwDetectTops(m,feats,quiet,win){ win=win||0.8;
   const ims=m.imgs.filter((im,k)=>feats[k]&&im.cx!=null&&im.zc>0.05&&!im.topManual);
   const zcMax=Math.max(...m.imgs.filter(im=>im.fitted).map(im=>im.zc)), zs=[];
   const zOf=(im,tr)=>{const g=ovwGood(tr,10), w=ovwGood(im.wl,8); if(!g||g.n<20||!w)return NaN; const v=[];
     for(let i=0;i<g.n;i++){const dl=-ovwInterp(w,g.L[i]); if(dl>0.002)v.push(im.zc+im.zc/Math.tan(dl)*Math.tan(g.T[i]));} return ovwMed(v);};
-  ims.forEach(im=>{const t=ovwTopDetect(feats[m.imgs.indexOf(im)],im.wl,im.zc,zcMax-2.5,zcMax+4); const z=t?zOf(im,t):NaN; if(isFinite(z))zs.push(z);});
-  const Z0=ovwMed(zs); if(!isFinite(Z0)){if(quiet)return; log('天端（桁との境目）を検出できませんでした。高さは水際線だけで合わせます。');return;}
-  m.Z0=Z0; let ok=0; ims.forEach(im=>{im.top=ovwTopDetect(feats[m.imgs.indexOf(im)],im.wl,im.zc,Z0-0.8,Z0+0.8); if(im.top)ok++;});
-  if(!quiet)log(`天端（桁・支承との境目）：${ok} 枚で検出`);
+  ims.forEach(im=>{const t=ovwTopDetect(feats[m.imgs.indexOf(im)],im.wl,im.zc,zcMax-2.5,zcMax+4,true); const z=t?zOf(im,t):NaN; if(isFinite(z)){zs.push(z);}});
+  // 最も多くの画像が集まる高さ（±25 cm）を天端とする（看板や目地の取り違えに引っ張られないように）
+  let Z0=NaN, bn=0; zs.forEach(z=>{const c=zs.filter(v=>Math.abs(v-z)<=0.25); if(c.length>bn){bn=c.length; Z0=ovwMed(c);}});
+  if(!isFinite(Z0)){if(quiet)return; log('天端（桁との境目）を検出できませんでした。高さは水際線だけで合わせます。');return;}
+  m.Z0=Z0; let ok=0, cut=0;
+  ims.forEach(im=>{im.top=ovwTopDetect(feats[m.imgs.indexOf(im)],im.wl,im.zc,Z0-win,Z0+win,true); if(!im.top)return;   // 型枠目地の途切れで天端を確かめられた画像だけ使う（桁の錆の境・看板への取り違えを防ぐ）
+    // 天端は水平：全体の高さから 25 cm 以上外れた所（桁の錆の境などに逸れた所）は使わない
+    const w=ovwGood(im.wl,8), t=im.top; for(let i=0;i<t.lat.length;i++){if(!(t.cf[i]>10)||t.lat[i]==null)continue; const l=t.l0+i*t.dl, dl=-ovwInterp(w,l); if(!(dl>0.002))continue;
+      const z=im.zc+im.zc/Math.tan(dl)*Math.tan(t.lat[i]); if(Math.abs(z-Z0)>0.25){t.cf[i]=-1;cut++;}}
+    const g=ovwGood(t,10); if(!g||g.n<20)im.top=null; else ok++;});
+  window.OVW_JR=feats.map(f=>f?[f.jrow,f.zJ]:null);
+  if(!quiet)log(`天端（桁・支承との境目）：${ok} 枚で検出（型枠目地の縦線が途切れる位置で確かめた画像だけを使用）`);
 }
 /* 天端の高さ（全画像の中央値）・画像ごとの高さ合わせ・4面の範囲 */
 function ovwFinish(m){
+  if(OVU.col&&OVU.col.some(c=>c))m.imgs.forEach(im=>{if(im.autoOff&&!(im.pairs&&im.pairs.length)){im.ds=0;im.dz=0;im.autoOff=false;}});   // 目印での自動の位置合わせはやり直す
   const zt=[]; m.imgs.forEach(im=>{if(!im.fitted||!im.top||im.cx==null)return; const t=ovwTopz(m,im,im.top,10); if(t){const v=ovwMed(t); if(isFinite(v))zt.push(v);}});
   m.ZTOP=zt.length?ovwMed(zt):null;
   if(m.ZTOP==null){const zc=m.imgs.filter(im=>im.fitted).map(im=>im.zc); m.ZTOP=Math.max(...zc)+1.0; log(`天端が見つからないため、図の上端を水面から ${fmt(m.ZTOP,1)} m とします`);}
@@ -2715,6 +2844,7 @@ function ovwFinish(m){
     if(!im.cor&&im.approx)im.cor=ovwColcorFlat(m,im);
     im.use=!im.excl&&(im.fitted||im.approx)&&!!im.cor; if(im.use){if(im.fitted)nc++; else na++;}});
   log(`高さ合わせ：水際線＝0 m、天端＝${fmt(m.ZTOP,2)} m として ${nc} 枚の高さを列ごとに合わせました`);
+  if(window.OVW_SIGN)ovwSignAlign(m,OVU.col);   // 試験中（2D のずらしだけでは合わないため、通常は使わない）
   if(na)log(`水際線が合わない画像 ${na} 枚は、同じ列の位置と高度計の高さで仮に置きました（合成では他の画像を優先します。ずれていれば「対応点」で直してください）`);
   m.rev=(m.rev||0)+1;
 }
@@ -2723,13 +2853,15 @@ async function ovwRegister(n,names,getSrc,noses,alts,seg,courseOf,panoW,locked,o
   const manual=$('#o-pwm').value==='manual';
   if(manual&&!(o.pw>0.5&&o.pt>0.3&&o.pw>=o.pt))throw new Error('橋脚の幅と厚さを入力してください（幅 ≧ 厚さ）。');
   const m={ver:1,imgs:[],fix:manual?{a:(o.pw-o.pt)/2,r:o.pt/2}:null,rev:0};
+  OVU.col=new Array(n).fill(null);
   const feats=new Array(n).fill(null), g0=S.gps?Math.max(0,S.gps.findIndex(v=>v)):0;
   log('各画像で水際線（柱と水面の境目）を検出しています…');
   for(let k=0;k<n;k++){prog(0.5*k/n); await sleep();
     const cen=(locked?panoW[k]:noses[k])*D2R, bphi=locked?angDiff(noses[k],panoW[k])*D2R:0;
     const src=await getSrc(k); const b=getWallBand(src,bphi,OVW_DW,OVW_LAT); src.close&&src.close();
     const wl=ovwWaterline(b), g=ovwGood(wl,8);
-    if(g&&g.n>=30)feats[k]=ovwTopFeat(b,g.lo,g.hi);
+    if(g&&g.n>=30)feats[k]=ovwTopFeat(b,g.lo,g.hi,g);
+    OVU.col[k]=ovwColPts(b,g&&g.n>=30?g:{lo:-55*D2R,hi:55*D2R});   // 水位標などの色の目印（保存はしない）
     const gp=S.gps&&S.gps.length===n&&S.gps[k]&&S.gps[g0]?[Math.round((S.gps[k][1]-S.gps[g0][1])*111320*Math.cos(S.gps[g0][0]*D2R)*100)/100,Math.round((S.gps[k][0]-S.gps[g0][0])*110540*100)/100]:null;
     m.imgs.push({name:names[k],f:seg[k],g:courseOf[k],z:alts[k],cen,bphi,wl,top:null,excl:false,ds:0,dz:0,gps:gp});
     ovwThumb(k,names[k],b,wl,g&&g.n>=30?`<span class="chip ok">水際線 ${Math.round(100*g.n/wl.lat.length)}%</span>`:'<span class="chip bad">水際線なし</span>');
@@ -2744,7 +2876,7 @@ async function ovwRegister(n,names,getSrc,noses,alts,seg,courseOf,panoW,locked,o
       if(zt!=null&&Math.abs(ovwWrap(2*(m.phi-ph)))/2<1*D2R&&Math.abs(m.Zt-zt)<0.05)break;}}
   prog(0.74); await sleep();
   ovwSolve(m,false,m.Zt!=null?{phis:[m.phi]}:{});   // 仕上げ：天端の重みを下げ、向きはここまでの値の近くで解く
-  ovwDetectTops(m,feats); feats.fill(null);
+  ovwDetectTops(m,feats,false,0.4); feats.fill(null);
   ovwFinish(m);
   m.imgs.forEach((im,k)=>{if(!im.use)setThumbStatus(k,`<span class="chip bad">${im.why||'除外'}</span>`); else setThumbStatus(k,im.approx?'<span class="chip warn">仮の位置</span>':`<span class="chip ok">使用</span>${im.top?'':'<span class="chip warn">天端なし</span>'}`);});
   S.ovm=m;
@@ -4463,7 +4595,7 @@ const HELP=[
  {sel:'[data-tool="measure"]',at:'seg',t:'距離を測る・範囲を指定・傾きを補正',b:'<b>距離を測る</b>：2点をタップすると実寸を表示します。既知の寸法（目地の間隔・柱の幅など）を測って「実寸」に入れると、縮尺を補正できます。<br><b>範囲を指定</b>：必要な部分だけを囲んで、その範囲を細かく合成し直します。<br><b>傾きを補正</b>：まっすぐな線に沿って2点をタップし、図の向きを直します。'},
  {sel:'#m-true',at:'after',t:'実寸',b:'測った2点の間の本当の長さ（m）を入れて「縮尺を補正」を押すと、図全体の縮尺を直します。'},
  // 小判型：確認・手動補正
- {sel:'#ovw-tap',at:'after',t:'合成図をタップして写真を開く',b:'チェックが入っていると、合成図（上）をタップした位置を担当している写真が下の欄に開き、その位置を桃色の枠で示します。「対応点」を選んでいるときは、同じ位置を写した別の写真も右に並べて開きます。距離を測る・範囲を指定するときはチェックを外してください。'},
+ {sel:'#ovw-tap',at:'after',t:'合成図をタップして写真を開く',b:'チェックが入っていると、合成図（上）をタップした位置を担当している写真が下の欄に開き、その位置を桃色の枠で示します。「対応点」を選んでいるときは、同じ位置を写した別の写真も右に並べて開きます。開いた写真が写している範囲（薄い色）と担当している範囲（濃い色）・撮影位置を、合成図の上に色分けして表示します（補正する画像：橙、基準の画像：水色）。距離を測る・範囲を指定するときはチェックを外してください。'},
  {sel:'#ovw-img',at:'after',t:'確認する画像',b:'合成図をタップする代わりに、一覧から画像を選んで開くこともできます。合成に使った画像を1枚ずつ開き、検出した<b>水際線（緑）</b>と<b>天端（水色）</b>を重ねて表示します。⚠ は線が全体と合っていない画像です。「この画像を使う」を外すと、その画像を合成から除きます（入れ直すこともできます）。'},
  {sel:'[data-ovt="view"]',at:'seg',t:'線の手動補正・対応点',b:'<b>水際線をなぞる</b>：柱と水面の境目を指でなぞると、その範囲の線を置き換えます。<br><b>天端をなぞる</b>：柱の上端（梁・支承との境目）をなぞります。<br><b>線を消す</b>：誤検出した部分をなぞって消します。<br>線を直したら「再計算して合成し直す」を押します。<br><b>対応点</b>：合成図でずれている所をタップすると、その場所を担当している画像（左）と、同じ所が写った別の画像（右）が左右に並んで開きます。右の画像は一覧から選び直せます。同じ目地・しみなどを左→右の順に2〜3組タップして「対応点で位置を合わせる」を押すと、左の画像の位置を直して合成し直します。'},
  {sel:'#ovw-apply',at:'after',t:'再計算して合成し直す',b:'直した水際線・天端・除外した画像を使って、断面と撮影位置をもう一度求め、合成し直します。数十秒かかります。'},
