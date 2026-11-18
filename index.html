@@ -545,7 +545,7 @@ input[type=text],input[type=date]{font:inherit;font-size:15px;width:100%;padding
           <div class="ovw-col" id="ovw-colB" hidden><div class="ovw-cap"><i class="ovw-sw" style="background:rgb(34,195,238)"></i>基準の画像（合成図の水色の範囲）<select id="ovw-ref" aria-label="基準の画像" style="width:auto;min-height:32px;padding:2px 6px;max-width:100%"></select></div><div class="ovw-stage" id="ovw-stage2" style="touch-action:none"><canvas id="ovw-cv2" width="1" height="1"></canvas></div></div>
         </div>
         <div id="ovw-col-row" hidden>
-          <div class="toolbar" style="margin-top:0"><span class="hint" style="margin:0">取る色：</span><span class="seg" role="group" aria-label="取る色"><button data-tcc="conc" aria-pressed="true">コンクリート</button><button data-tcc="sup" aria-pressed="false">上部工</button><button data-tcc="sky" aria-pressed="false">空</button><button data-tcc="cloud" aria-pressed="false">雲</button></span><button class="btn small" id="ovw-col-clear">色見本を全部消す</button></div>
+          <div class="toolbar" style="margin-top:0"><span class="hint" style="margin:0">取る色：</span><span class="seg" role="group" aria-label="取る色"><button data-tcc="conc" aria-pressed="true">コンクリート</button><button data-tcc="sup" aria-pressed="false">上部工</button><button data-tcc="supr" aria-pressed="false">上部工（照り返し）</button><button data-tcc="sky" aria-pressed="false">空</button><button data-tcc="cloud" aria-pressed="false">雲</button></span><button class="btn small" id="ovw-col-clear">色見本を全部消す</button></div>
           <div class="hint" id="ovw-col-list"></div>
           <p class="hint" id="ovw-col-state" style="margin:4px 0"></p>
         </div>
@@ -2466,7 +2466,7 @@ function ovwColPts(b,g){
   return {pts:Int16Array.from(pts),w,h,lonSpan:b.lonSpan,latSpan:b.latSpan,phi:b.phi};}
 /* 天端の色見本（v1.35.6）：確認画面で代表写真をタップして取った色（コンクリート／上部工／空／雲）。
    各画素を一番近い色見本に当て、「コンクリートらしさ」を 0〜255 で表す（128 より大きいとコンクリート寄り） */
-const OVW_TCN={conc:'コンクリート',sup:'上部工（桁・支承）',sky:'空',cloud:'雲'};
+const OVW_TCN={conc:'コンクリート',sup:'上部工（桁・支承）',supr:'上部工（照り返し）',sky:'空',cloud:'雲'};
 const OVW_LIN=(()=>{const t=new Float32Array(256); for(let i=0;i<256;i++){const c=i/255; t[i]=c<=0.04045?c/12.92:Math.pow((c+0.055)/1.055,2.4);} return t;})();
 function ovwLab(R,G,B){const r=OVW_LIN[R],g=OVW_LIN[G],b=OVW_LIN[B]; const f=t=>t>0.008856?Math.cbrt(t):7.787*t+16/116;
   const X=f((0.4124*r+0.3576*g+0.1805*b)/0.9505), Y=f(0.2126*r+0.7152*g+0.0722*b), Z=f((0.0193*r+0.1192*g+0.9505*b)/1.089);
@@ -2967,23 +2967,27 @@ function ovwSolve(m,quiet,opt){ opt=opt||{};
 }
 /* 天端の検出（1回目：広い範囲で全画像の天端の高さの中央値を求め、2回目：その ±0.8 m で探し直す） */
 function ovwDetectTops(m,feats,quiet,win){ win=win||0.8;
-  const ims=m.imgs.filter((im,k)=>feats[k]&&im.cx!=null&&im.zc>0.05&&!im.topManual);
-  const zcMax=Math.max(...m.imgs.filter(im=>im.fitted).map(im=>im.zc)), zs=[];
+  // 天端は列ごとに一番高い写真だけで探す（見つからなければ 2 番目に高い写真）。低い写真は天端を見上げる角度が大きく、
+  // 少しの誤検出で高さが大きく狂い、桁の下面や照り返しも天端の近くに入りやすいため
+  const cols=new Map(); m.imgs.forEach((im,k)=>{if(!feats[k]||im.cx==null||!(im.zc>0.05)||im.topManual)return; if(!cols.has(im.g))cols.set(im.g,[]); cols.get(im.g).push(k);});
+  cols.forEach(a=>a.sort((p,q)=>m.imgs[q].zc-m.imgs[p].zc));
+  m.imgs.forEach((im,k)=>{if(feats[k]&&!im.topManual)im.top=null;});
   const zOf=(im,tr)=>{const g=ovwGood(tr,10), w=ovwGood(im.wl,8); if(!g||g.n<20||!w)return NaN; const v=[];
     for(let i=0;i<g.n;i++){const dl=-ovwInterp(w,g.L[i]); if(dl>0.002)v.push(im.zc+im.zc/Math.tan(dl)*Math.tan(g.T[i]));} return ovwMed(v);};
-  const byCol=feats.some(f=>f&&f.cm);   // 色見本があれば、目地で確かめられない画像も使う
-  ims.forEach(im=>{const t=ovwTopDetect(feats[m.imgs.indexOf(im)],im.wl,im.zc,zcMax-2.5,zcMax+4,true); const z=t?zOf(im,t):NaN; if(isFinite(z)){zs.push(z);}});
-  // 最も多くの画像が集まる高さ（±25 cm）を天端とする（看板や目地の取り違えに引っ張られないように）
+  const byCol=feats.some(f=>f&&f.cm), zs=[];
+  // 1回目：天端は列で一番高い写真の高さより上（-0.5 m 〜 +4 m）にあるとして探し、全体の高さを決める
+  cols.forEach(a=>{const zt=m.imgs[a[0]].zc; for(const k of a.slice(0,2)){const im=m.imgs[k]; const t=ovwTopDetect(feats[k],im.wl,im.zc,zt-0.5,zt+4,true); const z=t?zOf(im,t):NaN; if(isFinite(z)){zs.push(z);break;}}});
+  // 最も多くの列が集まる高さ（±25 cm）を天端とする（看板や目地の取り違えに引っ張られないように）
   let Z0=NaN, bn=0; zs.forEach(z=>{const c=zs.filter(v=>Math.abs(v-z)<=0.25); if(c.length>bn){bn=c.length; Z0=ovwMed(c);}});
   if(!isFinite(Z0)){if(quiet)return; log('天端（桁との境目）を検出できませんでした。高さは水際線だけで合わせます。');return;}
-  m.Z0=Z0; let ok=0, cut=0;
-  ims.forEach(im=>{im.top=ovwTopDetect(feats[m.imgs.indexOf(im)],im.wl,im.zc,Z0-win,Z0+win,true); if(!im.top)return;   // 型枠目地の途切れで天端を確かめられた画像だけ使う（桁の錆の境・看板への取り違えを防ぐ）
+  m.Z0=Z0; let ok=0;
+  cols.forEach(a=>{for(const k of a.slice(0,2)){const im=m.imgs[k]; im.top=ovwTopDetect(feats[k],im.wl,im.zc,Z0-win,Z0+win,true); if(!im.top)continue;
     // 天端は水平：全体の高さから 25 cm 以上外れた所（桁の錆の境などに逸れた所）は使わない
     const w=ovwGood(im.wl,8), t=im.top; for(let i=0;i<t.lat.length;i++){if(!(t.cf[i]>10)||t.lat[i]==null)continue; const l=t.l0+i*t.dl, dl=-ovwInterp(w,l); if(!(dl>0.002))continue;
-      const z=im.zc+im.zc/Math.tan(dl)*Math.tan(t.lat[i]); if(Math.abs(z-Z0)>0.25){t.cf[i]=-1;cut++;}}
-    const g=ovwGood(t,10); if(!g||g.n<20)im.top=null; else ok++;});
+      const z=im.zc+im.zc/Math.tan(dl)*Math.tan(t.lat[i]); if(Math.abs(z-Z0)>0.25)t.cf[i]=-1;}
+    const g=ovwGood(t,10); if(!g||g.n<20)im.top=null; else {ok++; break;}}});
   window.OVW_JR=feats.map(f=>f?[f.jrow,f.zJ]:null);
-  if(!quiet)log(byCol?`天端（桁・支承との境目）：${ok} 枚で検出（指定した色見本で、コンクリートとそれ以外の境目を探しました）`:`天端（桁・支承との境目）：${ok} 枚で検出（型枠目地の縦線が途切れる位置で確かめた画像だけを使用）`);
+  if(!quiet)log(`天端（桁・支承との境目）：${cols.size} 列のうち ${ok} 列で、列の一番高い写真から検出${byCol?'（指定した色見本で、コンクリートとそれ以外の境目を探しました）':'（型枠目地の縦線が途切れる位置で確かめた画像だけを使用）'}`);
 }
 /* 色見本を変えたとき：各画像を読み直して天端を探し直す（手でなぞった天端はそのまま） */
 async function ovwRedetectTops(m){
@@ -3004,7 +3008,13 @@ function ovwFinish(m){
   let nc=0, na=0; m.imgs.forEach(im=>{im.cor=im.cx!=null&&im.zc>0.05?ovwColcor(m,im,m.ZTOP):null;
     if(!im.cor&&im.approx)im.cor=ovwColcorFlat(m,im);
     im.use=!im.excl&&(im.fitted||im.approx)&&!!im.cor; if(im.use){if(im.fitted)nc++; else na++;}});
-  log(`高さ合わせ：水際線＝0 m、天端＝${fmt(m.ZTOP,2)} m として ${nc} 枚の高さを列ごとに合わせました`);
+  // 列の中の高さ：下端は一番低い写真（水際線）、上端は一番高い写真（天端）で決め、途中の写真は高度計の差で割り付ける
+  const cols=new Map(); m.imgs.forEach(im=>{if(im.use&&im.fitted&&im.cor&&!im.cor.flat){if(!cols.has(im.g))cols.set(im.g,[]); cols.get(im.g).push(im);}});
+  let nTop=0; cols.forEach(a=>{if(a.length<2)return; a.sort((p,q)=>p.zc-q.zc); const lo=a[0], hi=a[a.length-1], zLo=lo.cor.zcp; let sc=1;
+    if(hi.top&&hi.zc-lo.zc>1){const t=ovwTopz(m,hi,hi.top,10), v=[]; if(t)for(const x of t)if(isFinite(x))v.push(m.ZTOP-(x-hi.zc));
+      if(v.length>=20){const s2=(ovwMed(v)-zLo)/(hi.zc-lo.zc); if(s2>0.9&&s2<1.1){sc=s2; nTop++;}}}
+    a.forEach(im=>{if(im!==lo)im.cor.zcp=Math.round((zLo+(im.zc-lo.zc)*sc)*1e4)/1e4;});});
+  log(`高さ合わせ：水際線＝0 m、天端＝${fmt(m.ZTOP,2)} m として ${nc} 枚の高さを列ごとに合わせました（下端は列の一番低い写真の水際線、上端は一番高い写真の天端（${nTop}/${cols.size} 列）、途中は高度計の差）`);
   if(window.OVW_SIGN)ovwSignAlign(m,OVU.col);   // 試験中（2D のずらしだけでは合わないため、通常は使わない）
   if(na)log(`水際線が合わない画像 ${na} 枚は、同じ列の位置と高度計の高さで仮に置きました（合成では他の画像を優先します。ずれていれば「対応点」で直してください）`);
   m.rev=(m.rev||0)+1;
@@ -4720,7 +4730,7 @@ function ovwInitUI(){
     document.querySelectorAll('[data-ovt]').forEach(x=>x.setAttribute('aria-pressed',x===b)); $('#ovw-pair-row').hidden=OVU.tool!=='pair'; $('#ovw-col-row').hidden=OVU.tool!=='col'; if(OVU.tool==='col')ovwTcNote();
     $('#ovw-stage').style.touchAction=OVU.tool==='view'?'auto':'none';
     $('#ovw-tool-hint').textContent={view:'線の確認だけを行います。',wl:'正しい水際線（柱と水面の境目）を左右になぞってください。なぞった範囲が置き換わります。',top:'正しい天端（柱と桁・支承の境目）を左右になぞってください。',
-      erase:'誤った線の上を左右になぞると、その範囲を使わないようにします（近い方の線が消えます）。',col:'天端付近がよく写った写真で、下の「取る色」を選んでから、その色の所をタップしてください（コンクリート、上部工（桁・支承）、空、雲）。全部の写真で、この色見本を使って天端を探し直します。',pair:'合成結果でずれている所をタップすると、その位置を写した2枚の画像が左右に並びます。左の画像→右の画像の順に、同じ点（目地・しみなど）を交互にタップしてください。'}[OVU.tool];
+      erase:'誤った線の上を左右になぞると、その範囲を使わないようにします（近い方の線が消えます）。',col:'天端付近がよく写った写真で、下の「取る色」を選んでから、その色の所をタップしてください（コンクリート、上部工（桁・支承）、上部工の照り返し、空、雲。日かげのコンクリートも取ると判定が安定します）。全部の写真で、この色見本を使って天端を探し直します。',pair:'合成結果でずれている所をタップすると、その位置を写した2枚の画像が左右に並びます。左の画像→右の画像の順に、同じ点（目地・しみなど）を交互にタップしてください。'}[OVU.tool];
     $('#ovw-colB').hidden=OVU.tool!=='pair'; ovwZoom();
     if(OVU.tool==='pair'&&OVU.A&&OVU.lastB!=null&&(!OVU.B||OVU.B.k!==OVU.lastB)&&OVU.mark&&OVU.mark.A&&OVU.mark.A.k===OVU.A.k)task(async()=>{await ovwShowRef(OVU.lastB); ovwCenter('B');});
     else if(OVU.tool==='pair'&&!OVU.B&&OVU.A){const m=S.ovm, k=OVU.A.k; let r=-1; for(let d=1;d<m.imgs.length&&r<0;d++)for(const q of [k-d,k+d])if(r<0&&m.imgs[q]&&m.imgs[q].use)r=q; if(r>=0)task(()=>ovwShowRef(r));}
