@@ -1,6 +1,6 @@
 --- v134/index.html	2026-11-15 11:33:04.308229000 +0000
-+++ v135/index.html	2026-11-18 07:45:19.986126000 +0000
-@@ -1,4808 +1,5898 @@
++++ v135/index.html	2026-11-18 11:12:18.421703000 +0000
+@@ -1,4808 +1,5955 @@
 -<!doctype html>
 -<html lang="ja">
 -<head>
@@ -5342,6 +5342,7 @@
 +        </div>
 +        <div class="toolbar" style="margin-top:0"><label><input type="checkbox" id="ovw-tap" checked> 合成図をタップして写真を開く</label><span class="hint" style="margin:0">合成図（上）の確認・補正したい位置をタップすると、その位置を写した写真がここに開きます（距離を測るときはチェックを外します）。</span></div>
 +        <div class="hint num" id="ovw-sum"></div>
++        <div class="note warn" id="ovw-wchk" hidden style="margin:6px 0;padding:8px 10px;border:1px solid var(--warn,#d97706);border-radius:8px"><p class="hint" id="ovw-wchk-msg" style="margin:0 0 6px"></p><div class="toolbar" style="margin:0"><button class="btn small primary" id="ovw-wchk-est"></button><button class="btn small" id="ovw-wchk-in"></button></div></div>
 +        <div class="hint" id="ovw-info"></div>
 +        <div class="toolbar">
 +          <span class="seg" role="group" aria-label="補正の道具"><button data-ovt="view" aria-pressed="true">確認</button><button data-ovt="wl" aria-pressed="false">水際線をなぞる</button><button data-ovt="top" aria-pressed="false">天端をなぞる</button><button data-ovt="erase" aria-pressed="false">線を消す</button><button data-ovt="col" aria-pressed="false">天端の色</button><button data-ovt="pair" aria-pressed="false">対応点</button></span>
@@ -7774,7 +7775,48 @@
 +    log(`断面：幅 ${fmt(2*(m.a+m.r),2)} m・厚さ ${fmt(2*m.r,2)} m${m.fix?'（入力した値で固定）':'（画像から推定・参考値）'}・長手方向の向き ${fmt(ax,0)}°（北から時計回り）`);
 +    if(!m.fix)log('注意：平面部の長さ（幅）は、水際線だけでは決まりにくく、実際より長く推定されることがあります。図面または実測の幅・厚さがあれば「寸法の決め方：手入力」で入れてください。');
 +    log(`水際線の当てはまり：中央値 ${fmt(fit.resMed*100,1)} cm（${ks.length} 枚）${fit.gpsRms!=null?`・GPS との差 ${fmt(fit.gpsRms,1)} m`:''}${drop.length?`。全体と合わず除いた画像：${drop.map(k=>m.imgs[k].name).join('、')}（確認・手動補正で線を直すと使えます）`:''}`);}
++  if(!quiet&&m.fix)ovwWidthCheck(m);
 +  return {drop};
++}
++/* 手入力の幅の確認：平面部を向いた列どうしの長手方向の間隔を、同じ飛行の GPS の間隔と比べる。
++   幅が実際より大きいと、列の間隔が GPS より広がり、平面部に同じ模様が二重に写る（大八橋：5.6 m 入力で東面に 1.2 m の二重写り） */
++function ovwWidthCheck(m){
++  const c=Math.cos(m.phi), s=Math.sin(m.phi), cols=new Map();
++  m.imgs.forEach(im=>{if(!im.fitted||!im.gps||im.cx==null)return; const u=c*im.cx+s*im.cy, v=-s*im.cx+c*im.cy; if(Math.abs(u)>m.a+0.3)return;   // 平面部の前の列だけ
++    const key=im.f+':'+im.g; if(!cols.has(key))cols.set(key,{f:im.f,side:Math.sign(v),u:[],gu:[]}); const q=cols.get(key); q.u.push(u); q.gu.push(c*im.gps[0]+s*im.gps[1]);});
++  const groups=new Map(); cols.forEach(q=>{const k=q.f+':'+q.side; if(!groups.has(k))groups.set(k,[]); groups.get(k).push({u:ovwMed(q.u),gu:ovwMed(q.gu)});});
++  const msg=[]; groups.forEach(a=>{if(a.length<2)return; a.sort((p,q)=>p.u-q.u); const du=a[a.length-1].u-a[0].u, dg=Math.abs(a[a.length-1].gu-a[0].gu);
++    if(du>0.8&&Math.abs(du-dg)>0.8)msg.push(`${fmt(du,1)} m（GPS では ${fmt(dg,1)} m）`);});
++  if(msg.length)log(`注意：平面部の前の列どうしの間隔が、GPS の間隔と合いません：${msg.join('、')}。入力した幅（${fmt(2*(m.a+m.r),2)} m）が実際と違うと、平面部が間延びしたり、同じ模様が二重に写ったりします。図面の総幅（円弧部を含む）を確かめてください。`);
++}
++/* 幅の推定（手入力のとき）：幅を変えて解き直し、同じ飛行のコースどうしの距離が GPS の距離と最も合う幅を探す。
++   水際線の当てはまりは幅にほとんど左右されない（大八橋：4.4 m 以上で横ばい）ため、GPS の間隔で決める。
++   入力値の合い方が推定値よりはっきり悪いときだけ、どちらで合成するかを尋ねる */
++function ovwGpsRms(m){
++  const c=Math.cos(m.phi), s=Math.sin(m.phi), cols=new Map();
++  m.imgs.forEach(im=>{if(!im.fitted||!im.gps||im.cx==null)return; const k=im.f+':'+im.g; if(!cols.has(k))cols.set(k,{f:im.f,x:[],y:[],gx:[],gy:[]}); const q=cols.get(k); q.x.push(im.cx); q.y.push(im.cy); q.gx.push(im.gps[0]); q.gy.push(im.gps[1]);});
++  const C=[...cols.values()].map(q=>({f:q.f,x:ovwMed(q.x),y:ovwMed(q.y),gx:ovwMed(q.gx),gy:ovwMed(q.gy)}));
++  let e=0,n=0; for(let i=0;i<C.length;i++)for(let j=i+1;j<C.length;j++){if(C[i].f!==C[j].f)continue;
++    e+=(Math.hypot(C[i].x-C[j].x,C[i].y-C[j].y)-Math.hypot(C[i].gx-C[j].gx,C[i].gy-C[j].gy))**2; n++;}
++  return n>=3?Math.sqrt(e/n):NaN;
++}
++async function ovwWidthScan(m){
++  if(!m.fix||!m.imgs.some(im=>im.gps))return null;
++  const t=2*m.r, Win=2*(m.a+m.r), res={}, ns=window.OVW_NOSHIFT;
++  const one=W=>{W=Math.round(W*10)/10; if(res[W])return res[W]; const c={ver:1,imgs:m.imgs.map(im=>({...im,cx:null,cy:null,fitted:false})),fix:{a:(W-t)/2,r:t/2},rev:0};
++    try{ovwSolve(c,true);}catch(e){return null;} return res[W]={W,rms:ovwGpsRms(c),res:c.resMed};};
++  window.OVW_NOSHIFT=1;
++  try{
++    const lo=t+0.4, hi=Math.max(Win+1.2,t+3); const Ws=[]; for(let W=lo;W<=hi+1e-6;W+=0.4)Ws.push(W); Ws.push(Win);
++    for(let i=0;i<Ws.length;i++){log(`幅の確認：${fmt(Ws[i],1)} m で解いています（${i+1}/${Ws.length}）`); prog(0.75+0.05*i/Ws.length); await sleep(); one(Ws[i]);}
++    const best=()=>{const a=Object.values(res).filter(r=>r&&isFinite(r.rms)&&isFinite(r.res)); if(!a.length)return null; const r0=Math.min(...a.map(r=>r.res));
++      return a.filter(r=>r.res<=r0*1.05).sort((p,q)=>p.rms-q.rms)[0];};
++    let b=best(); if(!b)return null;
++    for(const d of[-0.2,0.2]){if(b.W+d>=lo-1e-6){await sleep(); one(b.W+d);}} b=best();
++    const r=res[Math.round(Win*10)/10]; if(!r||!isFinite(r.rms))return null;
++    const ask=r.rms>1.15*b.rms&&Math.abs(b.W-Win)>0.4;
++    return {win:Win,west:b.W,rin:r.rms,rest:b.rms,ask,t};
++  }finally{window.OVW_NOSHIFT=ns;}
 +}
 +/* 天端の検出（1回目：広い範囲で全画像の天端の高さの中央値を求め、2回目：その ±0.8 m で探し直す） */
 +function ovwDetectTops(m,feats,quiet,win){ win=win||0.8;
@@ -7869,6 +7911,9 @@
 +  ovwSolve(m,false,m.Zt!=null?{phis:[m.phi]}:{});   // 仕上げ：天端の重みを下げ、向きはここまでの値の近くで解く
 +  ovwDetectTops(m,feats,false,0.4); feats.fill(null);
 +  ovwFinish(m);
++  if(m.fix&&!window.OVW_NOWSCAN){const w=await ovwWidthScan(m); m.wchk=w;
++    if(w)log(w.ask?`注意：入力した幅 ${fmt(w.win,1)} m では、撮影位置の間隔が GPS と合いません（ずれ ${fmt(w.rin*100,0)} cm）。写真と GPS からの推定は ${fmt(w.west,1)} m（ずれ ${fmt(w.rest*100,0)} cm）です。下の「確認・手動補正」で、どちらで合成するか選べます。`
++      :`幅の確認：入力した幅 ${fmt(w.win,1)} m は、写真と GPS からの推定（${fmt(w.west,1)} m）と大きな違いはありません。`);}
 +  m.imgs.forEach((im,k)=>{if(!im.use)setThumbStatus(k,`<span class="chip bad">${im.why||'除外'}</span>`); else setThumbStatus(k,im.approx?'<span class="chip warn">仮の位置</span>':`<span class="chip ok">使用</span>${im.top?'':'<span class="chip warn">天端なし</span>'}`);});
 +  S.ovm=m;
 +  const faces=ovwFaces(m).map((fc,i)=>({...fc,type:'wl',fi:i,sol:{cams:[],dropped:[],used:[]},gains:null,marks:[]}));
@@ -9359,6 +9404,7 @@
 +  sel.value=cur!==''&&+cur<m.imgs.length?cur:String(Math.max(0,m.imgs.findIndex(im=>im.use)));
 +  $('#ovw-ref').innerHTML=m.imgs.map((im,k)=>`<option value="${k}">${k+1}. ${esc(im.name.replace(/^DJI_\d+_/,''))}</option>`).join('');
 +  $('#ovw-sum').textContent=`断面 幅 ${fmt(2*(m.a+m.r),2)} m・厚さ ${fmt(2*m.r,2)} m${m.fix?'（図面）':'（推定）'}／天端 水面から ${fmt(m.ZTOP,2)} m／水際線の当てはまり ${fmt((m.resMed||0)*100,1)} cm`;
++  ovwWchkUI();
 +  ovwDirtyNote(); ovwInfo();
 +  if(!OVU.A&&S.getSrc)ovwShow(+sel.value,true).catch(e=>console.warn(e));
 +}
@@ -9474,6 +9520,16 @@
 +  OVU.pairs=[]; OVU.pend=null; ovwInfo(); ovwPairNote();
 +  await renderCurrent(); if(S.projectId)await saveProject(false);
 +}
++/* 幅の入力値と推定値が大きく違うとき：どちらで合成するかを選ぶ */
++function ovwWchkUI(){const m=S.ovm, w=m.wchk, el=$('#ovw-wchk'); if(!el)return; el.hidden=!(w&&w.ask&&!w.done); if(el.hidden)return;
++  $('#ovw-wchk-msg').innerHTML=`入力した幅 <b>${fmt(w.win,1)} m</b> と、写真と GPS から推定した幅 <b>${fmt(w.west,1)} m</b> が大きく違います。`+
++    `撮影位置の間隔と GPS の間隔のずれは、入力値で ${fmt(w.rin*100,0)} cm、推定値で ${fmt(w.rest*100,0)} cm です。幅が実際より大きいと、平面部が間延びしたり同じ模様が二重に写ったりします。`;
++  $('#ovw-wchk-est').textContent=`推定値 ${fmt(w.west,1)} m で合成し直す`; $('#ovw-wchk-in').textContent=`入力値 ${fmt(w.win,1)} m のまま`;}
++async function ovwWchkPick(est){const m=S.ovm, w=m.wchk; if(!w)return;
++  w.done=est?'est':'in';
++  if(!est){log(`幅は入力値 ${fmt(w.win,1)} m のままにしました`); ovwWchkUI(); S.dirty=true; if(S.projectId)await saveProject(false); return;}
++  const W=w.west; $('#o-pw').value=W; if(S.o)S.o.pw=W; m.fix={a:(W-w.t)/2,r:w.t/2}; m.imgs.forEach(im=>{if(!im.keep)im.excl=false;}); m.dirtyFit=true; ovwWchkUI();
++  await ovwRecompute(); log(`幅を推定値 ${fmt(W,1)} m（入力値は ${fmt(w.win,1)} m）にして合成し直しました`);}
 +async function ovwRecompute(){
 +  const m=S.ovm; logEl.textContent='';
 +  if(m.dirtyTop){log(ovwTcPrep(m.topCol)?'指定した色見本で、天端を探し直しています…':'色見本を消したので、型枠目地で天端を探し直しています…'); await sleep(); await ovwRedetectTops(m); m.dirtyTop=false;}
@@ -9558,6 +9614,7 @@
 +  $('#ovw-pair-clear').addEventListener('click',()=>{OVU.pairs=[];OVU.pend=null;ovwDraw('A');ovwDraw('B');ovwPairNote();});
 +  $('#ovw-pair-apply').addEventListener('click',()=>task(ovwPairApply));
 +  $('#ovw-apply').addEventListener('click',()=>task(ovwRecompute));
++  $('#ovw-wchk-est').addEventListener('click',()=>task(()=>ovwWchkPick(true))); $('#ovw-wchk-in').addEventListener('click',()=>ovwWchkPick(false));
 +  document.querySelectorAll('[data-tcc]').forEach(b=>b.addEventListener('click',()=>{OVU.tcCls=b.dataset.tcc; document.querySelectorAll('[data-tcc]').forEach(x=>x.setAttribute('aria-pressed',x===b));}));
 +  $('#ovw-col-clear').addEventListener('click',()=>{const m=S.ovm; if(!m||!m.topCol)return; m.topCol=null; m.dirtyTop=true; m.dirtyCor=true; S.dirty=true; ovwTcNote(); ovwDraw('A'); ovwDirtyNote();});
 +  ovwBind('A'); ovwBind('B');
