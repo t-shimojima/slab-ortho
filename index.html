@@ -2991,6 +2991,7 @@ function ovwSolve(m,quiet,opt){ opt=opt||{};
     im.approx=!im.excl&&i<0&&im.cx!=null&&im.zc!=null&&im.zc>0.05;   // 仮の位置（同じ列の位置と高度計の高さ）。対応点で直して使う
     im.why=im.excl?'手動で除外':i>=0?'':drop.includes(k)?'水際線が全体と合わない':!ovwGood(im.wl,8)||ovwGood(im.wl,8).n<30?'水際線を検出できない':'位置を決められない';});
   Object.assign(m,{a:fit.a,r:fit.r,phi:fit.phi,w:fit.w,kAlt:fit.k,flights:fl,resMed:fit.resMed,gpsRms:fit.gpsRms,Zt:fit.Zt});
+  if(m.fix&&(opt.noSil||window.OVW_SIL2===0))m.solVer=null; else if(m.fix)m.solVer=OVW_SOLVER;
   if(!quiet){const ax=((90-m.phi/D2R)%180+180)%180;
     log(`断面：幅 ${fmt(2*(m.a+m.r),2)} m・厚さ ${fmt(2*m.r,2)} m${m.fix?'（入力した値で固定）':'（画像から推定・参考値）'}・長手方向の向き ${fmt(ax,0)}°（北から時計回り）`);
     if(!m.fix)log('注意：平面部の長さ（幅）は、水際線だけでは決まりにくく、実際より長く推定されることがあります。図面または実測の幅・厚さがあれば「寸法の決め方：手入力」で入れてください。');
@@ -4643,7 +4644,9 @@ function ovwUI(){
   ovwDirtyNote(); ovwInfo();
   if(!OVU.A&&S.getSrc)ovwShow(+sel.value,true).catch(e=>console.warn(e));
 }
-function ovwDirtyNote(){const m=S.ovm; $('#ovw-dirty').textContent=m.dirtyTop?'天端の色見本を変更しました。「再計算して合成し直す」で天端を探し直します。':m.dirtyFit?'線・除外を変更しました。「再計算して合成し直す」で反映されます。':m.dirtyCor?'天端を変更しました。「再計算して合成し直す」で反映されます。':''; $('#ovw-apply').disabled=busy||!(m.dirtyFit||m.dirtyCor||m.dirtyTop);}
+const OVW_SOLVER='1.35.11';   // 位置合わせの計算方法の版。保存された案件がこれより前の方法で解いてあれば「再計算」を押せるようにする
+const ovwOldSolve=m=>!!(m&&m.fix&&m.solVer!==OVW_SOLVER);
+function ovwDirtyNote(){const m=S.ovm; $('#ovw-dirty').textContent=ovwOldSolve(m)&&!(m.dirtyTop||m.dirtyFit||m.dirtyCor)?'この案件は前の版の方法で位置を求めています。「再計算して合成し直す」で、柱の輪郭（見かけの幅）を使って求め直せます。':m.dirtyTop?'天端の色見本を変更しました。「再計算して合成し直す」で天端を探し直します。':m.dirtyFit?'線・除外を変更しました。「再計算して合成し直す」で反映されます。':m.dirtyCor?'天端を変更しました。「再計算して合成し直す」で反映されます。':''; $('#ovw-apply').disabled=busy||!(m.dirtyFit||m.dirtyCor||m.dirtyTop||ovwOldSolve(m));}
 function ovwInfo(){const m=S.ovm, k=+$('#ovw-img').value, im=m.imgs[k]; if(!im)return;
   $('#ovw-use').checked=!im.excl;
   const off=(im.ds||im.dz)?`・手動の位置補正 横 ${fmt((im.ds||0)*100,1)} cm／縦 ${fmt((im.dz||0)*100,1)} cm`:'';
@@ -4768,7 +4771,7 @@ async function ovwWchkPick(est){const m=S.ovm, w=m.wchk; if(!w)return;
 async function ovwRecompute(){
   const m=S.ovm; logEl.textContent='';
   if(m.dirtyTop){log(ovwTcPrep(m.topCol)?'指定した色見本で、天端を探し直しています…':'色見本を消したので、型枠目地で天端を探し直しています…'); await sleep(); await ovwRedetectTops(m); m.dirtyTop=false;}
-  else if(m.dirtyFit){log('水際線・除外の変更を反映して、断面と撮影位置を推定し直します…'); await sleep(); ovwSolve(m,false);}
+  else if(m.dirtyFit||ovwOldSolve(m)){log(m.dirtyFit?'水際線・除外の変更を反映して、断面と撮影位置を推定し直します…':'新しい方法（柱の輪郭を使う）で、断面と撮影位置を推定し直します…'); await sleep(); ovwSolve(m,false);}
   else log('天端の変更を反映して、高さを合わせ直します…');
   ovwFinish(m); m.dirtyFit=false; m.dirtyCor=false; S.dirty=true;
   m.imgs.forEach((im,k)=>setThumbStatus(k,im.use&&im.approx?'<span class="chip warn">仮の位置</span>':im.use?`<span class="chip ok">使用</span>${im.top?'':'<span class="chip warn">天端なし</span>'}`:`<span class="chip bad">${im.why||'除外'}</span>`));
