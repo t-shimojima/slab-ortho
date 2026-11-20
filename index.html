@@ -290,7 +290,7 @@ input[type=text],input[type=date]{font:inherit;font-size:15px;width:100%;padding
 <header class="top">
   <div class="brand">
     <h1>床版下面オルソ</h1>
-    <p>DJI Avata 360 の 360° 静止画から、床版下面の平面オルソ画像を端末内で合成します（v1.35）</p>
+    <p>DJI Avata 360 の 360° 静止画から、床版下面の平面オルソ画像を端末内で合成します（v1.35.12）</p>
     <div class="offline" id="offline"><i></i><span>オフライン対応を確認中…</span></div>
   </div>
   <nav class="tabs" role="tablist">
@@ -3193,6 +3193,7 @@ async function task(fn,kind){
   BZ.t0=performance.now(); BZ.f=0; BZ.stage=''; clearInterval(BZ.timer); BZ.timer=setInterval(busyRender,500);
   try{await fn();}catch(err){console.error(err);log('エラー：'+(err&&err.message||err));}
   finally{busyKind=''; setBusy(false); clearInterval(BZ.timer); $('#busy-pill').hidden=true;
+    if(S.ovm)try{ovwDirtyNote();}catch(e){}   // 処理中に表示を更新した「再計算」ボタンを、処理の後に押せる状態へ戻す（v1.35.11）
     const el=(performance.now()-BZ.t0)/1000; $('#prog-label').textContent=el>1?`完了（${mmss(el)}）`:'';}
 }
 const MAXPX=60e6, MAXDIM=16000;
@@ -4960,7 +4961,7 @@ const helpVal=v=>typeof v==='function'?v():v;
 /* オフライン対応（Service Worker） */
 (function(){
   const el=$('#offline');
-  const set=(ok,t)=>{el.classList.toggle('ok',ok);el.querySelector('span').textContent=t;};
+  const set=(ok,t)=>{el.classList.toggle('ok',ok);el.querySelector('span').textContent=t+'・v1.35.12';};   // 版の表記（更新できたか確かめるため）
   if(!('serviceWorker' in navigator)||location.protocol!=='https:'&&location.hostname!=='localhost'){set(false,'オフライン対応は https で公開したときに有効になります');return;}
   navigator.serviceWorker.register('sw.js').then(()=>navigator.serviceWorker.ready).then(()=>set(true,'オフラインで使えます')).catch(()=>set(false,'オフライン対応を登録できませんでした'));
 })();
