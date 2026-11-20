@@ -1,0 +1,118 @@
+--- /mnt/project-files/v13510/index.html	2026-11-18 23:41:04.535441000 +0000
++++ index.html	2026-11-20 06:38:02.873250166 +0000
+@@ -2592,6 +2592,7 @@
+     if(q.tl)for(let t=0;t<q.tl.length;t++){Pi[p]=i;Pz[p]=q.z;Pc[p]=q.cen+q.tl[t];Pt[p]=-Math.tan(q.tt[t]);Pk[p]=1;p++;}
+     if(q.el!=null){Pi[p]=i;Pc[p]=q.cen+q.el;Pk[p]=2;p++;} if(q.er!=null){Pi[p]=i;Pc[p]=q.cen+q.er;Pk[p]=3;p++;}});}
+   let nTop=0; for(let p=0;p<M;p++)if(Pk[p]===1)nTop++;
++  const q2=new Uint8Array(M); if(o.edge2)for(let p=0;p<M;p++)if(Pk[p]>=2)q2[p]=1;   // 両側の輪郭は外れ値扱いせず二乗で効かせる（誤検出は解く前に除いてある）
+   const ewt=obs.map(q=>Math.sqrt(Math.max(4,q.lon.length/4)));   // 輪郭 1 本の重み（水際線の点 1/4 画像分）
+   // コースごとの GPS の平均（東・北）と、そのコースの点の数
+   const gN=new Float64Array(G), gE=new Float64Array(G), gNo=new Float64Array(G), gc=new Int32Array(G), gfl=new Int32Array(G).fill(-1);
+@@ -2616,7 +2617,7 @@
+   const evalR=(x,wantJ)=>{const a=x[0],rr=x[1],c=Math.cos(x[2]),s=Math.sin(x[2]);
+     for(let p=0;p<M;p++){if(Pk[p]>=2){const i=Pi[p],q=obs[i],g=q.g, X=x[iC+2*g]+x[iD+2*i], Y=x[iC+2*g+1]+x[iD+2*i+1], side=Pk[p]===2?-1:1, ob=Pc[p]+x[iH+g], ref=Math.atan2(-X,-Y);
+         const f0=(A,Rr,Ph,XX,YY)=>{const v=edgeAz(A,Rr,Ph,XX,YY,side,ref); return v==null?null:ovwWrap(v-ob);};
+-        const e0=f0(a,rr,x[2],X,Y), wv=EW*ewt[i], wide=e0!=null&&side*e0>0;   // 輪郭は「少なくともここまでは柱」の片側条件（遠い面を斜めに見ると輪郭を内側で拾いやすいため、推定の方が広いときは罰しない）
++        const e0=f0(a,rr,x[2],X,Y), wv=(q.ew!=null?q.ew:EW)*ewt[i], wide=!o.edge2&&e0!=null&&side*e0>0;   // edge2：両側の条件（寸法が図面で決まっているとき。v1.35.11）   // 輪郭は「少なくともここまでは柱」の片側条件（遠い面を斜めに見ると輪郭を内側で拾いやすいため、推定の方が広いときは罰しない）
+         r[p]=wide?0:e0==null?0.3*wv:Math.max(-0.5,Math.min(0.5,e0))*wv;
+         if(wantJ){const o9=p*11; for(let e=0;e<11;e++){Ji[o9+e]=0;Jv[o9+e]=0;} if(e0!=null&&!wide){const hs=1e-5, dn=(dv,A,Rr,Ph,XX,YY)=>{const v=f0(A,Rr,Ph,XX,YY); return v==null?0:(v-e0)/dv*wv;};
+           Ji[o9]=0;Jv[o9]=dn(hs,a+hs,rr,x[2],X,Y); Ji[o9+1]=1;Jv[o9+1]=dn(hs,a,rr+hs,x[2],X,Y); Ji[o9+2]=2;Jv[o9+2]=dn(hs,a,rr,x[2]+hs,X,Y); Ji[o9+4]=iH+g;Jv[o9+4]=-wv;
+@@ -2624,7 +2625,8 @@
+         continue;}
+       const i=Pi[p],q=obs[i],f=q.f,g=q.g, br=Pc[p]+x[iH+g], sb=Math.sin(br), cb=Math.cos(br), rho=(x[iK+f]*Pz[p]-x[iW+f]-(Pk[p]?x[iZ]:0))/Pt[p];
+       const X=x[iC+2*g]+x[iD+2*i]+rho*sb, Y=x[iC+2*g+1]+x[iD+2*i+1]+rho*cb, u=c*X+s*Y, v=-s*X+c*Y, au=Math.abs(u), mm=Math.max(au-a,0), hh=Math.hypot(mm,v);
+-      const sc=Pk[p]?TW*Math.abs(Pt[p]):1;   // 天端の点は「高さの差」（m）で測る（水平に近い視線で距離の誤差が大きくならないように）
++      const sc=Pk[p]?TW*Math.abs(Pt[p]):o.steepW?2*Pt[p]/(1+Pt[p]*Pt[p]):1;   // 天端の点は「高さの差」（m）で測る（水平に近い視線で距離の誤差が大きくならないように）
++      // steepW（v1.35.11）：水際線の点は sin(2×見下ろし角) で重みを付ける。真下に近い点（70〜80°）は角度のわずかな誤差（360°画像の真下付近のゆがみ・傾き）で距離が大きく狂うため
+       r[p]=(hh-rr)*sc;
+       if(wantJ){const on=hh>1e-12, du=on&&au>a?(mm/hh)*Math.sign(u):0, dv=on?v/hh:0, gX=du*c-dv*s, gY=du*s+dv*c, o9=p*11;
+         Ji[o9]=0;Jv[o9]=on&&au>a?-mm/hh:0; Ji[o9+1]=1;Jv[o9+1]=-1; Ji[o9+2]=2;Jv[o9+2]=du*v-dv*u;
+@@ -2635,12 +2637,12 @@
+     for(let g=0;g<G;g++)r[k++]=x[iH+g]*ph;
+     for(let f=0;f<nF;f++)r[k++]=(x[iK+f]-1)*pk;
+     if(gpsOn)for(const g of useG){const f=gfl[g]; r[k++]=(x[iC+2*g]-gE[g]-x[iT+2*f])*pg[g]; r[k++]=(x[iC+2*g+1]-gNo[g]-x[iT+2*f+1])*pg[g];}
+-    let cost=0; for(let q=0;q<R;q++){if(q>=M&&q<M+2*N+G+nF){cost+=0.5*r[q]*r[q];continue;} const z=r[q]/fs; cost+=fs*fs*(Math.sqrt(1+z*z)-1);} return cost;};  // 向き・ずれの事前分布は二乗（外れ値扱いしない）
++    let cost=0; for(let q=0;q<R;q++){if((q>=M&&q<M+2*N+G+nF)||(q<M&&q2[q])){cost+=0.5*r[q]*r[q];continue;} const z=r[q]/fs; cost+=fs*fs*(Math.sqrt(1+z*z)-1);} return cost;};  // 向き・ずれの事前分布は二乗（外れ値扱いしない）
+   // 正規方程式：全体の未知数（NG 個）と、画像ごとの 2×2 のブロック（dd）に分けて解く（シューア補行列）
+   const Agg=new Float64Array(NG*NG), gg=new Float64Array(NG), Agd=new Float64Array(N*NG*2), Add=new Float64Array(N*4), gd=new Float64Array(2*N);
+   const Sm=new Float64Array(NG*NG), sv=new Float64Array(NG), dlt=new Float64Array(NP);
+   const accum=()=>{Agg.fill(0);gg.fill(0);Agd.fill(0);Add.fill(0);gd.fill(0);
+-    for(let p=0;p<M;p++){const z=r[p]/fs, wt=1/Math.sqrt(1+z*z), o9=p*11, i=Pi[p], rp=r[p];
++    for(let p=0;p<M;p++){const z=r[p]/fs, wt=q2[p]?1:1/Math.sqrt(1+z*z), o9=p*11, i=Pi[p], rp=r[p];
+       for(let a=0;a<9;a++){const ka=Ji[o9+a], va=Jv[o9+a]*wt; if(!va)continue; gg[ka]+=va*rp;
+         for(let b=0;b<9;b++)Agg[ka*NG+Ji[o9+b]]+=va*Jv[o9+b];
+         Agd[(i*NG+ka)*2]+=va*Jv[o9+9]; Agd[(i*NG+ka)*2+1]+=va*Jv[o9+10];}
+@@ -2963,7 +2965,19 @@
+     if(t&&t.n>=20){q.tl=[];q.tt=[];for(let i=0;i<t.n;i+=4)if(Math.abs(t.T[i])>3*D2R){q.tl.push(t.L[i]);q.tt.push(t.T[i]);} if(!q.tl.length){delete q.tl;delete q.tt;}}   // 天端の線：同じ高さの水平な線として断面・高さの推定に使う
+     return q;});
+   const zcs=m.imgs.filter(im=>im.zc!=null).map(im=>im.zc), ztInit=m.Z0||(zcs.length?Math.max(...zcs)+1:8);
+-  const R=ovwFitRobust(obs,{SIG:0.05,HS:5,SGPS:window.OVW_SGPS||3,fix:m.fix||null,ztInit,...opt}), fit=R.fit, ks=R.idx.map(i=>use[i]), drop=R.drop.map(i=>use[i]), fl=R.fl, cs=R.cs;
++  const base={SIG:0.05,HS:5,SGPS:window.OVW_SGPS||3,fix:m.fix||null,ztInit,...opt};
++  let R=ovwFitRobust(obs,base);
++  // v1.35.11：寸法が図面で決まっているときは、写真で見た柱の左右の輪郭（見かけの幅）を両側の条件に入れて解き直す。
++  // 見かけの幅は撮影高さ・水面の高さに左右されず、離隔を直接決める。真下に近い水際線の点は重みを下げる（steepW）。
++  // 1 回目の解から 8° 以上外れた輪郭は誤検出（看板の縁・波・柱の一部が隠れた画像）として使わない
++  let silN=0;
++  if(m.fix&&!opt.noSil&&window.OVW_SIL2!==0){
++    const f1=R.fit; R.idx.forEach((i,j)=>{const q=obs[i], cam=f1.cam[j], gi=R.cs.indexOf(q.g); if(q.el==null&&q.er==null)return;
++      const t={cx:cam[0],cy:cam[1],hb:q.cen+(gi>=0?f1.hg[gi]:0),sil:{l:q.el,r:q.er}}, e=ovwSilEx({a:f1.a,r:f1.r,phi:f1.phi},t); if(!e){q.el=q.er=null;return;}
++      if(e.l==null||Math.abs(e.l)>8)q.el=null; if(e.r==null||Math.abs(e.r)>8)q.er=null; if(q.el!=null||q.er!=null)silN++;});
++    obs.forEach((q,i)=>{if(!R.idx.includes(i)){q.el=null;q.er=null;}});
++    if(silN>=3)R=ovwFitRobust(obs,{...base,edge2:true,steepW:true,edgeW:window.OVW_EW2!=null?window.OVW_EW2:3,phis:[f1.phi]});}
++  const fit=R.fit, ks=R.idx.map(i=>use[i]), drop=R.drop.map(i=>use[i]), fl=R.fl, cs=R.cs;
+   // 結果を画像ごとに（除いた画像も、同じコースの位置・向きを入れておく：手で直した後に使えるように）
+   const ccOf=new Map(); ks.forEach((k,i)=>{const g=m.imgs[k].g; if(!ccOf.has(g))ccOf.set(g,[]); ccOf.get(g).push(fit.cam[i]);});
+   m.imgs.forEach((im,k)=>{const i=ks.indexOf(k), gi=cs.indexOf(im.g), fi=fl.indexOf(im.f);
+@@ -2982,7 +2996,7 @@
+     if(!m.fix)log('注意：平面部の長さ（幅）は、水際線だけでは決まりにくく、実際より長く推定されることがあります。図面または実測の幅・厚さがあれば「寸法の決め方：手入力」で入れてください。');
+     log(`水際線の当てはまり：中央値 ${fmt(fit.resMed*100,1)} cm（${ks.length} 枚）${fit.gpsRms!=null?`・GPS との差 ${fmt(fit.gpsRms,1)} m`:''}${drop.length?`。全体と合わず除いた画像：${drop.map(k=>m.imgs[k].name).join('、')}（確認・手動補正で線を直すと使えます）`:''}`);}
+   if(!quiet&&m.fix)ovwWidthCheck(m);
+-  if(!quiet)ovwSilCheck(m);
++  if(!quiet)ovwSilCheck(m,silN);
+   return {drop};
+ }
+ /* 輪郭の確認（v1.35.10）：推定した断面と撮影位置から計算した柱の左右の端と、写真で検出した輪郭を比べる。
+@@ -2990,12 +3004,13 @@
+    合成では写真の輪郭の内側だけを使うが、差が大きいときは寸法の確認を促す */
+ function ovwSilEx(m,im){const L=ovwPerim(m); let lo=1e9,hi=-1e9; for(let s=0;s<L;s+=0.01){const v=ovwView(m,im,s); if(v.vis>0){if(v.psi<lo)lo=v.psi; if(v.psi>hi)hi=v.psi;}}
+   if(!(hi>lo))return null; return {l:im.sil&&im.sil.l!=null?(im.sil.l-lo)/D2R:null, r:im.sil&&im.sil.r!=null?(hi-im.sil.r)/D2R:null};}
+-function ovwSilCheck(m){
++function ovwSilCheck(m,silN){
+   const ex=[]; let n=0;
+   m.imgs.forEach(im=>{if(!im.fitted||!im.sil||im.silOff||im.cx==null)return; const e=ovwSilEx(m,im); if(!e)return; let any=false;
+     for(const v of [e.l,e.r])if(v!=null&&Math.abs(v)<=10){ex.push(v);any=true;}   // 10° 以上の差は輪郭の誤検出（看板・波・柱の一部が隠れた画像）として除く
+     if(any)n++;});
+   if(ex.length<6)return; const md=ovwMed(ex); m.silEx=Math.round(md*10)/10;
++  if(silN)log(`柱の輪郭（見かけの幅）：${silN} 枚の輪郭で離隔を決めました。推定した柱の端と写真の輪郭の差は平均 ${fmt(md,1)}° です`);
+   if(md>2)log(`注意：推定した柱の左右の端が、写真で検出した柱の輪郭より平均 ${fmt(md,1)}° 外側にあります（${n} 枚）。${m.fix?`入力した幅・厚さ（${fmt(2*(m.a+m.r),2)}×${fmt(2*m.r,2)} m）が実際より大きいか、`:''}撮影位置が柱に近すぎる可能性があります。合成では写真で見た輪郭の内側だけを使い、輪郭に近い斜めの部分は他の写真を優先します。継ぎ目がずれるときは、図面の寸法（総幅・厚さ）を確かめてください。`);
+ }
+ /* 手入力の幅の確認：平面部を向いた列どうしの長手方向の間隔を、同じ飛行の GPS の間隔と比べる。
+@@ -3024,7 +3039,7 @@
+   if(!m.fix||!m.imgs.some(im=>im.gps))return null;
+   const t=2*m.r, Win=2*(m.a+m.r), res={}, ns=window.OVW_NOSHIFT;
+   const one=W=>{W=Math.round(W*10)/10; if(res[W])return res[W]; const c={ver:1,imgs:m.imgs.map(im=>({...im,cx:null,cy:null,fitted:false})),fix:{a:(W-t)/2,r:t/2},rev:0};
+-    try{ovwSolve(c,true);}catch(e){return null;} return res[W]={W,rms:ovwGpsRms(c),res:c.resMed};};
++    try{ovwSolve(c,true,{noSil:true});}catch(e){return null;} return res[W]={W,rms:ovwGpsRms(c),res:c.resMed};};
+   window.OVW_NOSHIFT=1;
+   try{
+     const lo=t+0.4, hi=Math.max(Win+1.2,t+3); const Ws=[]; for(let W=lo;W<=hi+1e-6;W+=0.4)Ws.push(W); Ws.push(Win);
+--- /mnt/project-files/v13510/README.md	2026-11-18 23:41:04.236090000 +0000
++++ README.md	2026-11-20 06:37:43.085469544 +0000
+@@ -170,6 +170,7 @@
+ - **幅の確認**（v1.35.8）：幅・厚さを手入力したとき、平面部の前の列どうしの間隔を GPS の間隔と比べ、0.8 m 以上違えばログで知らせます。幅の欄は円弧部を含む総幅です。幅が実際より大きいと列の間隔が広がり、平面部が間延びして同じ模様が二重に写ります（大八橋：5.6 m 入力で東面に 1.2 m の二重写り。写真と GPS からは総幅 4.6〜4.8 m 相当）。
+ - **幅の選択**（v1.35.9）：幅を手入力したとき、位置合わせのあとで幅を 0.4 m 刻みで変えて解き直し、同じ飛行のコースどうしの距離が GPS の距離と最も合う幅を「推定値」とします（水際線の当てはまりは幅でほとんど変わらないため、GPS の間隔で決めます）。入力値での GPS とのずれが推定値より 15% 以上大きく、かつ 0.4 m 以上違うときだけ、「確認・手動補正」の上に「推定値 X m で合成し直す」「入力値 Y m のまま」を表示します。推定値を選ぶと幅の欄も書き換えて合成し直します。図面がなく道路幅を入れた場合などに使います（大八橋：入力 5.6 m → 推定 4.2 m、更級橋：入力 4.3 m → 推定 4.7 m で差が小さいため表示なし）。幅の確認に 1 分前後かかります。
+ - **写真で見た柱の輪郭の内側だけを使う**（v1.35.10）：推定した断面・撮影位置から計算した柱の端と、写真で検出した柱の輪郭（水面との境）がずれていると、輪郭ぎわの斜めに写った所を「正面に近い」と誤認して担当にし、輪郭の外の背景まで混ざることがありました（更級橋：4.3×2.3 m 入力で、計算上の柱が写真より左右に平均 3〜4° 広く、円弧部・平面部の右端に木や水面が写り込んだ）。各写真の使う範囲を「検出した輪郭の 1.5° 内側まで」に限り（輪郭が検出できない写真は水際線の端から 1° まで）、輪郭から 10° 以内の所は輪郭に近いほど他の写真を優先します。差が平均 2° を超えるときはログで知らせるので、図面の寸法（総幅・厚さ）を確かめてください。どの写真にも正面から写っていない所は、背景で埋めずに空白（黒）のまま残ります。
++- **離隔を柱の見かけの幅で決める**（v1.35.11）：幅・厚さを手入力（図面の値）したときは、写真で柱が左右に何度の幅で写っているか（検出した輪郭）を位置合わせの条件に加え、撮影位置から柱までの離隔をこれで決めます。見かけの幅は高度計や水面の高さに左右されません。あわせて、真下に近い角度で見下ろした水際線の点（高い位置の写真）は重みを下げます。360°画像の真下付近では角度のわずかな誤差で離隔が大きく狂うためです。輪郭は 1 回目の解から 8° 以上外れたもの（看板の縁・波の誤検出）を除いてから使います。更級橋（4.3×2.3 m）では、計算上の柱と写真の輪郭の差が平均 3.3° → 0.3° になり、低い写真の撮影高さは水面から約 1.3 m → 約 1.7 m、天端を確かめられた列は 6 → 10 列になりました。位置合わせの時間は 1 回分ほど長くなります。
+ - 色見本に「上部工（照り返し）」を追加しました（v1.35.7）。照り返しで明るくなった桁の下面は、コンクリートの色に近くなるためです。
+ - **天端の色見本**（v1.35.6）：確認・手動補正の「天端の色」で、天端付近がよく写った写真をタップして色見本（コンクリート／上部工／空／雲）を取ると、全部の写真で「下がコンクリート・上がそれ以外」の境目を天端として探し直します。型枠目地で確かめられない画像でも天端を使えるようになります（大八橋の試験で 9 枚 → 26 枚）。色見本は案件に保存され、合成し直しても引き継がれます。
+ 
+--- /mnt/project-files/v13510/sw.js	2026-11-18 23:41:04.497498000 +0000
++++ sw.js	2026-11-20 06:37:43.089699179 +0000
+@@ -1,6 +1,6 @@
+ /* 床版オルソ v1.8 — オフライン用キャッシュ
+    画面（index.html）はネット優先：つながるときは常に最新版を取り直し、圏外ではキャッシュで動く */
+-const CACHE='slabortho-v1.35.10';
++const CACHE='slabortho-v1.35.11';
+ const FILES=['./','index.html','manifest.webmanifest','icon-180.png','icon-192.png','icon-512.png'];
+ self.addEventListener('install',e=>{
+   e.waitUntil(caches.open(CACHE).then(c=>Promise.all(FILES.map(f=>c.add(new Request(f,{cache:'reload'})).catch(()=>{})))).then(()=>self.skipWaiting()));
